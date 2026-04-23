@@ -98,6 +98,7 @@ export const equipment: Equipment[] = [
     description: "LED-прожектор с эффектом Aura, идеален для концертов и клубов.",
     specs: { "Мощность LED": "240 Вт", "Угол луча": "5.5° — 49°", "ЦМ-источник": "37 x LED", "Вес": "14.5 кг" },
     tags: ["концерт", "клуб", "шоу"],
+    image: "https://cdn.poehali.dev/projects/bbfa4077-327f-4ddf-84d0-e92a698a19e6/files/1235bce8-6787-49fa-8e4e-480c8e8d354c.jpg",
   },
   {
     id: 4,
@@ -111,6 +112,7 @@ export const equipment: Equipment[] = [
     description: "Мощная лазерная установка с RGB-лучом для создания визуальных шоу.",
     specs: { "Мощность": "2000 мВт", "Цвета": "RGB", "Управление": "DMX / ILDA", "Класс": "3B" },
     tags: ["лазер", "шоу", "клуб"],
+    image: "https://cdn.poehali.dev/projects/bbfa4077-327f-4ddf-84d0-e92a698a19e6/files/7a9d2e8c-cc8d-46be-956c-6901afe9990f.jpg",
   },
   {
     id: 5,
@@ -124,6 +126,7 @@ export const equipment: Equipment[] = [
     description: "Лазерный проектор 30 000 лм для крупных конференций и концертов.",
     specs: { "Яркость": "30 000 лм", "Разрешение": "WUXGA", "Технология": "DLP Laser", "Lens Shift": "±60% / ±15%" },
     tags: ["конференция", "проекция", "шоу"],
+    image: "https://cdn.poehali.dev/projects/bbfa4077-327f-4ddf-84d0-e92a698a19e6/files/4d8edaee-e00b-48f7-8baf-57d317f34a87.jpg",
   },
   {
     id: 6,
@@ -137,6 +140,7 @@ export const equipment: Equipment[] = [
     description: "Модульный LED-экран для indoor-мероприятий с шагом пикселя 3.9 мм.",
     specs: { "Шаг пикселя": "3.9 мм", "Яркость": "1000 кд/м²", "Обновление": "3840 Гц", "Угол обзора": "160°" },
     tags: ["экран", "конференция", "шоу"],
+    image: "https://cdn.poehali.dev/projects/bbfa4077-327f-4ddf-84d0-e92a698a19e6/files/d99c605b-6207-4daf-99be-c8ed809ec927.jpg",
   },
   {
     id: 7,
@@ -150,6 +154,7 @@ export const equipment: Equipment[] = [
     description: "Модульный сценический подиум из алюминия, высота регулируется.",
     specs: { "Размер": "2×1 м", "Высота": "0.4 — 1.2 м", "Нагрузка": "750 кг/м²", "Материал": "Алюминий" },
     tags: ["сцена", "подиум", "мероприятие"],
+    image: "https://cdn.poehali.dev/projects/bbfa4077-327f-4ddf-84d0-e92a698a19e6/files/7bff6cd3-275e-461c-9918-c1ec959348ee.jpg",
   },
   {
     id: 8,
@@ -163,6 +168,7 @@ export const equipment: Equipment[] = [
     description: "Цифровая конференц-система на 50 участников с синхронным переводом.",
     specs: { "Участники": "до 50", "Переводы": "32 канала", "Управление": "IP", "Запись": "встроенная" },
     tags: ["конференция", "переговоры", "форум"],
+    image: "https://cdn.poehali.dev/projects/bbfa4077-327f-4ddf-84d0-e92a698a19e6/files/30649f81-9aa3-4052-bd83-179ea08ac27b.jpg",
   },
   {
     id: 9,
@@ -176,6 +182,7 @@ export const equipment: Equipment[] = [
     description: "Дизельный генератор 10 кВт для автономного электроснабжения.",
     specs: { "Мощность": "10 кВт", "Топливо": "Дизель", "Бак": "15 л", "Шум": "58 дБ" },
     tags: ["аутдор", "автономность", "питание"],
+    image: "https://cdn.poehali.dev/projects/bbfa4077-327f-4ddf-84d0-e92a698a19e6/files/293d53b9-e1da-4099-8c60-d4340c1cacdf.jpg",
   },
 
   {
@@ -190,6 +197,7 @@ export const equipment: Equipment[] = [
     description: "Профессиональная дым-машина 3000 Вт для создания сценических эффектов.",
     specs: { "Мощность": "3000 Вт", "Выход": "1900 м³/мин", "Бак": "5 л", "DMX": "да" },
     tags: ["эффекты", "шоу", "концерт"],
+    image: "https://cdn.poehali.dev/projects/bbfa4077-327f-4ddf-84d0-e92a698a19e6/files/755fa1e6-4e18-480e-9538-b45b4aa3de77.jpg",
   },
   {
     id: 12,
@@ -203,5 +211,6 @@ export const equipment: Equipment[] = [
     description: "Флагманский видеопроцессор для сложных мультиэкранных инсталляций.",
     specs: { "Входы": "32", "Выходы": "16", "Разрешение": "4K", "Задержка": "< 1 кадра" },
     tags: ["видео", "конференция", "шоу"],
+    image: "https://cdn.poehali.dev/projects/bbfa4077-327f-4ddf-84d0-e92a698a19e6/files/482f3582-f101-4310-9de7-5ee808f7b888.jpg",
   },
 ];
