@@ -42,6 +42,7 @@ export const equipment: Equipment[] = [
     description: "Профессиональный субвуфер JBL Vertec 4880 для мощного и глубокого баса на больших площадках.",
     specs: { "Динамики": "2×18\"", "Частотный диапазон": "35 — 160 Гц", "Мощность": "4000 Вт", "Вес": "92 кг" },
     tags: ["бас", "концерт", "фестиваль"],
+    image: "https://cdn.poehali.dev/projects/bbfa4077-327f-4ddf-84d0-e92a698a19e6/files/b6ae7778-7ca0-4b18-941d-04b7c7432700.jpg",
   },
   {
     id: 13,
@@ -55,6 +56,7 @@ export const equipment: Equipment[] = [
     description: "Активная акустическая система JBL PRX615 для корпоративных мероприятий и небольших концертов.",
     specs: { "Мощность": "1000 Вт", "Динамик": "15\"", "Частотный диапазон": "40 Гц — 20 кГц", "Вес": "21 кг" },
     tags: ["концерт", "корпоратив", "мероприятие"],
+    image: "https://cdn.poehali.dev/projects/bbfa4077-327f-4ddf-84d0-e92a698a19e6/files/95b55169-f23b-4392-af3d-f13e83a39c9c.jpg",
   },
   {
     id: 14,
@@ -68,6 +70,7 @@ export const equipment: Equipment[] = [
     description: "Мощная активная акустическая система JBL PRX800 для средних и крупных мероприятий.",
     specs: { "Мощность": "1500 Вт", "Динамик": "15\"", "Частотный диапазон": "35 Гц — 20 кГц", "Вес": "25 кг" },
     tags: ["концерт", "фестиваль", "мероприятие"],
+    image: "https://cdn.poehali.dev/projects/bbfa4077-327f-4ddf-84d0-e92a698a19e6/files/caf73df8-2776-4c58-b056-3ecfa8588127.jpg",
   },
   {
     id: 15,
@@ -81,6 +84,7 @@ export const equipment: Equipment[] = [
     description: "Активная акустическая система Electro-Voice ELX115P с насыщенным звуком для любых мероприятий.",
     specs: { "Мощность": "1500 Вт", "Динамик": "15\"", "Частотный диапазон": "48 Гц — 18 кГц", "Вес": "20 кг" },
     tags: ["концерт", "корпоратив", "мероприятие"],
+    image: "https://cdn.poehali.dev/projects/bbfa4077-327f-4ddf-84d0-e92a698a19e6/files/04fad9cb-34b7-47f7-aa5e-70da5b5b7348.jpg",
   },
   {
     id: 3,
