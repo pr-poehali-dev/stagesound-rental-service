@@ -140,17 +140,23 @@ export default function Catalog() {
                     className="glass-card rounded-sm overflow-hidden group cursor-pointer hover:border-amber-500/30 transition-all"
                     onClick={() => setSelectedItem(item)}
                   >
-                    <div className="h-36 flex items-center justify-center relative" style={{ background: "var(--surface-2)" }}>
-                      <div className="absolute inset-0 grid-pattern opacity-50" />
+                    <div className="h-36 flex items-center justify-center relative overflow-hidden" style={{ background: "var(--surface-2)" }}>
+                      {item.image ? (
+                        <img src={item.image} alt={item.name} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                      ) : (
+                        <>
+                          <div className="absolute inset-0 grid-pattern opacity-50" />
+                          <div className="font-oswald text-5xl font-bold text-amber-500/10 group-hover:text-amber-500/20 transition-colors select-none">
+                            {item.category.charAt(0)}
+                          </div>
+                          <Icon name="Package" size={36} className="absolute text-amber-500/20 group-hover:text-amber-500/40 transition-colors" />
+                        </>
+                      )}
                       {item.popular && (
-                        <span className="absolute top-3 left-3 text-xs bg-amber-500 text-black font-bold px-2 py-0.5 uppercase tracking-wider">
+                        <span className="absolute top-3 left-3 text-xs bg-amber-500 text-black font-bold px-2 py-0.5 uppercase tracking-wider z-10">
                           Хит
                         </span>
                       )}
-                      <div className="font-oswald text-5xl font-bold text-amber-500/10 group-hover:text-amber-500/20 transition-colors select-none">
-                        {item.category.charAt(0)}
-                      </div>
-                      <Icon name="Package" size={36} className="absolute text-amber-500/20 group-hover:text-amber-500/40 transition-colors" />
                     </div>
                     <div className="p-4">
                       <div className="flex items-center gap-1 mb-1">
@@ -208,6 +214,12 @@ export default function Catalog() {
                 <Icon name="X" size={20} />
               </button>
             </div>
+
+            {selectedItem.image && (
+              <div className="mb-6 rounded-sm overflow-hidden h-56">
+                <img src={selectedItem.image} alt={selectedItem.name} className="w-full h-full object-cover" />
+              </div>
+            )}
 
             <p className="text-gray-400 mb-6 leading-relaxed">{selectedItem.description}</p>
 

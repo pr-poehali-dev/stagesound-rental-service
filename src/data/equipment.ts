@@ -10,6 +10,7 @@ export interface Equipment {
   specs: Record<string, string>;
   description: string;
   tags: string[];
+  image?: string;
 }
 
 export const categories = ["Все", "Звук", "Свет", "Видео", "Сцена", "Конференц", "Генераторы"];
@@ -27,6 +28,7 @@ export const equipment: Equipment[] = [
     description: "Профессиональный элемент линейного массива JBL Vertec 4889 для крупных мероприятий и концертов.",
     specs: { "Полоса": "3-полосная", "Частотный диапазон": "40 Гц — 18 кГц", "Чувствительность": "100 дБ", "Вес": "48 кг" },
     tags: ["концерт", "фестиваль", "аутдор"],
+    image: "https://cdn.poehali.dev/projects/bbfa4077-327f-4ddf-84d0-e92a698a19e6/bucket/5ce41175-f92b-4b6c-a5a8-faa95aac0c5e.jpg",
   },
   {
     id: 2,
