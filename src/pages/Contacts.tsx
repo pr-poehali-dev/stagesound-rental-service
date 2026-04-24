@@ -1,14 +1,9 @@
 import { useState } from "react";
 import Icon from "@/components/ui/icon";
-
-const contactInfo = [
-  { icon: "Phone", label: "Телефон", value: "8 800 123-45-67", sub: "Бесплатно по России" },
-  { icon: "Mail", label: "Email", value: "info@rentpro.ru", sub: "Ответим за 30 минут" },
-  { icon: "MapPin", label: "Адрес склада", value: "Москва, ул. Профсоюзная, 65", sub: "Пн–Вс 9:00–20:00" },
-  { icon: "MessageCircle", label: "Telegram", value: "@rentpro_support", sub: "Оперативная связь" },
-];
+import { useCity } from "@/context/CityContext";
 
 export default function Contacts() {
+  const { city } = useCity();
   const [form, setForm] = useState({ name: "", phone: "", email: "", type: "", message: "", date: "" });
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -39,7 +34,12 @@ export default function Contacts() {
           {/* Contact Info */}
           <div>
             <div className="space-y-4 mb-8">
-              {contactInfo.map((item) => (
+              {[
+                { icon: "Phone", label: "Телефон", value: city.phoneDisplay, sub: city.name },
+                { icon: "Mail", label: "Email", value: city.email, sub: "Ответим за 30 минут" },
+                { icon: "MapPin", label: "Адрес склада", value: city.address, sub: `${city.workdays} / ${city.weekend}` },
+                { icon: "MessageCircle", label: "Telegram", value: "@rentpro_support", sub: "Оперативная связь" },
+              ].map((item) => (
                 <div key={item.label} className="glass-card p-5 rounded-sm flex items-center gap-4">
                   <div className="w-11 h-11 flex items-center justify-center border border-amber-500/20 rounded-sm shrink-0">
                     <Icon name={item.icon} size={20} className="text-amber-500" />
@@ -77,7 +77,7 @@ export default function Contacts() {
                   <Icon name="CheckCircle" size={32} className="text-amber-500" />
                 </div>
                 <h2 className="font-oswald text-3xl font-bold text-white uppercase mb-3">Заявка принята!</h2>
-                <p className="text-gray-400 mb-6">Мы свяжемся с вами в течение 30 минут в рабочее время. Если срочно — звоните: 8 800 123-45-67</p>
+                <p className="text-gray-400 mb-6">Мы свяжемся с вами в течение 30 минут в рабочее время. Если срочно — звоните: {city.phoneDisplay}</p>
                 <button
                   onClick={() => { setSubmitted(false); setForm({ name: "", phone: "", email: "", type: "", message: "", date: "" }); }}
                   className="text-amber-500 text-sm uppercase tracking-wider hover:text-white transition-colors"

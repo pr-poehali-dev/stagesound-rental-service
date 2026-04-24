@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "react-router-dom";
 import Icon from "@/components/ui/icon";
+import { useCity, CITIES } from "@/context/CityContext";
 
 const navLinks = [
   { path: "/", label: "Главная" },
@@ -15,6 +16,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [cityDropdown, setCityDropdown] = useState(false);
+  const cityRef = useRef<HTMLDivElement>(null);
+  const { city, setCity } = useCity();
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 40);
@@ -25,6 +29,16 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     setMenuOpen(false);
   }, [location.pathname]);
+
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (cityRef.current && !cityRef.current.contains(e.target as Node)) {
+        setCityDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: "var(--surface)" }}>
@@ -63,8 +77,36 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </nav>
 
           <div className="hidden md:flex items-center gap-3">
-            <a href="tel:+78001234567" className="text-sm text-gray-400 hover:text-white transition-colors">
-              8 800 123-45-67
+            {/* City selector */}
+            <div className="relative" ref={cityRef}>
+              <button
+                onClick={() => setCityDropdown(!cityDropdown)}
+                className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors border border-amber-500/20 rounded-sm px-3 py-1.5 hover:border-amber-500/40"
+              >
+                <Icon name="MapPin" size={13} className="text-amber-500" />
+                {city.name}
+                <Icon name="ChevronDown" size={13} className={`transition-transform ${cityDropdown ? "rotate-180" : ""}`} />
+              </button>
+              {cityDropdown && (
+                <div className="absolute right-0 top-full mt-1 glass-card border border-amber-500/20 rounded-sm overflow-hidden z-50 min-w-[180px]">
+                  {CITIES.map((c) => (
+                    <button
+                      key={c.id}
+                      onClick={() => { setCity(c); setCityDropdown(false); }}
+                      className={`w-full text-left px-4 py-2.5 text-sm flex items-center gap-2 transition-colors ${
+                        c.id === city.id ? "text-amber-500 bg-amber-500/10" : "text-gray-400 hover:text-white hover:bg-white/5"
+                      }`}
+                    >
+                      {c.id === city.id && <Icon name="Check" size={12} className="text-amber-500" />}
+                      {c.id !== city.id && <span className="w-3" />}
+                      {c.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <a href={`tel:${city.phone}`} className="text-sm text-gray-400 hover:text-white transition-colors">
+              {city.phoneDisplay}
             </a>
             <Link to="/contacts" className="neon-btn px-4 py-2 text-sm rounded-sm">
               Оставить заявку
@@ -96,8 +138,26 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 </Link>
               ))}
               <div className="pt-2 border-t border-amber-500/10">
-                <a href="tel:+78001234567" className="block px-4 py-2 text-sm text-gray-400">
-                  8 800 123-45-67
+                <div className="px-4 py-2 flex flex-col gap-1">
+                  <span className="text-xs text-gray-600 uppercase tracking-wider">Ваш город</span>
+                  <div className="flex gap-2 flex-wrap">
+                    {CITIES.map((c) => (
+                      <button
+                        key={c.id}
+                        onClick={() => setCity(c)}
+                        className={`text-xs px-3 py-1.5 rounded-sm border transition-colors ${
+                          c.id === city.id
+                            ? "border-amber-500 text-amber-500 bg-amber-500/10"
+                            : "border-amber-500/20 text-gray-400 hover:border-amber-500/40 hover:text-white"
+                        }`}
+                      >
+                        {c.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <a href={`tel:${city.phone}`} className="block px-4 py-2 text-sm text-gray-400">
+                  {city.phoneDisplay}
                 </a>
                 <Link to="/contacts" className="neon-btn block text-center px-4 py-2 text-sm rounded-sm mt-2 mx-4">
                   Оставить заявку
@@ -136,18 +196,18 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               </ul>
             </div>
             <div>
-              <h4 className="text-white font-semibold uppercase tracking-wider text-sm mb-4">Контакты</h4>
+              <h4 className="text-white font-semibold uppercase tracking-wider text-sm mb-4">Контакты — {city.name}</h4>
               <ul className="space-y-2 text-sm text-gray-500">
-                <li className="flex items-center gap-2"><Icon name="Phone" size={14} className="text-amber-500" /> 8 800 123-45-67</li>
-                <li className="flex items-center gap-2"><Icon name="Mail" size={14} className="text-amber-500" /> info@rentpro.ru</li>
-                <li className="flex items-center gap-2"><Icon name="MapPin" size={14} className="text-amber-500" /> Москва, ул. Профсоюзная, 65</li>
+                <li className="flex items-center gap-2"><Icon name="Phone" size={14} className="text-amber-500" /> {city.phoneDisplay}</li>
+                <li className="flex items-center gap-2"><Icon name="Mail" size={14} className="text-amber-500" /> {city.email}</li>
+                <li className="flex items-center gap-2"><Icon name="MapPin" size={14} className="text-amber-500" /> {city.address}</li>
               </ul>
             </div>
             <div>
               <h4 className="text-white font-semibold uppercase tracking-wider text-sm mb-4">Режим работы</h4>
               <ul className="space-y-2 text-sm text-gray-500">
-                <li>Пн–Пт: 9:00 — 20:00</li>
-                <li>Сб–Вс: 10:00 — 18:00</li>
+                <li>{city.workdays}</li>
+                <li>{city.weekend}</li>
                 <li className="text-amber-500">Доставка 24/7</li>
               </ul>
             </div>
