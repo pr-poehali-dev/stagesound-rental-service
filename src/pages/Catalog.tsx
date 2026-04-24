@@ -246,6 +246,18 @@ export default function Catalog() {
                       <span className="absolute top-3 right-3 text-xs bg-black/60 text-gray-300 px-2 py-0.5 rounded-sm z-10 backdrop-blur-sm">
                         {item.category}
                       </span>
+                      {item.usage && (
+                        <span className={`absolute bottom-3 right-3 z-10 text-xs font-medium px-2 py-0.5 rounded-sm flex items-center gap-1 backdrop-blur-sm ${
+                          item.usage === "outdoor"
+                            ? "bg-sky-500/20 text-sky-300 border border-sky-500/30"
+                            : item.usage === "indoor"
+                            ? "bg-violet-500/20 text-violet-300 border border-violet-500/30"
+                            : "bg-green-500/20 text-green-300 border border-green-500/30"
+                        }`}>
+                          <Icon name={item.usage === "outdoor" ? "Sun" : item.usage === "indoor" ? "Building2" : "Layers"} size={10} />
+                          {item.usage === "indoor" ? "Indoor" : item.usage === "outdoor" ? "Outdoor" : "Indoor / Outdoor"}
+                        </span>
+                      )}
                     </div>
 
                     {/* Content */}
@@ -336,11 +348,25 @@ export default function Catalog() {
                 </div>
               )}
 
-              <div className="flex items-center gap-1 mb-4">
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <Icon key={i} name="Star" size={12} className={i < selectedItem.rating ? "text-amber-500 fill-amber-500" : "text-gray-700"} />
-                ))}
-                <span className="text-gray-500 text-xs ml-1">{selectedItem.reviews} отзывов</span>
+              <div className="flex items-center gap-3 mb-4 flex-wrap">
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <Icon key={i} name="Star" size={12} className={i < selectedItem.rating ? "text-amber-500 fill-amber-500" : "text-gray-700"} />
+                  ))}
+                  <span className="text-gray-500 text-xs ml-1">{selectedItem.reviews} отзывов</span>
+                </div>
+                {selectedItem.usage && (
+                  <span className={`text-xs font-medium px-2.5 py-1 rounded-sm flex items-center gap-1.5 ${
+                    selectedItem.usage === "outdoor"
+                      ? "bg-sky-500/20 text-sky-300 border border-sky-500/30"
+                      : selectedItem.usage === "indoor"
+                      ? "bg-violet-500/20 text-violet-300 border border-violet-500/30"
+                      : "bg-green-500/20 text-green-300 border border-green-500/30"
+                  }`}>
+                    <Icon name={selectedItem.usage === "outdoor" ? "Sun" : selectedItem.usage === "indoor" ? "Building2" : "Layers"} size={12} />
+                    {selectedItem.usage === "indoor" ? "Только Indoor" : selectedItem.usage === "outdoor" ? "Только Outdoor" : "Indoor / Outdoor"}
+                  </span>
+                )}
               </div>
 
               <p className="text-gray-400 mb-5 leading-relaxed text-sm">{selectedItem.description}</p>

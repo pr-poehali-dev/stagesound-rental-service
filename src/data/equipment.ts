@@ -12,6 +12,7 @@ export interface Equipment {
   description: string;
   tags: string[];
   image?: string;
+  usage?: "indoor" | "outdoor" | "indoor/outdoor";
 }
 
 export const categories = ["Все", "Звук", "Свет", "Видео", "Сцена", "Конференц", "Генераторы"];
@@ -154,6 +155,7 @@ export const equipment: Equipment[] = [
     specs: { "Шаг пикселя": "3.9 мм", "Яркость": "1000 кд/м²", "Обновление": "3840 Гц", "Угол обзора": "160°" },
     tags: ["экран", "конференция", "шоу"],
     image: "https://cdn.poehali.dev/projects/bbfa4077-327f-4ddf-84d0-e92a698a19e6/files/d99c605b-6207-4daf-99be-c8ed809ec927.jpg",
+    usage: "indoor",
   },
   {
     id: 16,
@@ -168,6 +170,7 @@ export const equipment: Equipment[] = [
     specs: { "Шаг пикселя": "2 мм", "Яркость": "1200 кд/м²", "Обновление": "3840 Гц", "Угол обзора": "160°" },
     tags: ["экран", "конференция", "шоу", "indoor"],
     image: "https://cdn.poehali.dev/projects/bbfa4077-327f-4ddf-84d0-e92a698a19e6/files/e5f4d2d5-44f0-4b5c-add4-45713f36c88b.jpg",
+    usage: "indoor",
   },
   {
     id: 17,
@@ -182,6 +185,7 @@ export const equipment: Equipment[] = [
     specs: { "Шаг пикселя": "3 мм", "Яркость": "1000 кд/м²", "Обновление": "3840 Гц", "Угол обзора": "160°" },
     tags: ["экран", "конференция", "шоу", "indoor"],
     image: "https://cdn.poehali.dev/projects/bbfa4077-327f-4ddf-84d0-e92a698a19e6/files/bf14d011-bb54-4e41-a7a6-586bc7057cbe.jpg",
+    usage: "indoor",
   },
   {
     id: 18,
@@ -196,6 +200,7 @@ export const equipment: Equipment[] = [
     specs: { "Шаг пикселя": "6 мм", "Яркость": "5500 кд/м²", "Обновление": "1920 Гц", "Угол обзора": "140°" },
     tags: ["экран", "аутдор", "шоу", "фестиваль"],
     image: "https://cdn.poehali.dev/projects/bbfa4077-327f-4ddf-84d0-e92a698a19e6/files/c434653f-b9d5-418c-a5ce-d62028e3b631.jpg",
+    usage: "outdoor",
   },
   {
     id: 7,
