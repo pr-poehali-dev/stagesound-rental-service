@@ -5,6 +5,7 @@ import { equipment } from "@/data/equipment";
 import { useSeo } from "@/hooks/useSeo";
 import { useCity } from "@/context/CityContext";
 import { CITY_CONTENT } from "@/data/cityContent";
+import func2url from "../../backend/func2url.json";
 
 const extraServices = [
   { id: "install", label: "Монтаж и демонтаж", price: 15000 },
@@ -36,6 +37,10 @@ export default function Calculator() {
   const [extras, setExtras] = useState<string[]>([]);
   const [step, setStep] = useState<"select" | "summary">("select");
   const [booked, setBooked] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+  const [formName, setFormName] = useState("");
+  const [formPhone, setFormPhone] = useState("");
+  const [sending, setSending] = useState(false);
   const [search, setSearch] = useState("");
   const [catFilter, setCatFilter] = useState("Все");
 
@@ -85,6 +90,24 @@ export default function Calculator() {
 
   const toggleExtra = (id: string) => {
     setExtras((prev) => prev.includes(id) ? prev.filter((e) => e !== id) : [...prev, id]);
+  };
+
+  const handleSubmitOrder = async () => {
+    if (!formName.trim() || !formPhone.trim()) return;
+    setSending(true);
+    const items = cart.map((c) => {
+      const eq = equipment.find((e) => e.id === c.id)!;
+      return { name: eq.name, qty: c.qty, subtotal: eq.price * c.qty * days };
+    });
+    const extrasLabels = extras.map((id) => extraServices.find((s) => s.id === id)?.label || id);
+    await fetch(func2url["send-order"], {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: formName, phone: formPhone, items, days, delivery, extras: extrasLabels, total }),
+    });
+    setSending(false);
+    setShowForm(false);
+    setBooked(true);
   };
 
   return (
@@ -319,7 +342,7 @@ export default function Calculator() {
                 </div>
 
                 <button
-                  onClick={() => { if (cart.length > 0) setBooked(true); }}
+                  onClick={() => { if (cart.length > 0) setShowForm(true); }}
                   disabled={cart.length === 0}
                   className="neon-btn w-full py-4 rounded-sm text-sm flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
@@ -344,6 +367,63 @@ export default function Calculator() {
           </div>
         )}
       </div>
+
+      {/* Форма контактов */}
+      {showForm && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: "rgba(0,0,0,0.85)", backdropFilter: "blur(8px)" }}
+          onClick={() => setShowForm(false)}
+        >
+          <div
+            className="glass-card neon-border rounded-sm max-w-md w-full p-8"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button onClick={() => setShowForm(false)} className="absolute top-4 right-4 text-gray-500 hover:text-white transition-colors">
+              <Icon name="X" size={20} />
+            </button>
+            <h2 className="font-oswald text-2xl font-bold text-white uppercase mb-1">Оформить заявку</h2>
+            <p className="text-gray-500 text-sm mb-6">Укажите контакты — менеджер свяжется в течение 30 минут</p>
+
+            <div className="space-y-4 mb-6">
+              <div>
+                <label className="text-xs text-gray-500 uppercase tracking-wider block mb-1.5">Ваше имя</label>
+                <input
+                  type="text"
+                  value={formName}
+                  onChange={(e) => setFormName(e.target.value)}
+                  placeholder="Иван Иванов"
+                  className="w-full bg-transparent border border-amber-500/30 rounded-sm px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/70 text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 uppercase tracking-wider block mb-1.5">Телефон</label>
+                <input
+                  type="tel"
+                  value={formPhone}
+                  onChange={(e) => setFormPhone(e.target.value)}
+                  placeholder="+7 (999) 000-00-00"
+                  className="w-full bg-transparent border border-amber-500/30 rounded-sm px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/70 text-sm"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between py-3 border-t border-amber-500/10 mb-6">
+              <span className="text-gray-400 text-sm">Итого</span>
+              <span className="font-oswald text-2xl font-bold neon-text">{total.toLocaleString()} ₽</span>
+            </div>
+
+            <button
+              onClick={handleSubmitOrder}
+              disabled={!formName.trim() || !formPhone.trim() || sending}
+              className="neon-btn w-full py-4 rounded-sm text-sm flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {sending ? <Icon name="Loader2" size={16} className="animate-spin" /> : <Icon name="Send" size={16} />}
+              {sending ? "Отправляем..." : "Отправить заявку"}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
