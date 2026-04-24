@@ -365,13 +365,13 @@ export default function Calculator() {
 
                 <div className="grid grid-cols-2 gap-2 mt-3">
                   <a
-                    href="https://wa.me/79333222028"
+                    href="https://max.ru/+79333222028"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center justify-center gap-2 border border-green-500/30 text-green-400 hover:bg-green-500/10 rounded-sm py-2.5 text-xs transition-colors"
+                    className="flex items-center justify-center gap-2 border border-purple-500/30 text-purple-400 hover:bg-purple-500/10 rounded-sm py-2.5 text-xs transition-colors"
                   >
-                    <Icon name="MessageCircle" size={14} />
-                    WhatsApp
+                    <Icon name="MessageSquare" size={14} />
+                    MAX
                   </a>
                   <a
                     href="https://t.me/+79333222028"

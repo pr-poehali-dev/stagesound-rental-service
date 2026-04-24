@@ -42,7 +42,7 @@ export default function Contacts() {
                 { icon: "Phone", label: "Телефон", value: city.phoneDisplay, sub: city.name },
                 { icon: "Mail", label: "Email", value: city.email, sub: "Ответим за 30 минут" },
                 { icon: "MapPin", label: "Адрес склада", value: city.address, sub: `${city.workdays} / ${city.weekend}` },
-                { icon: "MessageCircle", label: "Telegram", value: "@rentpro_support", sub: "Оперативная связь" },
+                { icon: "Send", label: "Telegram", value: "+7 933 322-20-28", sub: "Оперативная связь" },
               ].map((item) => (
                 <div key={item.label} className="glass-card p-5 rounded-sm flex items-center gap-4">
                   <div className="w-11 h-11 flex items-center justify-center border border-amber-500/20 rounded-sm shrink-0">
@@ -55,6 +55,28 @@ export default function Contacts() {
                   </div>
                 </div>
               ))}
+            </div>
+
+            {/* Мессенджеры */}
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <a
+                href="https://max.ru/+79333222028"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-2 border border-purple-500/30 text-purple-400 hover:bg-purple-500/10 rounded-sm py-3 text-sm font-medium transition-colors"
+              >
+                <Icon name="MessageSquare" size={16} />
+                Написать в MAX
+              </a>
+              <a
+                href="https://t.me/+79333222028"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-2 border border-sky-500/30 text-sky-400 hover:bg-sky-500/10 rounded-sm py-3 text-sm font-medium transition-colors"
+              >
+                <Icon name="Send" size={16} />
+                Написать в Telegram
+              </a>
             </div>
 
             <div className="glass-card p-6 rounded-sm">
