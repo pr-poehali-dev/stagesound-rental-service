@@ -158,6 +158,9 @@ export default function Calculator() {
                         <div className="flex-1 min-w-0 mr-4">
                           <div className="text-sm font-medium text-white truncate">{item.name}</div>
                           <div className="text-xs text-gray-600">{item.category} · {item.price.toLocaleString()} ₽/{item.unit}</div>
+                          {item.category === "Сцена" && item.description && (
+                            <div className="text-xs text-gray-500 mt-1 leading-relaxed">{item.description}</div>
+                          )}
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
                           {qty > 0 ? (
