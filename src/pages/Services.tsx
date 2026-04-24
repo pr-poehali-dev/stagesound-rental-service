@@ -5,14 +5,11 @@ import { useSeo } from "@/hooks/useSeo";
 import { useCity } from "@/context/CityContext";
 import { CITY_CONTENT } from "@/data/cityContent";
 
-const services = [
+const BASE_SERVICES = [
   {
     id: "delivery",
     icon: "Truck",
     title: "Доставка",
-    subtitle: "По Москве и области",
-    price: "от 1 500 ₽",
-    description: "Доставляем оборудование в любую точку Москвы и Подмосковья. Опытные водители-экспедиторы бережно транспортируют технику в фирменных кейсах и кофрах.",
     features: [
       "Доставка в день заказа при бронировании до 18:00",
       "GPS-отслеживание транспорта",
@@ -20,19 +17,13 @@ const services = [
       "Работаем 24/7, включая праздники",
       "Разгрузка на месте в комплекте",
     ],
-    zones: [
-      { name: "Центр Москвы", price: "1 500 ₽" },
-      { name: "Москва (в пределах МКАД)", price: "2 200 ₽" },
-      { name: "Подмосковье (до 50 км)", price: "3 500 ₽" },
-      { name: "Подмосковье (50–100 км)", price: "5 500 ₽" },
-    ],
   },
   {
     id: "installation",
     icon: "Wrench",
     title: "Монтаж и демонтаж",
     subtitle: "Профессиональная установка",
-    price: "от 3 000 ₽",
+    price: "от 9 000 ₽",
     description: "Наши технические специалисты профессионально смонтируют, настроят и проверят всё оборудование перед мероприятием. После — демонтируем и заберём всё в срок.",
     features: [
       "Выезд бригады с опытом от 5 лет",
@@ -42,9 +33,9 @@ const services = [
       "Демонтаж после окончания мероприятия",
     ],
     zones: [
-      { name: "Звук (малый)", price: "3 000 ₽" },
-      { name: "Звук + Свет (средний)", price: "7 500 ₽" },
-      { name: "Полный комплекс (крупный)", price: "от 18 000 ₽" },
+      { name: "Звук (малый)", price: "9 000 ₽" },
+      { name: "Звук + Свет (средний)", price: "22 500 ₽" },
+      { name: "Полный комплекс (крупный)", price: "от 54 000 ₽" },
       { name: "Фестиваль / аутдор", price: "по запросу" },
     ],
   },
@@ -53,7 +44,7 @@ const services = [
     icon: "Headphones",
     title: "Техническая поддержка",
     subtitle: "Техник на месте",
-    price: "от 4 000 ₽/день",
+    price: "от 12 000 ₽/день",
     description: "Опытный технический специалист присутствует на вашем мероприятии от начала до конца: следит за работой оборудования, оперативно решает любые технические вопросы.",
     features: [
       "Постоянное присутствие на мероприятии",
@@ -63,10 +54,10 @@ const services = [
       "Отчёт после мероприятия",
     ],
     zones: [
-      { name: "Техник (до 8 ч)", price: "4 000 ₽" },
-      { name: "Звукорежиссёр (до 8 ч)", price: "7 000 ₽" },
-      { name: "Световой оператор (до 8 ч)", price: "6 500 ₽" },
-      { name: "Полная бригада (до 8 ч)", price: "18 000 ₽" },
+      { name: "Техник (до 8 ч)", price: "12 000 ₽" },
+      { name: "Звукорежиссёр (до 8 ч)", price: "21 000 ₽" },
+      { name: "Световой оператор (до 8 ч)", price: "19 500 ₽" },
+      { name: "Полная бригада (до 8 ч)", price: "54 000 ₽" },
     ],
   },
   {
@@ -84,9 +75,9 @@ const services = [
       "Документальный отчёт",
     ],
     zones: [
-      { name: "Корпоратив (до 200 чел.)", price: "от 80 000 ₽" },
-      { name: "Конференция (200–500 чел.)", price: "от 150 000 ₽" },
-      { name: "Концерт (500–2000 чел.)", price: "от 350 000 ₽" },
+      { name: "Корпоратив (до 200 чел.)", price: "от 240 000 ₽" },
+      { name: "Конференция (200–500 чел.)", price: "от 450 000 ₽" },
+      { name: "Концерт (500–2000 чел.)", price: "от 1 050 000 ₽" },
       { name: "Фестиваль (2000+ чел.)", price: "по запросу" },
     ],
   },
@@ -96,6 +87,19 @@ export default function Services() {
   useSeo({ page: "services" });
   const { city } = useCity();
   const content = CITY_CONTENT[city.id] ?? CITY_CONTENT.moscow;
+  const { delivery } = content;
+
+  const services = [
+    {
+      ...BASE_SERVICES[0],
+      subtitle: delivery.subtitle,
+      price: delivery.minPrice,
+      description: delivery.description,
+      zones: delivery.zones,
+    },
+    ...BASE_SERVICES.slice(1),
+  ];
+
   const [activeService, setActiveService] = useState(services[0].id);
   const current = services.find((s) => s.id === activeService)!;
 
