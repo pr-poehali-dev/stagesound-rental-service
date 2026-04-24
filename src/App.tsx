@@ -13,6 +13,7 @@ import About from "./pages/About";
 import Portfolio from "./pages/Portfolio";
 import Contacts from "./pages/Contacts";
 import Calculator from "./pages/Calculator";
+import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -43,6 +44,7 @@ const App = () => (
             <Route path="/:citySlug/contacts" element={<CityLayout><Contacts /></CityLayout>} />
             <Route path="/:citySlug/calculator" element={<CityLayout><Calculator /></CityLayout>} />
 
+            <Route path="/admin" element={<Admin />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
