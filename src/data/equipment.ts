@@ -2,6 +2,7 @@ export interface Equipment {
   id: number;
   name: string;
   category: string;
+  subcategory?: string;
   price: number;
   unit: string;
   rating: number;
@@ -15,11 +16,19 @@ export interface Equipment {
 
 export const categories = ["Все", "Звук", "Свет", "Видео", "Сцена", "Конференц", "Генераторы"];
 
+export const soundSubcategories = [
+  "Комплекты звука",
+  "Колонки и сабвуферы",
+  "Микрофоны",
+  "Микшерные пульты",
+];
+
 export const equipment: Equipment[] = [
   {
     id: 1,
     name: "Элемент линейного массива JBL Vertec 4889",
     category: "Звук",
+    subcategory: "Колонки и сабвуферы",
     price: 8000,
     unit: "день",
     rating: 5,
@@ -34,6 +43,7 @@ export const equipment: Equipment[] = [
     id: 2,
     name: "Субвуфер JBL Vertec 4880",
     category: "Звук",
+    subcategory: "Колонки и сабвуферы",
     price: 7000,
     unit: "день",
     rating: 5,
@@ -48,6 +58,7 @@ export const equipment: Equipment[] = [
     id: 13,
     name: "Колонка JBL PRX615",
     category: "Звук",
+    subcategory: "Колонки и сабвуферы",
     price: 2500,
     unit: "день",
     rating: 4,
@@ -62,6 +73,7 @@ export const equipment: Equipment[] = [
     id: 14,
     name: "Колонка JBL PRX800",
     category: "Звук",
+    subcategory: "Колонки и сабвуферы",
     price: 3000,
     unit: "день",
     rating: 5,
@@ -76,6 +88,7 @@ export const equipment: Equipment[] = [
     id: 15,
     name: "Колонка Electro-Voice ELX115P",
     category: "Звук",
+    subcategory: "Колонки и сабвуферы",
     price: 3000,
     unit: "день",
     rating: 4,
