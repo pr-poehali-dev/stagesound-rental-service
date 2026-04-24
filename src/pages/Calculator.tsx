@@ -41,6 +41,7 @@ export default function Calculator() {
   const [showForm, setShowForm] = useState(false);
   const [formName, setFormName] = useState("");
   const [formPhone, setFormPhone] = useState("");
+  const [formEmail, setFormEmail] = useState("");
   const [formDate, setFormDate] = useState("");
   const [formPlace, setFormPlace] = useState("");
   const [formComment, setFormComment] = useState("");
@@ -107,7 +108,7 @@ export default function Calculator() {
     const res = await fetch(func2url["send-order"], {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: formName, phone: formPhone, date: formDate, place: formPlace, comment: formComment, items, days, delivery, extras: extrasLabels, total }),
+      body: JSON.stringify({ name: formName, phone: formPhone, email: formEmail, date: formDate, place: formPlace, comment: formComment, items, days, delivery, extras: extrasLabels, total }),
     });
     const data = await res.json();
     setSending(false);
@@ -415,6 +416,16 @@ export default function Calculator() {
                   value={formPhone}
                   onChange={(e) => setFormPhone(e.target.value)}
                   placeholder="+7 (999) 000-00-00"
+                  className="w-full bg-transparent border border-amber-500/30 rounded-sm px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/70 text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 uppercase tracking-wider block mb-1.5">Email <span className="text-gray-600 normal-case">(для подтверждения заявки)</span></label>
+                <input
+                  type="email"
+                  value={formEmail}
+                  onChange={(e) => setFormEmail(e.target.value)}
+                  placeholder="your@email.com"
                   className="w-full bg-transparent border border-amber-500/30 rounded-sm px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/70 text-sm"
                 />
               </div>

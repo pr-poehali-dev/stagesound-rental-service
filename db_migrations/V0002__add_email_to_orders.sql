@@ -1,0 +1,1 @@
+ALTER TABLE t_p53739895_stagesound_rental_se.orders ADD COLUMN IF NOT EXISTS email TEXT;
