@@ -49,11 +49,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       >
         <div className="container mx-auto px-4 flex items-center justify-between h-16">
           <Link to="/" className="flex items-center gap-2">
-            <div className="w-8 h-8 neon-btn flex items-center justify-center text-sm font-bold" style={{ clipPath: "polygon(0 0, 100% 0, 85% 100%, 0 100%)" }}>
-              R
-            </div>
+            <img
+              src="https://cdn.poehali.dev/projects/bbfa4077-327f-4ddf-84d0-e92a698a19e6/files/3131187c-c9af-430a-9b73-7da04d954c7f.jpg"
+              alt="Soul Rent logo"
+              className="w-9 h-9 rounded-sm object-cover"
+            />
             <span className="font-oswald text-xl font-bold tracking-widest text-white uppercase">
-              Rent<span className="neon-text">Pro</span>
+              Soul<span className="neon-text">Rent</span>
             </span>
           </Link>
 
@@ -176,8 +178,15 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         <div className="container mx-auto px-4 py-10">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
             <div>
-              <div className="font-oswald text-xl font-bold tracking-widest text-white uppercase mb-3">
-                Rent<span className="neon-text">Pro</span>
+              <div className="flex items-center gap-2 mb-3">
+                <img
+                  src="https://cdn.poehali.dev/projects/bbfa4077-327f-4ddf-84d0-e92a698a19e6/files/3131187c-c9af-430a-9b73-7da04d954c7f.jpg"
+                  alt="Soul Rent logo"
+                  className="w-8 h-8 rounded-sm object-cover"
+                />
+                <span className="font-oswald text-xl font-bold tracking-widest text-white uppercase">
+                  Soul<span className="neon-text">Rent</span>
+                </span>
               </div>
               <p className="text-gray-500 text-sm leading-relaxed">
                 Профессиональная аренда оборудования для мероприятий любого масштаба

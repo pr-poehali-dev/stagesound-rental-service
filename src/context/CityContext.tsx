@@ -17,7 +17,7 @@ export const CITIES: CityData[] = [
     name: "Москва",
     phone: "+74951234567",
     phoneDisplay: "+7 (495) 123-45-67",
-    email: "moscow@rentpro.ru",
+    email: "moscow@soulrent.ru",
     address: "Москва, ул. Профсоюзная, 65",
     workdays: "Пн–Пт: 9:00 — 20:00",
     weekend: "Сб–Вс: 10:00 — 18:00",
@@ -27,7 +27,7 @@ export const CITIES: CityData[] = [
     name: "Санкт-Петербург",
     phone: "+78121234567",
     phoneDisplay: "+7 (812) 123-45-67",
-    email: "spb@rentpro.ru",
+    email: "spb@soulrent.ru",
     address: "Санкт-Петербург, Невский пр., 88",
     workdays: "Пн–Пт: 9:00 — 20:00",
     weekend: "Сб–Вс: 10:00 — 17:00",
@@ -37,7 +37,7 @@ export const CITIES: CityData[] = [
     name: "Красноярск",
     phone: "+73912345678",
     phoneDisplay: "+7 (391) 234-56-78",
-    email: "krsk@rentpro.ru",
+    email: "krsk@soulrent.ru",
     address: "Красноярск, пр. Мира, 102",
     workdays: "Пн–Пт: 9:00 — 19:00",
     weekend: "Сб: 10:00 — 16:00",
@@ -55,13 +55,13 @@ const CityContext = createContext<CityContextType>({
 });
 
 export function CityProvider({ children }: { children: ReactNode }) {
-  const savedId = typeof window !== "undefined" ? localStorage.getItem("rentpro_city") : null;
+  const savedId = typeof window !== "undefined" ? localStorage.getItem("soulrent_city") : null;
   const initial = CITIES.find((c) => c.id === savedId) ?? CITIES[0];
   const [city, setCityState] = useState<CityData>(initial);
 
   const setCity = (c: CityData) => {
     setCityState(c);
-    localStorage.setItem("rentpro_city", c.id);
+    localStorage.setItem("soulrent_city", c.id);
   };
 
   return <CityContext.Provider value={{ city, setCity }}>{children}</CityContext.Provider>;
