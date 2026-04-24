@@ -2,6 +2,8 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import Icon from "@/components/ui/icon";
 import { useSeo } from "@/hooks/useSeo";
+import { useCity } from "@/context/CityContext";
+import { CITY_CONTENT } from "@/data/cityContent";
 
 const services = [
   {
@@ -92,6 +94,8 @@ const services = [
 
 export default function Services() {
   useSeo({ page: "services" });
+  const { city } = useCity();
+  const content = CITY_CONTENT[city.id] ?? CITY_CONTENT.moscow;
   const [activeService, setActiveService] = useState(services[0].id);
   const current = services.find((s) => s.id === activeService)!;
 
@@ -207,6 +211,20 @@ export default function Services() {
                   <p className="text-gray-500 text-sm">{item.text}</p>
                 </div>
               </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* SEO Text Block */}
+      <div className="container mx-auto px-4 py-16 border-t border-amber-500/10">
+        <div className="max-w-4xl">
+          <h2 className="font-oswald text-3xl font-bold uppercase text-white mb-6">
+            {content.servicesSeoBlock.title}
+          </h2>
+          <div className="space-y-4">
+            {content.servicesSeoBlock.paragraphs.map((p, i) => (
+              <p key={i} className="text-gray-500 text-sm leading-relaxed">{p}</p>
             ))}
           </div>
         </div>

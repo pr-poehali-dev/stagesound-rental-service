@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import Icon from "@/components/ui/icon";
 import { useSeo } from "@/hooks/useSeo";
 import { useCity } from "@/context/CityContext";
+import { CITY_CONTENT } from "@/data/cityContent";
 
 const stats = [
   { value: "500+", label: "Единиц оборудования" },
@@ -43,12 +44,12 @@ const reviews = [
 export default function Home() {
   useSeo({ page: "home" });
   const { city } = useCity();
+  const content = CITY_CONTENT[city.id] ?? CITY_CONTENT.moscow;
 
   return (
     <div>
       {/* Hero */}
       <section className="relative min-h-[90vh] flex items-center overflow-hidden">
-        {/* Video background */}
         <video
           className="absolute inset-0 w-full h-full object-cover"
           autoPlay
@@ -59,9 +60,7 @@ export default function Home() {
         >
           <source src="https://videos.pexels.com/video-files/3257809/3257809-uhd_2560_1440_25fps.mp4" type="video/mp4" />
         </video>
-        {/* Dark overlay */}
         <div className="absolute inset-0 bg-black/70" />
-        {/* Grid pattern overlay */}
         <div className="absolute inset-0 grid-pattern opacity-30" />
         <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 via-transparent to-transparent" />
 
@@ -79,8 +78,7 @@ export default function Home() {
             </h1>
 
             <p className="text-gray-400 text-lg md:text-xl max-w-xl mb-10 leading-relaxed">
-              Аренда звука, света, микрофонов и сцены в {city.name === "Санкт-Петербург" ? "Санкт-Петербурге" : city.name === "Красноярск" ? "Красноярске" : "Москве"} для мероприятий любого масштаба.
-              Доставка, монтаж и техническая поддержка включены.
+              {content.heroSubtitle}
             </p>
 
             <div className="flex flex-wrap gap-4">
@@ -99,7 +97,6 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Decorative grid number */}
         <div className="absolute right-8 top-1/2 -translate-y-1/2 hidden xl:block">
           <div className="font-oswald text-[200px] font-bold leading-none select-none" style={{ color: "rgba(255,140,0,0.04)" }}>
             01
@@ -124,7 +121,7 @@ export default function Home() {
       {/* Categories */}
       <section className="py-20">
         <div className="container mx-auto px-4">
-          <div className="flex items-end justify-between mb-12">
+          <div className="flex items-end justify-between mb-4">
             <div>
               <p className="text-amber-500 text-xs uppercase tracking-widest mb-2">Что мы предлагаем</p>
               <h2 className="font-oswald text-4xl md:text-5xl font-bold uppercase text-white">
@@ -135,6 +132,7 @@ export default function Home() {
               Весь каталог <Icon name="ArrowRight" size={16} />
             </Link>
           </div>
+          <p className="text-gray-500 text-sm mb-10 max-w-2xl">{content.categoriesIntro}</p>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {categories.map((cat) => (
@@ -174,7 +172,7 @@ export default function Home() {
                 Рассчитай стоимость<br />за 2 минуты
               </h2>
               <p className="text-gray-400 max-w-md">
-                Выбери оборудование, укажи даты мероприятия — получи точную стоимость аренды без скрытых платежей
+                Выбери оборудование, укажи даты мероприятия — получи точную стоимость аренды {content.cityNameIn} без скрытых платежей
               </p>
             </div>
             <Link to="/calculator" className="neon-btn px-10 py-5 rounded-sm text-base whitespace-nowrap flex items-center gap-3">
@@ -185,7 +183,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Services preview */}
+      {/* How we work */}
       <section className="py-20">
         <div className="container mx-auto px-4">
           <div className="mb-12 text-center">
@@ -195,7 +193,7 @@ export default function Home() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             {[
               { num: "01", icon: "ShoppingCart", title: "Выбор", desc: "Подбираем оборудование под задачи вашего события" },
-              { num: "02", icon: "Truck", title: "Доставка", desc: "Привозим на площадку в удобное время" },
+              { num: "02", icon: "Truck", title: "Доставка", desc: `Привозим ${content.cityNameFrom} в удобное время` },
               { num: "03", icon: "Wrench", title: "Монтаж", desc: "Профессиональная установка и настройка" },
               { num: "04", icon: "Headphones", title: "Поддержка", desc: "Техник на месте весь период мероприятия" },
             ].map((step) => (
@@ -232,6 +230,44 @@ export default function Home() {
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* SEO Text Block */}
+      <section className="py-16 border-t border-amber-500/10">
+        <div className="container mx-auto px-4">
+          <div className="max-w-4xl">
+            <h2 className="font-oswald text-3xl md:text-4xl font-bold uppercase text-white mb-8">
+              {content.seoBlock.title}
+            </h2>
+            <div className="space-y-4">
+              {content.seoBlock.paragraphs.map((p, i) => (
+                <p key={i} className="text-gray-500 text-sm leading-relaxed">
+                  {p}
+                </p>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* FAQ */}
+      <section className="py-16 border-t border-amber-500/10">
+        <div className="container mx-auto px-4">
+          <div className="max-w-4xl">
+            <p className="text-amber-500 text-xs uppercase tracking-widest mb-2">Часто спрашивают</p>
+            <h2 className="font-oswald text-3xl md:text-4xl font-bold uppercase text-white mb-8">
+              Вопросы и ответы
+            </h2>
+            <div className="space-y-4">
+              {content.faq.map((item, i) => (
+                <div key={i} className="glass-card p-6 rounded-sm">
+                  <h3 className="font-semibold text-white mb-2">{item.q}</h3>
+                  <p className="text-gray-500 text-sm leading-relaxed">{item.a}</p>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </section>

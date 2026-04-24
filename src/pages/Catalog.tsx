@@ -3,6 +3,8 @@ import { Link, useSearchParams } from "react-router-dom";
 import Icon from "@/components/ui/icon";
 import { equipment, categories, soundSubcategories } from "@/data/equipment";
 import { useSeo } from "@/hooks/useSeo";
+import { useCity } from "@/context/CityContext";
+import { CITY_CONTENT } from "@/data/cityContent";
 
 const categoryMeta: Record<string, { image: string; desc: string; icon: string }> = {
   Звук: {
@@ -50,6 +52,8 @@ const catCounts = Object.fromEntries(
 
 export default function Catalog() {
   useSeo({ page: "catalog" });
+  const { city } = useCity();
+  const content = CITY_CONTENT[city.id] ?? CITY_CONTENT.moscow;
   const [searchParams] = useSearchParams();
   const [activeCategory, setActiveCategory] = useState(
     categories.find((c) => c.toLowerCase() === searchParams.get("category")) || "Все"
@@ -405,6 +409,22 @@ export default function Catalog() {
           </div>
         </div>
       )}
+
+      {/* SEO Text Block */}
+      <section className="py-16 border-t border-amber-500/10">
+        <div className="container mx-auto px-4">
+          <div className="max-w-4xl">
+            <h2 className="font-oswald text-3xl font-bold uppercase text-white mb-6">
+              {content.catalogSeoBlock.title}
+            </h2>
+            <div className="space-y-4">
+              {content.catalogSeoBlock.paragraphs.map((p, i) => (
+                <p key={i} className="text-gray-500 text-sm leading-relaxed">{p}</p>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
     </div>
   );
 }
