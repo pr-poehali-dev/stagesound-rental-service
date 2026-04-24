@@ -2,10 +2,12 @@ import { useState } from "react";
 import Icon from "@/components/ui/icon";
 import { useCity } from "@/context/CityContext";
 import { useSeo } from "@/hooks/useSeo";
+import { CITY_CONTENT } from "@/data/cityContent";
 
 export default function Contacts() {
   useSeo({ page: "contacts" });
   const { city } = useCity();
+  const content = CITY_CONTENT[city.id] ?? CITY_CONTENT.moscow;
   const [form, setForm] = useState({ name: "", phone: "", email: "", type: "", message: "", date: "" });
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -200,6 +202,20 @@ export default function Contacts() {
                 </form>
               </div>
             )}
+          </div>
+        </div>
+      </div>
+
+      {/* SEO Text Block */}
+      <div className="container mx-auto px-4 py-16 border-t border-amber-500/10">
+        <div className="max-w-4xl">
+          <h2 className="font-oswald text-3xl font-bold uppercase text-white mb-6">
+            {content.contactsSeoBlock.title}
+          </h2>
+          <div className="space-y-4">
+            {content.contactsSeoBlock.paragraphs.map((p, i) => (
+              <p key={i} className="text-gray-500 text-sm leading-relaxed">{p}</p>
+            ))}
           </div>
         </div>
       </div>
