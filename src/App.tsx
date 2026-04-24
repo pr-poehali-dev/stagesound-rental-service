@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Layout from "@/components/Layout";
+import CityLayout from "@/components/CityLayout";
 import { CityProvider } from "@/context/CityContext";
 import Home from "./pages/Home";
 import Catalog from "./pages/Catalog";
@@ -19,22 +20,33 @@ const queryClient = new QueryClient();
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <CityProvider>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Layout><Home /></Layout>} />
-          <Route path="/catalog" element={<Layout><Catalog /></Layout>} />
-          <Route path="/services" element={<Layout><Services /></Layout>} />
-          <Route path="/about" element={<Layout><About /></Layout>} />
-          <Route path="/portfolio" element={<Layout><Portfolio /></Layout>} />
-          <Route path="/contacts" element={<Layout><Contacts /></Layout>} />
-          <Route path="/calculator" element={<Layout><Calculator /></Layout>} />
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
-    </TooltipProvider>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <Routes>
+            {/* Маршруты без города (Москва по умолчанию) */}
+            <Route path="/" element={<Layout><Home /></Layout>} />
+            <Route path="/catalog" element={<Layout><Catalog /></Layout>} />
+            <Route path="/services" element={<Layout><Services /></Layout>} />
+            <Route path="/about" element={<Layout><About /></Layout>} />
+            <Route path="/portfolio" element={<Layout><Portfolio /></Layout>} />
+            <Route path="/contacts" element={<Layout><Contacts /></Layout>} />
+            <Route path="/calculator" element={<Layout><Calculator /></Layout>} />
+
+            {/* Маршруты с городским префиксом /:citySlug */}
+            <Route path="/:citySlug" element={<CityLayout><Home /></CityLayout>} />
+            <Route path="/:citySlug/catalog" element={<CityLayout><Catalog /></CityLayout>} />
+            <Route path="/:citySlug/services" element={<CityLayout><Services /></CityLayout>} />
+            <Route path="/:citySlug/about" element={<CityLayout><About /></CityLayout>} />
+            <Route path="/:citySlug/portfolio" element={<CityLayout><Portfolio /></CityLayout>} />
+            <Route path="/:citySlug/contacts" element={<CityLayout><Contacts /></CityLayout>} />
+            <Route path="/:citySlug/calculator" element={<CityLayout><Calculator /></CityLayout>} />
+
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </BrowserRouter>
+      </TooltipProvider>
     </CityProvider>
   </QueryClientProvider>
 );

@@ -1,7 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:xhtml="http://www.w3.org/1999/xhtml">
+
+  <!-- Москва (основные URL без префикса) -->
   <url>
     <loc>https://globalrenta.ru/</loc>
+    <xhtml:link rel="alternate" hreflang="ru-RU" href="https://globalrenta.ru/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://globalrenta.ru/"/>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
@@ -35,4 +40,119 @@
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
+
+  <!-- Москва (с префиксом /moscow/) -->
+  <url>
+    <loc>https://globalrenta.ru/moscow</loc>
+    <xhtml:link rel="alternate" hreflang="ru-RU" href="https://globalrenta.ru/moscow"/>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://globalrenta.ru/moscow/catalog</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://globalrenta.ru/moscow/services</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://globalrenta.ru/moscow/calculator</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://globalrenta.ru/moscow/portfolio</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://globalrenta.ru/moscow/about</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://globalrenta.ru/moscow/contacts</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+
+  <!-- Санкт-Петербург -->
+  <url>
+    <loc>https://globalrenta.ru/spb</loc>
+    <xhtml:link rel="alternate" hreflang="ru-RU" href="https://globalrenta.ru/spb"/>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://globalrenta.ru/spb/catalog</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://globalrenta.ru/spb/services</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://globalrenta.ru/spb/calculator</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://globalrenta.ru/spb/portfolio</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://globalrenta.ru/spb/about</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://globalrenta.ru/spb/contacts</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+
+  <!-- Красноярск -->
+  <url>
+    <loc>https://globalrenta.ru/krasnoyarsk</loc>
+    <xhtml:link rel="alternate" hreflang="ru-RU" href="https://globalrenta.ru/krasnoyarsk"/>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://globalrenta.ru/krasnoyarsk/catalog</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://globalrenta.ru/krasnoyarsk/services</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://globalrenta.ru/krasnoyarsk/calculator</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://globalrenta.ru/krasnoyarsk/portfolio</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://globalrenta.ru/krasnoyarsk/about</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://globalrenta.ru/krasnoyarsk/contacts</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+
 </urlset>

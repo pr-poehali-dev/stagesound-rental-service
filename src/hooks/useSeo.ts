@@ -196,5 +196,24 @@ export function useSeo({ page }: SeoConfig) {
       document.head.appendChild(ogUrl);
     }
     ogUrl.setAttribute("content", window.location.origin + window.location.pathname);
+
+    // hreflang — убираем старые и добавляем актуальные
+    document.querySelectorAll('link[rel="alternate"][hreflang]').forEach((el) => el.remove());
+    const origin = window.location.origin;
+    const pagePath = page === "home" ? "" : `/${page}`;
+    const hreflangs: Array<{ lang: string; href: string }> = [
+      { lang: "ru-RU", href: `${origin}${pagePath || "/"}` },
+      { lang: "ru-ru-moscow", href: `${origin}/moscow${pagePath || ""}` },
+      { lang: "ru-ru-spb", href: `${origin}/spb${pagePath || ""}` },
+      { lang: "ru-ru-krasnoyarsk", href: `${origin}/krasnoyarsk${pagePath || ""}` },
+      { lang: "x-default", href: `${origin}${pagePath || "/"}` },
+    ];
+    hreflangs.forEach(({ lang, href }) => {
+      const link = document.createElement("link");
+      link.setAttribute("rel", "alternate");
+      link.setAttribute("hreflang", lang);
+      link.setAttribute("href", href);
+      document.head.appendChild(link);
+    });
   }, [city.id, page]);
 }
