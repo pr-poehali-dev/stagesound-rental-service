@@ -42,10 +42,23 @@ export default function Home() {
   return (
     <div>
       {/* Hero */}
-      <section className="relative min-h-[90vh] flex items-center overflow-hidden grid-pattern">
+      <section className="relative min-h-[90vh] flex items-center overflow-hidden">
+        {/* Video background */}
+        <video
+          className="absolute inset-0 w-full h-full object-cover"
+          autoPlay
+          muted
+          loop
+          playsInline
+          poster="https://cdn.poehali.dev/projects/bbfa4077-327f-4ddf-84d0-e92a698a19e6/files/6b27e5a8-dfd1-4749-bf9b-5f9ba48a1b99.jpg"
+        >
+          <source src="https://videos.pexels.com/video-files/3257809/3257809-uhd_2560_1440_25fps.mp4" type="video/mp4" />
+        </video>
+        {/* Dark overlay */}
+        <div className="absolute inset-0 bg-black/70" />
+        {/* Grid pattern overlay */}
+        <div className="absolute inset-0 grid-pattern opacity-30" />
         <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 via-transparent to-transparent" />
-        <div className="absolute top-20 right-0 w-96 h-96 bg-amber-500/5 rounded-full blur-3xl" />
-        <div className="absolute bottom-10 left-0 w-64 h-64 bg-amber-500/3 rounded-full blur-2xl" />
 
         <div className="container mx-auto px-4 relative z-10">
           <div className="max-w-3xl">
