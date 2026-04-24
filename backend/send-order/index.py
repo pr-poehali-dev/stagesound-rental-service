@@ -2,9 +2,10 @@ import json
 import os
 import urllib.request
 import urllib.parse
+import psycopg2
 
 def handler(event: dict, context) -> dict:
-    """Отправка заявки из калькулятора в Telegram."""
+    """Отправка заявки из калькулятора в Telegram с присвоением номера заявки."""
     cors = {
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Methods": "POST, OPTIONS",
@@ -26,7 +27,22 @@ def handler(event: dict, context) -> dict:
     extras = body.get("extras", [])
     total = body.get("total", 0)
 
-    lines = ["🎪 <b>Новая заявка с калькулятора</b>", ""]
+    schema = os.environ.get("MAIN_DB_SCHEMA", "public")
+    conn = psycopg2.connect(os.environ["DATABASE_URL"])
+    cur = conn.cursor()
+    cur.execute(
+        f"INSERT INTO {schema}.orders (name, phone, date, place, comment, items, days, delivery, extras, total) "
+        f"VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
+        (name, phone, date, place, comment, json.dumps(items), days, delivery, json.dumps(extras), total)
+    )
+    order_id = cur.fetchone()[0]
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    order_number = f"SS-{order_id:04d}"
+
+    lines = [f"🎪 <b>Заявка #{order_number}</b>", ""]
     lines.append(f"👤 <b>Имя:</b> {name}")
     lines.append(f"📞 <b>Телефон:</b> {phone}")
     if date:
@@ -67,4 +83,4 @@ def handler(event: dict, context) -> dict:
     if not resp_data.get("ok"):
         return {"statusCode": 500, "headers": cors, "body": json.dumps({"error": "Telegram error"})}
 
-    return {"statusCode": 200, "headers": cors, "body": json.dumps({"ok": True})}
+    return {"statusCode": 200, "headers": cors, "body": json.dumps({"ok": True, "order_number": order_number})}

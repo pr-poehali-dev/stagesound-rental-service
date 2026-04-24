@@ -37,6 +37,7 @@ export default function Calculator() {
   const [extras, setExtras] = useState<string[]>([]);
   const [step, setStep] = useState<"select" | "summary">("select");
   const [booked, setBooked] = useState(false);
+  const [orderNumber, setOrderNumber] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [formName, setFormName] = useState("");
   const [formPhone, setFormPhone] = useState("");
@@ -103,13 +104,15 @@ export default function Calculator() {
       return { name: eq.name, qty: c.qty, subtotal: eq.price * c.qty * days };
     });
     const extrasLabels = extras.map((id) => extraServices.find((s) => s.id === id)?.label || id);
-    await fetch(func2url["send-order"], {
+    const res = await fetch(func2url["send-order"], {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: formName, phone: formPhone, date: formDate, place: formPlace, comment: formComment, items, days, delivery, extras: extrasLabels, total }),
     });
+    const data = await res.json();
     setSending(false);
     setShowForm(false);
+    setOrderNumber(data.order_number || "");
     setBooked(true);
   };
 
@@ -128,6 +131,12 @@ export default function Calculator() {
               <Icon name="CheckCircle" size={40} className="text-amber-500" />
             </div>
             <h2 className="font-oswald text-4xl font-bold text-white uppercase mb-3">Бронирование оформлено!</h2>
+            {orderNumber && (
+              <div className="mb-4 px-6 py-3 border border-amber-500/30 rounded-sm bg-amber-500/5">
+                <div className="text-xs text-gray-500 uppercase tracking-widest mb-0.5">Номер заявки</div>
+                <div className="font-oswald text-2xl font-bold neon-text">{orderNumber}</div>
+              </div>
+            )}
             <p className="text-gray-400 mb-2">Заявка на сумму <span className="neon-text font-bold">{total.toLocaleString()} ₽</span> принята.</p>
             <p className="text-gray-500 text-sm mb-8">Менеджер свяжется с вами в течение 30 минут для подтверждения.</p>
             <div className="flex gap-3">
