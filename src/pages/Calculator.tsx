@@ -40,6 +40,8 @@ export default function Calculator() {
   const [showForm, setShowForm] = useState(false);
   const [formName, setFormName] = useState("");
   const [formPhone, setFormPhone] = useState("");
+  const [formDate, setFormDate] = useState("");
+  const [formPlace, setFormPlace] = useState("");
   const [sending, setSending] = useState(false);
   const [search, setSearch] = useState("");
   const [catFilter, setCatFilter] = useState("Все");
@@ -103,7 +105,7 @@ export default function Calculator() {
     await fetch(func2url["send-order"], {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: formName, phone: formPhone, items, days, delivery, extras: extrasLabels, total }),
+      body: JSON.stringify({ name: formName, phone: formPhone, date: formDate, place: formPlace, items, days, delivery, extras: extrasLabels, total }),
     });
     setSending(false);
     setShowForm(false);
@@ -403,6 +405,25 @@ export default function Calculator() {
                   value={formPhone}
                   onChange={(e) => setFormPhone(e.target.value)}
                   placeholder="+7 (999) 000-00-00"
+                  className="w-full bg-transparent border border-amber-500/30 rounded-sm px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/70 text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 uppercase tracking-wider block mb-1.5">Дата мероприятия</label>
+                <input
+                  type="date"
+                  value={formDate}
+                  onChange={(e) => setFormDate(e.target.value)}
+                  className="w-full bg-transparent border border-amber-500/30 rounded-sm px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/70 text-sm [color-scheme:dark]"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 uppercase tracking-wider block mb-1.5">Место проведения</label>
+                <input
+                  type="text"
+                  value={formPlace}
+                  onChange={(e) => setFormPlace(e.target.value)}
+                  placeholder="Адрес, площадка или город"
                   className="w-full bg-transparent border border-amber-500/30 rounded-sm px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/70 text-sm"
                 />
               </div>

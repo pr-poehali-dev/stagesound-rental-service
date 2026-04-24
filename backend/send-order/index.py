@@ -17,6 +17,8 @@ def handler(event: dict, context) -> dict:
     body = json.loads(event.get("body") or "{}")
     name = body.get("name", "").strip()
     phone = body.get("phone", "").strip()
+    date = body.get("date", "").strip()
+    place = body.get("place", "").strip()
     items = body.get("items", [])
     days = body.get("days", 1)
     delivery = body.get("delivery", "Без доставки")
@@ -26,6 +28,10 @@ def handler(event: dict, context) -> dict:
     lines = ["🎪 <b>Новая заявка с калькулятора</b>", ""]
     lines.append(f"👤 <b>Имя:</b> {name}")
     lines.append(f"📞 <b>Телефон:</b> {phone}")
+    if date:
+        lines.append(f"📅 <b>Дата мероприятия:</b> {date}")
+    if place:
+        lines.append(f"📍 <b>Место:</b> {place}")
     lines.append("")
     lines.append("🎛 <b>Оборудование:</b>")
     for it in items:
