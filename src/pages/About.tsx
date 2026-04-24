@@ -1,6 +1,8 @@
 import { Link } from "react-router-dom";
 import Icon from "@/components/ui/icon";
 import { useSeo } from "@/hooks/useSeo";
+import { useCity } from "@/context/CityContext";
+import { CITY_CONTENT } from "@/data/cityContent";
 
 const team = [
   { name: "Алексей Рогозин", role: "Генеральный директор", exp: "15 лет в event-индустрии", icon: "User" },
@@ -26,6 +28,8 @@ const certificates = [
 
 export default function About() {
   useSeo({ page: "about" });
+  const { city } = useCity();
+  const content = CITY_CONTENT[city.id] ?? CITY_CONTENT.moscow;
   return (
     <div className="py-12">
       <div className="container mx-auto px-4">
@@ -136,6 +140,20 @@ export default function About() {
             <Link to="/catalog" className="border border-amber-500/30 text-white px-6 py-3 rounded-sm text-sm hover:border-amber-500/60 transition-colors">
               Каталог
             </Link>
+          </div>
+        </div>
+
+        {/* SEO Text Block */}
+        <div className="mt-16 pt-16 border-t border-amber-500/10">
+          <div className="max-w-4xl">
+            <h2 className="font-oswald text-3xl font-bold uppercase text-white mb-6">
+              {content.aboutSeoBlock.title}
+            </h2>
+            <div className="space-y-4">
+              {content.aboutSeoBlock.paragraphs.map((p, i) => (
+                <p key={i} className="text-gray-500 text-sm leading-relaxed">{p}</p>
+              ))}
+            </div>
           </div>
         </div>
       </div>
