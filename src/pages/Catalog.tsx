@@ -23,8 +23,8 @@ const categoryMeta: Record<string, { image: string; desc: string; icon: string }
     icon: "Monitor",
   },
   Сцена: {
-    image: "https://cdn.poehali.dev/projects/bbfa4077-327f-4ddf-84d0-e92a698a19e6/files/5d66a879-fd6c-4f93-bedd-d1dd5b737ab1.jpg",
-    desc: "Подиумы, фермы, конструкции, кейтеринг",
+    image: "https://cdn.poehali.dev/projects/bbfa4077-327f-4ddf-84d0-e92a698a19e6/files/f45b6b60-a984-4fbe-b59c-5fa6165732ee.jpg",
+    desc: "Сценические конструкции от 3×4 до 14×10 м с крышей и боковыми порталами",
     icon: "LayoutGrid",
   },
   Конференц: {
@@ -61,7 +61,7 @@ export default function Catalog() {
   const [activeSubcategory, setActiveSubcategory] = useState<string | null>(null);
   const [sort, setSort] = useState("popular");
   const [search, setSearch] = useState("");
-  const [priceMax, setPriceMax] = useState(10000);
+  const [priceMax, setPriceMax] = useState(() => Math.max(...equipment.map((e) => e.price)));
   const [selectedItem, setSelectedItem] = useState<null | (typeof equipment)[0]>(null);
 
   const handleCategoryChange = (cat: string) => {
@@ -74,6 +74,11 @@ export default function Catalog() {
     if (activeCategory !== "Все") result = result.filter((e) => e.category === activeCategory);
     if (activeCategory === "Звук" && activeSubcategory) {
       result = result.filter((e) => e.subcategory === activeSubcategory);
+    }
+    if (activeCategory === "Сцена" && activeSubcategory) {
+      const tagMap: Record<string, string> = { "Подиум": "подиум", "С крышей": "крыша", "С порталами": "порталы" };
+      const tag = tagMap[activeSubcategory];
+      if (tag) result = result.filter((e) => e.tags.includes(tag));
     }
     if (search) result = result.filter((e) => e.name.toLowerCase().includes(search.toLowerCase()) || e.tags.some((t) => t.includes(search.toLowerCase())));
     result = result.filter((e) => e.price <= priceMax);
@@ -138,6 +143,38 @@ export default function Catalog() {
       </div>
 
 
+
+      {/* Subcategory bar for Сцена */}
+      {activeCategory === "Сцена" && (
+        <div className="border-b border-amber-500/10 bg-black/20">
+          <div className="container mx-auto px-4">
+            <div className="flex overflow-x-auto gap-0 scrollbar-none">
+              <button
+                onClick={() => setActiveSubcategory(null)}
+                className={`px-4 py-3 text-sm whitespace-nowrap border-b-2 transition-all ${activeSubcategory === null ? "border-amber-500/60 text-amber-400" : "border-transparent text-gray-600 hover:text-gray-300"}`}
+              >
+                Все
+              </button>
+              {["Подиум", "С крышей", "С порталами"].map((tag) => {
+                const tagMap: Record<string, string> = { "Подиум": "подиум", "С крышей": "крыша", "С порталами": "порталы" };
+                const count = equipment.filter((e) => e.category === "Сцена" && e.tags.includes(tagMap[tag])).length;
+                return (
+                  <button
+                    key={tag}
+                    onClick={() => setActiveSubcategory(tag)}
+                    className={`flex items-center gap-2 px-4 py-3 text-sm whitespace-nowrap border-b-2 transition-all ${activeSubcategory === tag ? "border-amber-500/60 text-amber-400" : "border-transparent text-gray-600 hover:text-gray-300"}`}
+                  >
+                    {tag}
+                    {count > 0 && (
+                      <span className={`text-xs px-1.5 py-0.5 rounded-full ${activeSubcategory === tag ? "bg-amber-500/20 text-amber-400" : "bg-gray-800 text-gray-600"}`}>{count}</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Subcategory bar (only for Звук) */}
       {activeCategory === "Звук" && (
