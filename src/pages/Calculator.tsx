@@ -363,9 +363,26 @@ export default function Calculator() {
                   Забронировать
                 </button>
 
-                <Link to="/contacts" className="block text-center text-xs text-gray-600 hover:text-amber-500 mt-3 transition-colors">
-                  Нужна помощь с подбором?
-                </Link>
+                <div className="grid grid-cols-2 gap-2 mt-3">
+                  <a
+                    href="https://wa.me/79333222028"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-center gap-2 border border-green-500/30 text-green-400 hover:bg-green-500/10 rounded-sm py-2.5 text-xs transition-colors"
+                  >
+                    <Icon name="MessageCircle" size={14} />
+                    WhatsApp
+                  </a>
+                  <a
+                    href="https://t.me/+79333222028"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-center gap-2 border border-sky-500/30 text-sky-400 hover:bg-sky-500/10 rounded-sm py-2.5 text-xs transition-colors"
+                  >
+                    <Icon name="Send" size={14} />
+                    Telegram
+                  </a>
+                </div>
 
                 {cart.length > 0 && (
                   <div className="mt-4 p-3 border border-amber-500/10 rounded-sm">
