@@ -49,11 +49,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       >
         <div className="container mx-auto px-4 flex items-center justify-between h-16">
           <Link to="/" className="flex items-center gap-2">
-            <img
-              src="https://cdn.poehali.dev/projects/bbfa4077-327f-4ddf-84d0-e92a698a19e6/files/3131187c-c9af-430a-9b73-7da04d954c7f.jpg"
-              alt="Global Renta logo"
-              className="w-9 h-9 rounded-sm object-cover"
-            />
             <span className="font-oswald text-xl font-bold tracking-widest text-white uppercase">
               Global<span className="neon-text">Renta</span>
             </span>
