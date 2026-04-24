@@ -51,11 +51,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <Link to="/" className="flex items-center gap-2">
             <img
               src="https://cdn.poehali.dev/projects/bbfa4077-327f-4ddf-84d0-e92a698a19e6/files/3131187c-c9af-430a-9b73-7da04d954c7f.jpg"
-              alt="Soul Rent logo"
+              alt="Global Renta logo"
               className="w-9 h-9 rounded-sm object-cover"
             />
             <span className="font-oswald text-xl font-bold tracking-widest text-white uppercase">
-              Soul<span className="neon-text">Rent</span>
+              Global<span className="neon-text">Renta</span>
             </span>
           </Link>
 
@@ -181,11 +181,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               <div className="flex items-center gap-2 mb-3">
                 <img
                   src="https://cdn.poehali.dev/projects/bbfa4077-327f-4ddf-84d0-e92a698a19e6/files/3131187c-c9af-430a-9b73-7da04d954c7f.jpg"
-                  alt="Soul Rent logo"
+                  alt="Global Renta logo"
                   className="w-8 h-8 rounded-sm object-cover"
                 />
                 <span className="font-oswald text-xl font-bold tracking-widest text-white uppercase">
-                  Soul<span className="neon-text">Rent</span>
+                  Global<span className="neon-text">Renta</span>
                 </span>
               </div>
               <p className="text-gray-500 text-sm leading-relaxed">
