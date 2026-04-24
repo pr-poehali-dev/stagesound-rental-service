@@ -42,6 +42,7 @@ export default function Calculator() {
   const [formPhone, setFormPhone] = useState("");
   const [formDate, setFormDate] = useState("");
   const [formPlace, setFormPlace] = useState("");
+  const [formComment, setFormComment] = useState("");
   const [sending, setSending] = useState(false);
   const [search, setSearch] = useState("");
   const [catFilter, setCatFilter] = useState("Все");
@@ -105,7 +106,7 @@ export default function Calculator() {
     await fetch(func2url["send-order"], {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: formName, phone: formPhone, date: formDate, place: formPlace, items, days, delivery, extras: extrasLabels, total }),
+      body: JSON.stringify({ name: formName, phone: formPhone, date: formDate, place: formPlace, comment: formComment, items, days, delivery, extras: extrasLabels, total }),
     });
     setSending(false);
     setShowForm(false);
@@ -425,6 +426,16 @@ export default function Calculator() {
                   onChange={(e) => setFormPlace(e.target.value)}
                   placeholder="Адрес, площадка или город"
                   className="w-full bg-transparent border border-amber-500/30 rounded-sm px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/70 text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 uppercase tracking-wider block mb-1.5">Комментарий</label>
+                <textarea
+                  value={formComment}
+                  onChange={(e) => setFormComment(e.target.value)}
+                  placeholder="Пожелания, уточнения, особые условия..."
+                  rows={3}
+                  className="w-full bg-transparent border border-amber-500/30 rounded-sm px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/70 text-sm resize-none"
                 />
               </div>
             </div>

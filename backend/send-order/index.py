@@ -19,6 +19,7 @@ def handler(event: dict, context) -> dict:
     phone = body.get("phone", "").strip()
     date = body.get("date", "").strip()
     place = body.get("place", "").strip()
+    comment = body.get("comment", "").strip()
     items = body.get("items", [])
     days = body.get("days", 1)
     delivery = body.get("delivery", "Без доставки")
@@ -44,6 +45,9 @@ def handler(event: dict, context) -> dict:
     lines.append("")
     lines.append(f"🚚 <b>Доставка:</b> {delivery}")
     lines.append(f"💰 <b>Итого: {total:,} ₽</b>")
+    if comment:
+        lines.append("")
+        lines.append(f"💬 <b>Комментарий:</b> {comment}")
 
     text = "\n".join(lines)
 
