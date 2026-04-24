@@ -3,20 +3,14 @@ import { Link } from "react-router-dom";
 import Icon from "@/components/ui/icon";
 import { equipment } from "@/data/equipment";
 import { useSeo } from "@/hooks/useSeo";
-
-const deliveryPrices: Record<string, number> = {
-  "Без доставки": 0,
-  "Центр Москвы": 1500,
-  "В пределах МКАД": 2200,
-  "Подмосковье (до 50 км)": 3500,
-  "Подмосковье (50–100 км)": 5500,
-};
+import { useCity } from "@/context/CityContext";
+import { CITY_CONTENT } from "@/data/cityContent";
 
 const extraServices = [
-  { id: "install", label: "Монтаж и демонтаж", price: 5000 },
-  { id: "tech", label: "Техник на месте (1 день)", price: 4000 },
-  { id: "sound", label: "Звукорежиссёр (1 день)", price: 7000 },
-  { id: "light", label: "Световой оператор (1 день)", price: 6500 },
+  { id: "install", label: "Монтаж и демонтаж", price: 15000 },
+  { id: "tech", label: "Техник на месте (1 день)", price: 12000 },
+  { id: "sound", label: "Звукорежиссёр (1 день)", price: 21000 },
+  { id: "light", label: "Световой оператор (1 день)", price: 19500 },
 ];
 
 type CartItem = {
@@ -26,6 +20,16 @@ type CartItem = {
 
 export default function Calculator() {
   useSeo({ page: "calculator" });
+  const { city } = useCity();
+  const content = CITY_CONTENT[city.id] ?? CITY_CONTENT.moscow;
+  const deliveryZones = [
+    { name: "Без доставки", price: 0 },
+    ...content.delivery.zones.map((z) => ({
+      name: z.name,
+      price: parseInt(z.price.replace(/\s/g, "").replace("₽", "")),
+    })),
+  ];
+
   const [cart, setCart] = useState<CartItem[]>([]);
   const [days, setDays] = useState(1);
   const [delivery, setDelivery] = useState("Без доставки");
@@ -76,7 +80,7 @@ export default function Calculator() {
     return sum + (s ? s.price : 0);
   }, 0);
 
-  const deliveryTotal = deliveryPrices[delivery] || 0;
+  const deliveryTotal = deliveryZones.find((z) => z.name === delivery)?.price || 0;
   const total = equipmentTotal + extrasTotal + deliveryTotal;
 
   const toggleExtra = (id: string) => {
@@ -222,15 +226,15 @@ export default function Calculator() {
                   <h2 className="font-oswald text-xl font-bold text-white uppercase">Доставка</h2>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {Object.entries(deliveryPrices).map(([zone, price]) => (
+                  {deliveryZones.map((zone) => (
                     <button
-                      key={zone}
-                      onClick={() => setDelivery(zone)}
-                      className={`p-3 rounded-sm border text-left transition-all ${delivery === zone ? "border-amber-500/50 bg-amber-500/5" : "border-amber-500/10 hover:border-amber-500/20"}`}
+                      key={zone.name}
+                      onClick={() => setDelivery(zone.name)}
+                      className={`p-3 rounded-sm border text-left transition-all ${delivery === zone.name ? "border-amber-500/50 bg-amber-500/5" : "border-amber-500/10 hover:border-amber-500/20"}`}
                     >
-                      <div className="text-sm text-white">{zone}</div>
-                      <div className={`text-xs font-bold ${delivery === zone ? "neon-text" : "text-gray-500"}`}>
-                        {price === 0 ? "Бесплатно" : `${price.toLocaleString()} ₽`}
+                      <div className="text-sm text-white">{zone.name}</div>
+                      <div className={`text-xs font-bold ${delivery === zone.name ? "neon-text" : "text-gray-500"}`}>
+                        {zone.price === 0 ? "Бесплатно" : `${zone.price.toLocaleString()} ₽`}
                       </div>
                     </button>
                   ))}
