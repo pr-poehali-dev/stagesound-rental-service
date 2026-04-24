@@ -1,8 +1,10 @@
 import { useState } from "react";
 import Icon from "@/components/ui/icon";
 import { useCity } from "@/context/CityContext";
+import { useSeo } from "@/hooks/useSeo";
 
 export default function Contacts() {
+  useSeo({ page: "contacts" });
   const { city } = useCity();
   const [form, setForm] = useState({ name: "", phone: "", email: "", type: "", message: "", date: "" });
   const [submitted, setSubmitted] = useState(false);

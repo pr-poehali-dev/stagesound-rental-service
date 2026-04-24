@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import Icon from "@/components/ui/icon";
 import { equipment, categories, soundSubcategories } from "@/data/equipment";
+import { useSeo } from "@/hooks/useSeo";
 
 const categoryMeta: Record<string, { image: string; desc: string; icon: string }> = {
   Звук: {
@@ -48,6 +49,7 @@ const catCounts = Object.fromEntries(
 );
 
 export default function Catalog() {
+  useSeo({ page: "catalog" });
   const [searchParams] = useSearchParams();
   const [activeCategory, setActiveCategory] = useState(
     categories.find((c) => c.toLowerCase() === searchParams.get("category")) || "Все"

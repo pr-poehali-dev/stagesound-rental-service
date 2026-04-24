@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import Icon from "@/components/ui/icon";
+import { useSeo } from "@/hooks/useSeo";
 
 const team = [
   { name: "Алексей Рогозин", role: "Генеральный директор", exp: "15 лет в event-индустрии", icon: "User" },
@@ -24,6 +25,7 @@ const certificates = [
 ];
 
 export default function About() {
+  useSeo({ page: "about" });
   return (
     <div className="py-12">
       <div className="container mx-auto px-4">

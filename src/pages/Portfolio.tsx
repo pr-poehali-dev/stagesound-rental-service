@@ -1,5 +1,6 @@
 import { useState } from "react";
 import Icon from "@/components/ui/icon";
+import { useSeo } from "@/hooks/useSeo";
 
 const portfolioFilters = ["Все", "Концерты", "Конференции", "Корпоративы", "Фестивали", "Шоу"];
 
@@ -73,6 +74,7 @@ const projects = [
 ];
 
 export default function Portfolio() {
+  useSeo({ page: "portfolio" });
   const [activeFilter, setActiveFilter] = useState("Все");
   const [selected, setSelected] = useState<null | (typeof projects)[0]>(null);
 

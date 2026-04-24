@@ -1,5 +1,7 @@
 import { Link } from "react-router-dom";
 import Icon from "@/components/ui/icon";
+import { useSeo } from "@/hooks/useSeo";
+import { useCity } from "@/context/CityContext";
 
 const stats = [
   { value: "500+", label: "Единиц оборудования" },
@@ -39,6 +41,9 @@ const reviews = [
 ];
 
 export default function Home() {
+  useSeo({ page: "home" });
+  const { city } = useCity();
+
   return (
     <div>
       {/* Hero */}
@@ -64,7 +69,7 @@ export default function Home() {
           <div className="max-w-3xl">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-sm border border-amber-500/30 text-amber-500 text-xs font-medium uppercase tracking-widest mb-6">
               <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse" />
-              Профессиональная аренда оборудования
+              Профессиональная аренда оборудования · {city.name}
             </div>
 
             <h1 className="font-oswald text-6xl md:text-8xl font-bold uppercase leading-none mb-6">
@@ -74,7 +79,7 @@ export default function Home() {
             </h1>
 
             <p className="text-gray-400 text-lg md:text-xl max-w-xl mb-10 leading-relaxed">
-              Аренда профессионального оборудования для мероприятий любого масштаба.
+              Аренда звука, света, микрофонов и сцены в {city.name === "Санкт-Петербург" ? "Санкт-Петербурге" : city.name === "Красноярск" ? "Красноярске" : "Москве"} для мероприятий любого масштаба.
               Доставка, монтаж и техническая поддержка включены.
             </p>
 

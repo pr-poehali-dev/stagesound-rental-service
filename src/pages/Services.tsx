@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import Icon from "@/components/ui/icon";
+import { useSeo } from "@/hooks/useSeo";
 
 const services = [
   {
@@ -90,6 +91,7 @@ const services = [
 ];
 
 export default function Services() {
+  useSeo({ page: "services" });
   const [activeService, setActiveService] = useState(services[0].id);
   const current = services.find((s) => s.id === activeService)!;
 

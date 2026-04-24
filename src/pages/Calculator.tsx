@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import Icon from "@/components/ui/icon";
 import { equipment } from "@/data/equipment";
+import { useSeo } from "@/hooks/useSeo";
 
 const deliveryPrices: Record<string, number> = {
   "Без доставки": 0,
@@ -24,6 +25,7 @@ type CartItem = {
 };
 
 export default function Calculator() {
+  useSeo({ page: "calculator" });
   const [cart, setCart] = useState<CartItem[]>([]);
   const [days, setDays] = useState(1);
   const [delivery, setDelivery] = useState("Без доставки");
