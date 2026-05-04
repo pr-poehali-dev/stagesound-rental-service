@@ -30,13 +30,13 @@ CORS = {
 
 _FONTS_OK = False
 
-# Источники шрифта — cdnjs Roboto поддерживает кириллицу (от pdfmake)
+# Источники шрифта: наш S3 → cdnjs (Roboto с кириллицей)
 _FONT_SOURCES = [
-    lambda key_id: f"https://cdn.poehali.dev/projects/{key_id}/bucket/fonts/DejaVuSans.ttf",
+    lambda key_id: f"https://cdn.poehali.dev/projects/{key_id}/bucket/fonts/font_F.ttf",
     lambda _: "https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/fonts/Roboto/Roboto-Regular.ttf",
 ]
 _BOLD_SOURCES = [
-    lambda key_id: f"https://cdn.poehali.dev/projects/{key_id}/bucket/fonts/DejaVuSans-Bold.ttf",
+    lambda key_id: f"https://cdn.poehali.dev/projects/{key_id}/bucket/fonts/font_FB.ttf",
     lambda _: "https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/fonts/Roboto/Roboto-Medium.ttf",
 ]
 
@@ -47,17 +47,28 @@ def get_s3():
                         aws_secret_access_key=os.environ["AWS_SECRET_ACCESS_KEY"])
 
 
+def is_valid_ttf_bytes(data: bytes) -> bool:
+    return len(data) > 1000 and data[:4] in (b"\x00\x01\x00\x00", b"OTTO", b"true", b"typ1")
+
+
 def fetch_font(path_local: str, s3_key: str, sources: list):
     """Скачивает шрифт: сначала наш S3, потом внешние источники. Кеширует в S3."""
     key_id = os.environ.get("AWS_ACCESS_KEY_ID", "")
     s3 = get_s3()
 
-    # 1. Пробуем скачать с нашего S3
+    # 1. Пробуем скачать с нашего S3 (только если там валидный TTF)
     try:
         obj = s3.get_object(Bucket="files", Key=s3_key)
-        with open(path_local, "wb") as f:
-            f.write(obj["Body"].read())
-        return
+        data = obj["Body"].read()
+        if is_valid_ttf_bytes(data):
+            with open(path_local, "wb") as f:
+                f.write(data)
+            return
+        # В S3 лежит мусор — удаляем
+        try:
+            s3.delete_object(Bucket="files", Key=s3_key)
+        except Exception:
+            pass
     except Exception:
         pass
 
@@ -65,8 +76,11 @@ def fetch_font(path_local: str, s3_key: str, sources: list):
     for source_fn in sources:
         url = source_fn(key_id)
         try:
-            resp = requests.get(url, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
-            if resp.status_code == 200 and len(resp.content) > 10000:
+            resp = requests.get(url, timeout=20, headers={
+                "User-Agent": "Mozilla/5.0",
+                "Accept": "application/octet-stream, */*",
+            })
+            if resp.status_code == 200 and is_valid_ttf_bytes(resp.content):
                 with open(path_local, "wb") as f:
                     f.write(resp.content)
                 # Кешируем в S3
@@ -79,16 +93,13 @@ def fetch_font(path_local: str, s3_key: str, sources: list):
         except Exception:
             continue
 
-    raise RuntimeError(f"Не удалось загрузить шрифт из всех источников")
+    raise RuntimeError(f"Не удалось загрузить TTF шрифт. Все источники недоступны.")
 
 
 def is_valid_ttf(path: str) -> bool:
-    """Проверяет что файл является TTF (начинается с корректной сигнатуры)."""
     try:
         with open(path, "rb") as f:
-            header = f.read(4)
-        # TTF: 00 01 00 00 или OTF: 4F 54 54 4F
-        return header in (b"\x00\x01\x00\x00", b"OTTO", b"true", b"typ1")
+            return is_valid_ttf_bytes(f.read())
     except Exception:
         return False
 
@@ -98,8 +109,8 @@ def ensure_fonts():
     if _FONTS_OK:
         return
     for name, local, s3key, sources in [
-        ("F",  "/tmp/font_F.ttf",  "fonts/DejaVuSans.ttf",      _FONT_SOURCES),
-        ("FB", "/tmp/font_FB.ttf", "fonts/DejaVuSans-Bold.ttf",  _BOLD_SOURCES),
+        ("F",  "/tmp/font_F.ttf",  "fonts/font_F.ttf",  _FONT_SOURCES),
+        ("FB", "/tmp/font_FB.ttf", "fonts/font_FB.ttf", _BOLD_SOURCES),
     ]:
         # Удаляем невалидный кеш
         if os.path.exists(local) and not is_valid_ttf(local):
