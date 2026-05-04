@@ -5,29 +5,53 @@ import func2url from "../../backend/func2url.json";
 
 const URLS = func2url as Record<string, string>;
 
-const extraServices = [
+// Города и их зоны доставки (цены редактируются менеджером)
+const CITIES: Record<string, { label: string; zones: { name: string; defaultPrice: number }[] }> = {
+  moscow: {
+    label: "Москва",
+    zones: [
+      { name: "Без доставки", defaultPrice: 0 },
+      { name: "Центр Москвы", defaultPrice: 4500 },
+      { name: "Москва (в пределах МКАД)", defaultPrice: 6600 },
+      { name: "Подмосковье (до 50 км)", defaultPrice: 10500 },
+      { name: "Подмосковье (50–100 км)", defaultPrice: 16500 },
+    ],
+  },
+  spb: {
+    label: "Санкт-Петербург",
+    zones: [
+      { name: "Без доставки", defaultPrice: 0 },
+      { name: "Центр СПб (внутри КАД)", defaultPrice: 4500 },
+      { name: "Санкт-Петербург (за КАД)", defaultPrice: 6600 },
+      { name: "Ленобласть (до 50 км)", defaultPrice: 10500 },
+      { name: "Ленобласть (50–100 км)", defaultPrice: 16500 },
+    ],
+  },
+  krasnoyarsk: {
+    label: "Красноярск",
+    zones: [
+      { name: "Без доставки", defaultPrice: 0 },
+      { name: "Центр Красноярска", defaultPrice: 4500 },
+      { name: "Красноярск (все районы)", defaultPrice: 6600 },
+      { name: "Пригород (до 50 км)", defaultPrice: 10500 },
+      { name: "Красноярский край (50–100 км)", defaultPrice: 16500 },
+    ],
+  },
+};
+
+type ExtraService = { id: string; label: string; price: number };
+
+const DEFAULT_EXTRAS: ExtraService[] = [
   { id: "install", label: "Монтаж и демонтаж", price: 15000 },
   { id: "tech", label: "Техник на месте (1 день)", price: 12000 },
   { id: "sound", label: "Звукорежиссёр (1 день)", price: 21000 },
   { id: "light", label: "Световой оператор (1 день)", price: 19500 },
 ];
 
-const deliveryZones = [
-  { name: "Без доставки", price: 0 },
-  { name: "МКАД (до 30 км)", price: 5000 },
-  { name: "30–60 км от МКАД", price: 9000 },
-  { name: "60–100 км от МКАД", price: 15000 },
-];
-
-type Eq = {
-  id: number; name: string; category: string; price: number; unit: string;
-  image?: string;
-};
+type Eq = { id: number; name: string; category: string; price: number; unit: string; image?: string };
 type CartItem = { id: number; qty: number };
 
-function inp(className = "") {
-  return `w-full bg-transparent border border-amber-500/20 rounded-sm px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/50 ${className}`;
-}
+const iCls = "w-full bg-transparent border border-amber-500/20 rounded-sm px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/50";
 
 export default function AdminQuote() {
   const navigate = useNavigate();
@@ -42,29 +66,50 @@ export default function AdminQuote() {
 
   const [cart, setCart] = useState<CartItem[]>([]);
   const [days, setDays] = useState(1);
-  const [delivery, setDelivery] = useState("Без доставки");
-  const [extras, setExtras] = useState<string[]>([]);
   const [title, setTitle] = useState("");
+
+  // Город и доставка
+  const [cityKey, setCityKey] = useState("moscow");
+  const [deliveryZoneIdx, setDeliveryZoneIdx] = useState(0); // индекс зоны
+  // Редактируемые цены доставки (по городу)
+  const [deliveryPrices, setDeliveryPrices] = useState<Record<string, number[]>>({
+    moscow: CITIES.moscow.zones.map((z) => z.defaultPrice),
+    spb: CITIES.spb.zones.map((z) => z.defaultPrice),
+    krasnoyarsk: CITIES.krasnoyarsk.zones.map((z) => z.defaultPrice),
+  });
+
+  // Доп. услуги с редактируемыми ценами
+  const [extraServices, setExtraServices] = useState<ExtraService[]>(DEFAULT_EXTRAS);
+  const [selectedExtras, setSelectedExtras] = useState<string[]>([]);
 
   const [saving, setSaving] = useState(false);
   const [copiedLink, setCopiedLink] = useState("");
   const [shareLink, setShareLink] = useState("");
 
-  // Auth
-  const handleAuth = async () => {
-    const res = await fetch(`${URLS["manage-quotes"]}?pwd=${encodeURIComponent(password)}`);
-    if (res.ok) {
-      sessionStorage.setItem("admin_pwd", password);
-      setAuthed(true);
-      setAuthError(false);
-    } else {
-      setAuthError(true);
-    }
+  const currentCity = CITIES[cityKey];
+  const currentZones = currentCity.zones;
+  const currentPrices = deliveryPrices[cityKey];
+  const deliveryZone = currentZones[deliveryZoneIdx];
+  const deliveryTotal = deliveryZoneIdx === 0 ? 0 : currentPrices[deliveryZoneIdx];
+
+  const setDeliveryPrice = (idx: number, val: number) => {
+    setDeliveryPrices((prev) => ({
+      ...prev,
+      [cityKey]: prev[cityKey].map((p, i) => (i === idx ? val : p)),
+    }));
   };
 
-  useEffect(() => {
-    if (password) handleAuth();
-  }, []);
+  const setExtraPrice = (id: string, val: number) => {
+    setExtraServices((prev) => prev.map((s) => (s.id === id ? { ...s, price: val } : s)));
+  };
+
+  const handleAuth = async () => {
+    const res = await fetch(`${URLS["manage-quotes"]}?pwd=${encodeURIComponent(password)}`);
+    if (res.ok) { sessionStorage.setItem("admin_pwd", password); setAuthed(true); setAuthError(false); }
+    else setAuthError(true);
+  };
+
+  useEffect(() => { if (password) handleAuth(); }, []);
 
   useEffect(() => {
     if (!authed) return;
@@ -74,8 +119,10 @@ export default function AdminQuote() {
       .catch(() => setLoading(false));
   }, [authed]);
 
-  const categories = useMemo(() => ["Все", ...Array.from(new Set(equipment.map((e) => e.category)))], [equipment]);
+  // Сбрасываем зону при смене города
+  useEffect(() => { setDeliveryZoneIdx(0); }, [cityKey]);
 
+  const categories = useMemo(() => ["Все", ...Array.from(new Set(equipment.map((e) => e.category)))], [equipment]);
   const filtered = useMemo(() =>
     equipment.filter((e) => {
       const matchCat = catFilter === "Все" || e.category === catFilter;
@@ -84,30 +131,24 @@ export default function AdminQuote() {
     }), [equipment, catFilter, search]);
 
   const getQty = (id: number) => cart.find((c) => c.id === id)?.qty || 0;
-
   const addToCart = (id: number) => setCart((prev) => {
-    const found = prev.find((c) => c.id === id);
-    if (found) return prev.map((c) => c.id === id ? { ...c, qty: c.qty + 1 } : c);
-    return [...prev, { id, qty: 1 }];
+    const f = prev.find((c) => c.id === id);
+    return f ? prev.map((c) => c.id === id ? { ...c, qty: c.qty + 1 } : c) : [...prev, { id, qty: 1 }];
   });
-
   const removeFromCart = (id: number) => setCart((prev) => {
-    const found = prev.find((c) => c.id === id);
-    if (!found) return prev;
-    if (found.qty <= 1) return prev.filter((c) => c.id !== id);
-    return prev.map((c) => c.id === id ? { ...c, qty: c.qty - 1 } : c);
+    const f = prev.find((c) => c.id === id);
+    if (!f) return prev;
+    return f.qty <= 1 ? prev.filter((c) => c.id !== id) : prev.map((c) => c.id === id ? { ...c, qty: c.qty - 1 } : c);
   });
-
   const setQty = (id: number, qty: number) => {
     if (qty <= 0) { setCart((prev) => prev.filter((c) => c.id !== id)); return; }
     setCart((prev) => {
-      const found = prev.find((c) => c.id === id);
-      if (found) return prev.map((c) => c.id === id ? { ...c, qty } : c);
-      return [...prev, { id, qty }];
+      const f = prev.find((c) => c.id === id);
+      return f ? prev.map((c) => c.id === id ? { ...c, qty } : c) : [...prev, { id, qty }];
     });
   };
-
-  const toggleExtra = (id: string) => setExtras((prev) => prev.includes(id) ? prev.filter((e) => e !== id) : [...prev, id]);
+  const toggleExtra = (id: string) =>
+    setSelectedExtras((prev) => prev.includes(id) ? prev.filter((e) => e !== id) : [...prev, id]);
 
   const equipmentTotal = useMemo(() =>
     cart.reduce((sum, item) => {
@@ -115,11 +156,10 @@ export default function AdminQuote() {
       return sum + (eq ? eq.price * item.qty * days : 0);
     }, 0), [cart, days, equipment]);
 
-  const extrasTotal = extras.reduce((sum, id) => {
+  const extrasTotal = selectedExtras.reduce((sum, id) => {
     const s = extraServices.find((s) => s.id === id);
     return sum + (s ? s.price : 0);
   }, 0);
-  const deliveryTotal = deliveryZones.find((z) => z.name === delivery)?.price || 0;
   const total = equipmentTotal + extrasTotal + deliveryTotal;
 
   const handleSaveAndShare = async () => {
@@ -129,22 +169,25 @@ export default function AdminQuote() {
       const eq = equipment.find((e) => e.id === c.id)!;
       return { id: eq.id, name: eq.name, price: eq.price, unit: eq.unit, qty: c.qty };
     });
-    const extrasData = extras.map((id) => {
+    const extrasData = selectedExtras.map((id) => {
       const s = extraServices.find((s) => s.id === id)!;
       return { id, name: s.label, price: s.price };
     });
+    const deliveryName = deliveryZoneIdx === 0 ? "Без доставки" : `${currentCity.label} — ${deliveryZone.name}`;
     const res = await fetch(`${URLS["manage-quotes"]}?pwd=${encodeURIComponent(password)}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: title || "КП без названия", items, days, delivery, delivery_price: deliveryTotal, extras: extrasData, total }),
+      body: JSON.stringify({
+        title: title || "КП без названия",
+        items, days,
+        delivery: deliveryName,
+        delivery_price: deliveryTotal,
+        extras: extrasData, total,
+      }),
     });
     const data = await res.json();
-
-    // Сразу помечаем как отправленное, получаем токен
     await fetch(`${URLS["manage-quotes"]}?pwd=${encodeURIComponent(password)}&action=send&id=${data.id}`, { method: "POST" });
-
-    const link = `${window.location.origin}/quote/${data.token}`;
-    setShareLink(link);
+    setShareLink(`${window.location.origin}/quote/${data.token}`);
     setSaving(false);
   };
 
@@ -160,8 +203,7 @@ export default function AdminQuote() {
         <div className="glass-card rounded-sm p-8 w-full max-w-sm">
           <h2 className="font-oswald text-2xl font-bold text-white uppercase mb-6 text-center">Вход в Admin</h2>
           <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleAuth()}
-            placeholder="Пароль" className={inp("mb-3")} />
+            onKeyDown={(e) => e.key === "Enter" && handleAuth()} placeholder="Пароль" className={`${iCls} mb-3`} />
           {authError && <p className="text-red-400 text-sm mb-3">Неверный пароль</p>}
           <button onClick={handleAuth} className="neon-btn w-full py-2 rounded-sm text-sm">Войти</button>
         </div>
@@ -172,7 +214,6 @@ export default function AdminQuote() {
   return (
     <div className="min-h-screen bg-[#0a0a0a] p-4 md:p-8">
       <div className="max-w-7xl mx-auto">
-        {/* Header */}
         <div className="flex items-center gap-4 mb-8">
           <button onClick={() => navigate("/admin")} className="text-gray-500 hover:text-amber-500 transition-colors">
             <Icon name="ArrowLeft" size={20} />
@@ -184,20 +225,17 @@ export default function AdminQuote() {
         </div>
 
         {shareLink ? (
-          /* ── Ссылка готова ── */
           <div className="glass-card neon-border rounded-sm p-8 text-center max-w-2xl mx-auto">
             <Icon name="CheckCircle" size={48} className="text-amber-500 mx-auto mb-4" />
             <h2 className="font-oswald text-2xl font-bold text-white uppercase mb-2">КП готово!</h2>
             <p className="text-gray-400 text-sm mb-6">Отправьте эту ссылку клиенту для согласования</p>
-            <div className="bg-black/40 border border-amber-500/30 rounded-sm px-4 py-3 text-amber-400 text-sm break-all mb-4 text-left">
-              {shareLink}
-            </div>
+            <div className="bg-black/40 border border-amber-500/30 rounded-sm px-4 py-3 text-amber-400 text-sm break-all mb-4 text-left">{shareLink}</div>
             <div className="flex gap-3 justify-center flex-wrap">
               <button onClick={copyLink} className="neon-btn flex items-center gap-2 px-6 py-2 rounded-sm text-sm">
                 <Icon name={copiedLink ? "Check" : "Copy"} size={14} />
                 {copiedLink ? "Скопировано!" : "Скопировать ссылку"}
               </button>
-              <button onClick={() => { setShareLink(""); setCart([]); setTitle(""); }}
+              <button onClick={() => { setShareLink(""); setCart([]); setTitle(""); setSelectedExtras([]); }}
                 className="border border-gray-700 text-gray-400 px-6 py-2 rounded-sm text-sm hover:border-gray-500 transition-colors">
                 Создать новое КП
               </button>
@@ -214,7 +252,7 @@ export default function AdminQuote() {
               <div className="glass-card rounded-sm p-4">
                 <div className="flex flex-col sm:flex-row gap-3">
                   <input value={search} onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Поиск оборудования..." className={inp("flex-1")} />
+                    placeholder="Поиск оборудования..." className={`${iCls} flex-1`} />
                   <select value={catFilter} onChange={(e) => setCatFilter(e.target.value)}
                     className="border border-amber-500/20 rounded-sm px-3 py-2 text-sm text-gray-300 focus:outline-none"
                     style={{ background: "var(--surface-2, #111)" }}>
@@ -231,43 +269,39 @@ export default function AdminQuote() {
                     const qty = getQty(eq.id);
                     return (
                       <div key={eq.id} className={`glass-card rounded-sm p-4 flex gap-3 transition-all ${qty > 0 ? "border border-amber-500/40" : ""}`}>
-                        {eq.image && (
-                          <img src={eq.image} alt={eq.name}
-                            className="w-16 h-16 object-cover rounded-sm shrink-0 opacity-80" />
-                        )}
+                        {eq.image && <img src={eq.image} alt={eq.name} className="w-16 h-16 object-cover rounded-sm shrink-0 opacity-80" />}
                         <div className="flex-1 min-w-0">
                           <p className="text-white text-sm font-medium leading-tight mb-1 truncate">{eq.name}</p>
                           <p className="text-amber-500 text-xs font-bold mb-3">{eq.price.toLocaleString()} ₽/{eq.unit}</p>
                           <div className="flex items-center gap-2">
                             <button onClick={() => removeFromCart(eq.id)}
-                              className="w-7 h-7 border border-amber-500/30 rounded-sm text-amber-500 hover:bg-amber-500/10 flex items-center justify-center text-lg leading-none transition-colors">−</button>
+                              className="w-7 h-7 border border-amber-500/30 rounded-sm text-amber-500 hover:bg-amber-500/10 flex items-center justify-center transition-colors text-base leading-none">−</button>
                             <span className="text-white text-sm w-6 text-center">{qty}</span>
                             <button onClick={() => addToCart(eq.id)}
-                              className="w-7 h-7 border border-amber-500/30 rounded-sm text-amber-500 hover:bg-amber-500/10 flex items-center justify-center text-lg leading-none transition-colors">+</button>
+                              className="w-7 h-7 border border-amber-500/30 rounded-sm text-amber-500 hover:bg-amber-500/10 flex items-center justify-center transition-colors text-base leading-none">+</button>
                           </div>
                         </div>
                       </div>
                     );
                   })}
-                  {filtered.length === 0 && (
-                    <div className="col-span-2 text-center text-gray-500 py-12">Ничего не найдено</div>
-                  )}
+                  {filtered.length === 0 && <div className="col-span-2 text-center text-gray-500 py-12">Ничего не найдено</div>}
                 </div>
               )}
             </div>
 
-            {/* ── Сводка КП ── */}
+            {/* ── Правая панель ── */}
             <div className="xl:col-span-1 space-y-4">
+
               {/* Название КП */}
               <div className="glass-card rounded-sm p-4">
-                <label className="text-xs text-gray-600 uppercase tracking-wider block mb-2">Название КП</label>
+                <label className="text-xs text-gray-500 uppercase tracking-wider block mb-2">Название КП</label>
                 <input value={title} onChange={(e) => setTitle(e.target.value)}
-                  placeholder="Мероприятие, событие..." className={inp()} />
+                  placeholder="Мероприятие, событие..." className={iCls} />
               </div>
 
               {/* Корзина */}
               <div className="glass-card rounded-sm p-4">
-                <h3 className="text-xs text-gray-600 uppercase tracking-wider mb-3">Выбранное оборудование</h3>
+                <h3 className="text-xs text-gray-500 uppercase tracking-wider mb-3">Выбранное оборудование</h3>
                 {cart.length === 0 ? (
                   <p className="text-gray-600 text-sm text-center py-4">Добавьте позиции из каталога</p>
                 ) : (
@@ -291,8 +325,8 @@ export default function AdminQuote() {
                   </div>
                 )}
 
-                {/* Дни */}
-                <label className="text-xs text-gray-600 uppercase tracking-wider block mb-1 mt-4">Дней аренды</label>
+                {/* Дней */}
+                <label className="text-xs text-gray-500 uppercase tracking-wider block mb-1 mt-2">Дней аренды</label>
                 <div className="flex items-center gap-3 mb-4">
                   <button onClick={() => setDays((d) => Math.max(1, d - 1))}
                     className="w-8 h-8 border border-amber-500/30 rounded-sm text-amber-500 hover:bg-amber-500/10 flex items-center justify-center transition-colors">−</button>
@@ -301,31 +335,96 @@ export default function AdminQuote() {
                     className="w-8 h-8 border border-amber-500/30 rounded-sm text-amber-500 hover:bg-amber-500/10 flex items-center justify-center transition-colors">+</button>
                 </div>
 
-                {/* Доставка */}
-                <label className="text-xs text-gray-600 uppercase tracking-wider block mb-1">Доставка</label>
-                <select value={delivery} onChange={(e) => setDelivery(e.target.value)}
-                  className="w-full border border-amber-500/20 rounded-sm px-3 py-2 text-sm text-gray-300 focus:outline-none mb-4"
+                {/* Итог оборудование */}
+                {cart.length > 0 && (
+                  <div className="flex justify-between text-sm text-gray-400 mb-4 pb-4 border-b border-amber-500/10">
+                    <span>Оборудование</span>
+                    <span className="text-white">{equipmentTotal.toLocaleString()} ₽</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Город и доставка */}
+              <div className="glass-card rounded-sm p-4">
+                <h3 className="text-xs text-gray-500 uppercase tracking-wider mb-3">Город и доставка</h3>
+
+                <label className="text-xs text-gray-600 block mb-1">Город</label>
+                <select value={cityKey} onChange={(e) => setCityKey(e.target.value)}
+                  className="w-full border border-amber-500/20 rounded-sm px-3 py-2 text-sm text-gray-300 focus:outline-none mb-3"
                   style={{ background: "var(--surface-2, #111)" }}>
-                  {deliveryZones.map((z) => (
-                    <option key={z.name} value={z.name}>{z.name}{z.price ? ` — ${z.price.toLocaleString()} ₽` : ""}</option>
+                  {Object.entries(CITIES).map(([key, c]) => <option key={key} value={key}>{c.label}</option>)}
+                </select>
+
+                <label className="text-xs text-gray-600 block mb-1">Зона доставки</label>
+                <select value={deliveryZoneIdx} onChange={(e) => setDeliveryZoneIdx(Number(e.target.value))}
+                  className="w-full border border-amber-500/20 rounded-sm px-3 py-2 text-sm text-gray-300 focus:outline-none mb-3"
+                  style={{ background: "var(--surface-2, #111)" }}>
+                  {currentZones.map((z, i) => (
+                    <option key={i} value={i}>
+                      {z.name}{i > 0 ? ` — ${currentPrices[i].toLocaleString()} ₽` : ""}
+                    </option>
                   ))}
                 </select>
 
-                {/* Доп. услуги */}
-                <label className="text-xs text-gray-600 uppercase tracking-wider block mb-2">Доп. услуги</label>
-                <div className="space-y-1 mb-4">
+                {/* Редактирование цен доставки */}
+                <details className="mt-1">
+                  <summary className="text-xs text-amber-500/70 hover:text-amber-500 cursor-pointer select-none mb-2">
+                    Изменить цены доставки
+                  </summary>
+                  <div className="space-y-2 mt-2">
+                    {currentZones.slice(1).map((z, i) => (
+                      <div key={i} className="flex items-center gap-2">
+                        <span className="text-gray-500 text-xs flex-1 truncate">{z.name}</span>
+                        <input
+                          type="number"
+                          value={currentPrices[i + 1]}
+                          onChange={(e) => setDeliveryPrice(i + 1, Number(e.target.value))}
+                          className="w-24 bg-transparent border border-amber-500/20 rounded-sm px-2 py-1 text-sm text-white text-right focus:outline-none focus:border-amber-500/50"
+                        />
+                        <span className="text-gray-600 text-xs">₽</span>
+                      </div>
+                    ))}
+                  </div>
+                </details>
+
+                {deliveryTotal > 0 && (
+                  <div className="flex justify-between text-sm text-gray-400 mt-3 pt-3 border-t border-amber-500/10">
+                    <span>Доставка</span>
+                    <span className="text-white">{deliveryTotal.toLocaleString()} ₽</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Доп. услуги */}
+              <div className="glass-card rounded-sm p-4">
+                <h3 className="text-xs text-gray-500 uppercase tracking-wider mb-3">Доп. услуги</h3>
+                <div className="space-y-2">
                   {extraServices.map((s) => (
-                    <label key={s.id} className="flex items-center gap-2 cursor-pointer text-sm">
-                      <input type="checkbox" checked={extras.includes(s.id)} onChange={() => toggleExtra(s.id)}
-                        className="w-4 h-4 accent-amber-500" />
-                      <span className="text-gray-400 flex-1">{s.label}</span>
-                      <span className="text-gray-500">{s.price.toLocaleString()} ₽</span>
-                    </label>
+                    <div key={s.id} className="flex items-center gap-2">
+                      <input type="checkbox" checked={selectedExtras.includes(s.id)}
+                        onChange={() => toggleExtra(s.id)} className="w-4 h-4 accent-amber-500 shrink-0" />
+                      <span className="text-gray-400 text-sm flex-1">{s.label}</span>
+                      <input
+                        type="number"
+                        value={s.price}
+                        onChange={(e) => setExtraPrice(s.id, Number(e.target.value))}
+                        className="w-24 bg-transparent border border-amber-500/20 rounded-sm px-2 py-1 text-sm text-white text-right focus:outline-none focus:border-amber-500/50"
+                      />
+                      <span className="text-gray-600 text-xs">₽</span>
+                    </div>
                   ))}
                 </div>
+                {extrasTotal > 0 && (
+                  <div className="flex justify-between text-sm text-gray-400 mt-3 pt-3 border-t border-amber-500/10">
+                    <span>Доп. услуги</span>
+                    <span className="text-white">{extrasTotal.toLocaleString()} ₽</span>
+                  </div>
+                )}
+              </div>
 
-                {/* Итог */}
-                <div className="border-t border-amber-500/20 pt-3 space-y-1 mb-4">
+              {/* Итого и кнопка */}
+              <div className="glass-card rounded-sm p-4">
+                <div className="space-y-1 mb-4">
                   {equipmentTotal > 0 && (
                     <div className="flex justify-between text-sm text-gray-400">
                       <span>Оборудование</span><span>{equipmentTotal.toLocaleString()} ₽</span>
@@ -341,8 +440,9 @@ export default function AdminQuote() {
                       <span>Доставка</span><span>{deliveryTotal.toLocaleString()} ₽</span>
                     </div>
                   )}
-                  <div className="flex justify-between text-lg font-bold text-white pt-1">
-                    <span>Итого</span><span className="text-amber-500">{total.toLocaleString()} ₽</span>
+                  <div className="flex justify-between text-lg font-bold text-white pt-2 border-t border-amber-500/20">
+                    <span>Итого</span>
+                    <span className="text-amber-500">{total.toLocaleString()} ₽</span>
                   </div>
                 </div>
 
