@@ -13,6 +13,7 @@ type Quote = {
   id: number; token: string; title: string; items: QuoteItem[];
   days: number; delivery: string; delivery_price: number; extras: QuoteExtra[];
   total: number; status: string;
+  event_date?: string; delivery_address?: string;
 };
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -200,6 +201,36 @@ export default function QuoteApproval() {
           <>
             <div className="glass-card rounded-sm p-6 mb-4">
               <h2 className="font-oswald text-xl font-bold text-white uppercase mb-4">Состав аренды</h2>
+
+              {/* Дата и адрес */}
+              {(q.event_date || q.delivery_address) && (
+                <div className="bg-amber-500/5 border border-amber-500/20 rounded-sm p-3 mb-4 space-y-1.5">
+                  {q.event_date && (
+                    <div className="flex items-center gap-2 text-sm">
+                      <Icon name="Calendar" size={14} className="text-amber-500 shrink-0" />
+                      <span className="text-gray-400">Дата мероприятия:</span>
+                      <span className="text-white font-medium">
+                        {new Date(q.event_date).toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" })}
+                      </span>
+                    </div>
+                  )}
+                  {q.delivery_address && (
+                    <div className="flex items-center gap-2 text-sm">
+                      <Icon name="MapPin" size={14} className="text-amber-500 shrink-0" />
+                      <span className="text-gray-400">Адрес:</span>
+                      <span className="text-white font-medium">{q.delivery_address}</span>
+                    </div>
+                  )}
+                  {q.delivery && q.delivery !== "Без доставки" && (
+                    <div className="flex items-center gap-2 text-sm">
+                      <Icon name="Truck" size={14} className="text-amber-500 shrink-0" />
+                      <span className="text-gray-400">Доставка:</span>
+                      <span className="text-white font-medium">{q.delivery}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="space-y-3 mb-4">
                 {q.items.map((item) => (
                   <div key={item.id} className="flex justify-between items-start gap-4">
