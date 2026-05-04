@@ -58,26 +58,37 @@ export default function Catalog() {
   const [subcategories, setSubcategories] = useState<{ name: string; category: string }[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(true);
 
-  useEffect(() => {
-    fetch((func2url as Record<string, string>)["get-catalog"])
-      .then((r) => r.json())
-      .then((data) => {
-        setCategories(["Все", ...(data.categories || [])]);
-        setSubcategories(data.subcategories || []);
-        setEquipment(data.equipment || []);
-        setCatalogLoading(false);
-      })
-      .catch(() => setCatalogLoading(false));
-  }, []);
-
-  const [activeCategory, setActiveCategory] = useState(
-    categories.find((c) => c.toLowerCase() === searchParams.get("category")) || "Все"
-  );
+  const [activeCategory, setActiveCategory] = useState("Все");
   const [activeSubcategory, setActiveSubcategory] = useState<string | null>(null);
   const [sort, setSort] = useState("popular");
   const [search, setSearch] = useState("");
-  const [priceMax, setPriceMax] = useState(500000);
   const [selectedItem, setSelectedItem] = useState<null | Equipment>(null);
+  const priceMax = 500000;
+
+  useEffect(() => {
+    fetch((func2url as Record<string, string>)["get-catalog"])
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
+      .then((data) => {
+        const cats: string[] = data.categories || [];
+        setCategories(["Все", ...cats]);
+        setSubcategories(data.subcategories || []);
+        setEquipment(data.equipment || []);
+        // применяем категорию из URL после загрузки
+        const urlCat = searchParams.get("category");
+        if (urlCat) {
+          const matched = cats.find((c) => c.toLowerCase() === urlCat.toLowerCase());
+          if (matched) setActiveCategory(matched);
+        }
+        setCatalogLoading(false);
+      })
+      .catch((err) => {
+        console.error("Ошибка загрузки каталога:", err);
+        setCatalogLoading(false);
+      });
+  }, []);
 
   const catCounts = Object.fromEntries(
     categories.slice(1).map((c) => [c, equipment.filter((e) => e.category === c).length])
@@ -93,14 +104,14 @@ export default function Catalog() {
     let result = [...equipment];
     if (activeCategory !== "Все") result = result.filter((e) => e.category === activeCategory);
     if (activeSubcategory) result = result.filter((e) => e.subcategory === activeSubcategory);
-    if (search) result = result.filter((e) => e.name.toLowerCase().includes(search.toLowerCase()) || e.tags.some((t) => t.includes(search.toLowerCase())));
+    if (search) result = result.filter((e) => e.name.toLowerCase().includes(search.toLowerCase()) || (e.tags || []).some((t) => t.includes(search.toLowerCase())));
     result = result.filter((e) => e.price <= priceMax);
     if (sort === "popular") result = result.sort((a, b) => (b.popular ? 1 : 0) - (a.popular ? 1 : 0));
     if (sort === "price-asc") result = result.sort((a, b) => a.price - b.price);
     if (sort === "price-desc") result = result.sort((a, b) => b.price - a.price);
     if (sort === "rating") result = result.sort((a, b) => b.rating - a.rating);
     return result;
-  }, [activeCategory, activeSubcategory, search, priceMax, sort, equipment]);
+  }, [activeCategory, activeSubcategory, search, sort, equipment]);
 
   return (
     <div className="pb-16">

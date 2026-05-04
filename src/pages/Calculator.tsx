@@ -70,7 +70,7 @@ export default function Calculator() {
       const matchSearch = !search || e.name.toLowerCase().includes(search.toLowerCase());
       return matchCat && matchSearch;
     });
-  }, [catFilter, search]);
+  }, [catFilter, search, equipment]);
 
   const addToCart = (id: number) => {
     setCart((prev) => {
@@ -96,7 +96,7 @@ export default function Calculator() {
       const eq = equipment.find((e) => e.id === item.id);
       return sum + (eq ? eq.price * item.qty * days : 0);
     }, 0);
-  }, [cart, days]);
+  }, [cart, days, equipment]);
 
   const extrasTotal = extras.reduce((sum, id) => {
     const s = extraServices.find((s) => s.id === id);
