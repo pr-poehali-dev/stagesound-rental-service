@@ -216,18 +216,22 @@ def build_pdf(contract: dict, quote: dict) -> bytes:
 
     phone = contract.get("phone") or "_______________"
     email = contract.get("email") or "_______________"
-    items      = quote.get("items") or []
-    extras     = quote.get("extras") or []
-    days       = int(quote.get("days") or 1)
-    delivery   = quote.get("delivery") or "Без доставки"
-    delivery_p = int(quote.get("delivery_price") or 0)
-    total      = int(quote.get("total") or 0)
-    qtitle     = quote.get("title") or "Аренда оборудования"
+    items           = quote.get("items") or []
+    extras          = quote.get("extras") or []
+    days            = int(quote.get("days") or 1)
+    delivery        = quote.get("delivery") or "Без доставки"
+    delivery_p      = int(quote.get("delivery_price") or 0)
+    total           = int(quote.get("total") or 0)
+    qtitle          = quote.get("title") or "Аренда оборудования"
+    event_date      = quote.get("event_date") or ""
+    delivery_address = quote.get("delivery_address") or ""
 
     if days == 1:
         days_str = "1 (один) календарный день"
     elif 2 <= days <= 4:
-        days_str = f"{days} ({money_words(days).split('(')[1].split(')')[0]}) календарных дня"
+        _mw = money_words(days)
+        _word = _mw.split("(")[1].split(")")[0] if "(" in _mw else str(days)
+        days_str = f"{days} ({_word}) календарных дня"
     else:
         days_str = f"{days} календарных дней"
 
@@ -280,12 +284,19 @@ def build_pdf(contract: dict, quote: dict) -> bytes:
         items_block.append(Spacer(1, 3*mm))
         story.append(KeepTogether(items_block))
 
+    event_date_str   = fmt_date(event_date) if event_date else "«&nbsp;&nbsp;&nbsp;»&nbsp;_______________&nbsp;______&nbsp;г."
+    address_str      = delivery_address if delivery_address else "по адресу, согласованному Сторонами"
+    delivery_str     = f"{delivery}" if delivery and delivery != "Без доставки" else "самовывоз"
+
     section("1", "ПРЕДМЕТ ДОГОВОРА",
         "1.1. Арендодатель обязуется предоставить Арендатору во временное платное пользование "
         "оборудование согласно Перечню (Приложение №&nbsp;1), а Арендатор обязуется принять "
         "его, оплатить аренду и вернуть в исправном состоянии.",
         f"1.2. Назначение: <b>{qtitle}</b>.",
-        f"1.3. Срок аренды: <b>{days_str}</b>.",
+        f"1.3. Дата мероприятия: <b>{event_date_str}</b>.",
+        f"1.4. Адрес доставки/проведения: <b>{address_str}</b>.",
+        f"1.5. Способ доставки: <b>{delivery_str}</b>.",
+        f"1.6. Срок аренды: <b>{days_str}</b>.",
     )
     section("2", "СТОИМОСТЬ И ПОРЯДОК РАСЧЁТОВ",
         f"2.1. Общая стоимость аренды по настоящему Договору составляет: "
@@ -534,7 +545,8 @@ def handler(event: dict, context) -> dict:
             c.passport_date, c.birth_date, c.address,
             c.company_name, c.inn, c.kpp, c.ogrn, c.legal_address, c.director,
             c.phone, c.email,
-            q.title, q.items, q.days, q.delivery, q.delivery_price, q.extras, q.total
+            q.title, q.items, q.days, q.delivery, q.delivery_price, q.extras, q.total,
+            q.event_date, q.delivery_address
         FROM {schema}.contracts c
         JOIN {schema}.quotes q ON q.id = c.quote_id
         WHERE c.id = %s""",
@@ -549,7 +561,7 @@ def handler(event: dict, context) -> dict:
     keys_c = ["id","quote_id","client_type","full_name","passport_series","passport_number",
               "passport_issued","passport_date","birth_date","address",
               "company_name","inn","kpp","ogrn","legal_address","director","phone","email"]
-    keys_q = ["title","items","days","delivery","delivery_price","extras","total"]
+    keys_q = ["title","items","days","delivery","delivery_price","extras","total","event_date","delivery_address"]
     data     = dict(zip(keys_c + keys_q, row))
     contract = {k: data[k] for k in keys_c}
     quote    = {k: data[k] for k in keys_q}

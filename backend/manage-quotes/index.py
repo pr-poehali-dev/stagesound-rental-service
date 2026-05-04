@@ -64,14 +64,14 @@ def handler(event: dict, context) -> dict:
         conn = db()
         cur = conn.cursor()
         cur.execute(
-            f"SELECT id, token, title, items, days, delivery, delivery_price, extras, total, status, created_at "
+            f"SELECT id, token, title, items, days, delivery, delivery_price, extras, total, status, created_at, event_date, delivery_address "
             f"FROM {schema}.quotes WHERE token = %s", (token,)
         )
         row = cur.fetchone()
         cur.close(); conn.close()
         if not row:
             return {"statusCode": 404, "headers": CORS, "body": json.dumps({"error": "Not found"})}
-        keys = ["id", "token", "title", "items", "days", "delivery", "delivery_price", "extras", "total", "status", "created_at"]
+        keys = ["id", "token", "title", "items", "days", "delivery", "delivery_price", "extras", "total", "status", "created_at", "event_date", "delivery_address"]
         q = dict(zip(keys, row))
         q["created_at"] = str(q["created_at"])
         return {"statusCode": 200, "headers": CORS, "body": json.dumps(q)}
@@ -193,8 +193,8 @@ def handler(event: dict, context) -> dict:
         body = json.loads(event.get("body") or "{}")
         tok = secrets.token_urlsafe(16)
         cur.execute(
-            f"INSERT INTO {schema}.quotes (token, title, items, days, delivery, delivery_price, extras, total, status) "
-            f"VALUES (%s,%s,%s,%s,%s,%s,%s,%s,'draft') RETURNING id",
+            f"INSERT INTO {schema}.quotes (token, title, items, days, delivery, delivery_price, extras, total, status, event_date, delivery_address) "
+            f"VALUES (%s,%s,%s,%s,%s,%s,%s,%s,'draft',%s,%s) RETURNING id",
             (
                 tok,
                 body.get("title", "КП"),
@@ -204,6 +204,8 @@ def handler(event: dict, context) -> dict:
                 body.get("delivery_price", 0),
                 json.dumps(body.get("extras", [])),
                 body.get("total", 0),
+                body.get("event_date", ""),
+                body.get("delivery_address", ""),
             )
         )
         new_id = cur.fetchone()[0]
@@ -214,12 +216,13 @@ def handler(event: dict, context) -> dict:
         qid = int(qp.get("id", 0))
         body = json.loads(event.get("body") or "{}")
         cur.execute(
-            f"UPDATE {schema}.quotes SET title=%s, items=%s, days=%s, delivery=%s, delivery_price=%s, extras=%s, total=%s "
+            f"UPDATE {schema}.quotes SET title=%s, items=%s, days=%s, delivery=%s, delivery_price=%s, extras=%s, total=%s, event_date=%s, delivery_address=%s "
             f"WHERE id=%s",
             (
                 body.get("title", ""), json.dumps(body.get("items", [])),
                 body.get("days", 1), body.get("delivery", ""), body.get("delivery_price", 0),
-                json.dumps(body.get("extras", [])), body.get("total", 0), qid,
+                json.dumps(body.get("extras", [])), body.get("total", 0),
+                body.get("event_date", ""), body.get("delivery_address", ""), qid,
             )
         )
         conn.commit(); cur.close(); conn.close()

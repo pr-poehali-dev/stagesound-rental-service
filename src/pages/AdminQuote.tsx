@@ -67,6 +67,8 @@ export default function AdminQuote() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [days, setDays] = useState(1);
   const [title, setTitle] = useState("");
+  const [eventDate, setEventDate] = useState("");
+  const [deliveryAddress, setDeliveryAddress] = useState("");
 
   // Город и доставка
   const [cityKey, setCityKey] = useState("moscow");
@@ -183,6 +185,8 @@ export default function AdminQuote() {
         delivery: deliveryName,
         delivery_price: deliveryTotal,
         extras: extrasData, total,
+        event_date: eventDate,
+        delivery_address: deliveryAddress,
       }),
     });
     const data = await res.json();
@@ -235,7 +239,7 @@ export default function AdminQuote() {
                 <Icon name={copiedLink ? "Check" : "Copy"} size={14} />
                 {copiedLink ? "Скопировано!" : "Скопировать ссылку"}
               </button>
-              <button onClick={() => { setShareLink(""); setCart([]); setTitle(""); setSelectedExtras([]); }}
+              <button onClick={() => { setShareLink(""); setCart([]); setTitle(""); setSelectedExtras([]); setEventDate(""); setDeliveryAddress(""); }}
                 className="border border-gray-700 text-gray-400 px-6 py-2 rounded-sm text-sm hover:border-gray-500 transition-colors">
                 Создать новое КП
               </button>
@@ -292,11 +296,23 @@ export default function AdminQuote() {
             {/* ── Правая панель ── */}
             <div className="xl:col-span-1 space-y-4">
 
-              {/* Название КП */}
-              <div className="glass-card rounded-sm p-4">
-                <label className="text-xs text-gray-500 uppercase tracking-wider block mb-2">Название КП</label>
-                <input value={title} onChange={(e) => setTitle(e.target.value)}
-                  placeholder="Мероприятие, событие..." className={iCls} />
+              {/* Название КП + детали мероприятия */}
+              <div className="glass-card rounded-sm p-4 space-y-3">
+                <div>
+                  <label className="text-xs text-gray-500 uppercase tracking-wider block mb-2">Название КП</label>
+                  <input value={title} onChange={(e) => setTitle(e.target.value)}
+                    placeholder="Мероприятие, событие..." className={iCls} />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 uppercase tracking-wider block mb-2">Дата мероприятия</label>
+                  <input type="date" value={eventDate} onChange={(e) => setEventDate(e.target.value)}
+                    className={iCls} />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 uppercase tracking-wider block mb-2">Адрес доставки / проведения</label>
+                  <input value={deliveryAddress} onChange={(e) => setDeliveryAddress(e.target.value)}
+                    placeholder="г. Москва, ул. Примерная, д. 1" className={iCls} />
+                </div>
               </div>
 
               {/* Корзина */}
