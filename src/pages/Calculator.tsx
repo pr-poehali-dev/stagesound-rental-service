@@ -1,7 +1,7 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Link } from "react-router-dom";
 import Icon from "@/components/ui/icon";
-import { equipment } from "@/data/equipment";
+import { Equipment } from "@/data/equipment";
 import { useSeo } from "@/hooks/useSeo";
 import { useCity } from "@/context/CityContext";
 import { CITY_CONTENT } from "@/data/cityContent";
@@ -31,6 +31,19 @@ export default function Calculator() {
     })),
   ];
 
+  const [equipment, setEquipment] = useState<Equipment[]>([]);
+  const [catalogLoading, setCatalogLoading] = useState(true);
+
+  useEffect(() => {
+    fetch((func2url as Record<string, string>)["get-catalog"])
+      .then((r) => r.json())
+      .then((data) => {
+        setEquipment(data.equipment || []);
+        setCatalogLoading(false);
+      })
+      .catch(() => setCatalogLoading(false));
+  }, []);
+
   const [cart, setCart] = useState<CartItem[]>([]);
   const [days, setDays] = useState(1);
   const [delivery, setDelivery] = useState("Без доставки");
@@ -49,7 +62,7 @@ export default function Calculator() {
   const [search, setSearch] = useState("");
   const [catFilter, setCatFilter] = useState("Все");
 
-  const categories = ["Все", "Звук", "Свет", "Видео", "Сцена", "Конференц", "Генераторы"];
+  const categories = ["Все", ...Array.from(new Set(equipment.map((e) => e.category)))];
 
   const filteredEq = useMemo(() => {
     return equipment.filter((e) => {
@@ -184,13 +197,23 @@ export default function Calculator() {
                 </div>
 
                 <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
-                  {filteredEq.map((item) => {
+                  {catalogLoading && Array.from({ length: 5 }).map((_, i) => (
+                    <div key={i} className="flex items-center justify-between p-3 rounded-sm border border-amber-500/10 animate-pulse">
+                      <div className="flex-1 space-y-1.5">
+                        <div className="h-3.5 bg-amber-500/10 rounded w-2/3" />
+                        <div className="h-2.5 bg-amber-500/5 rounded w-1/3" />
+                      </div>
+                      <div className="w-20 h-7 bg-amber-500/10 rounded-sm" />
+                    </div>
+                  ))}
+                  {!catalogLoading && filteredEq.map((item) => {
                     const qty = getQty(item.id);
                     return (
                       <div
                         key={item.id}
                         className={`flex items-center justify-between p-3 rounded-sm border transition-all ${qty > 0 ? "border-amber-500/30 bg-amber-500/5" : "border-amber-500/10 hover:border-amber-500/20"}`}
                       >
+
                         <div className="flex-1 min-w-0 mr-4">
                           <div className="text-sm font-medium text-white truncate">{item.name}</div>
                           <div className="text-xs text-gray-600">{item.category} · {item.price.toLocaleString()} ₽/{item.unit}</div>

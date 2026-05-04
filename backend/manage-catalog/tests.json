@@ -1,0 +1,10 @@
+{
+  "tests": [
+    {
+      "name": "GET without password returns 401",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 401
+    }
+  ]
+}

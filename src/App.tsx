@@ -14,6 +14,7 @@ import Portfolio from "./pages/Portfolio";
 import Contacts from "./pages/Contacts";
 import Calculator from "./pages/Calculator";
 import Admin from "./pages/Admin";
+import AdminCatalog from "./pages/AdminCatalog";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -45,6 +46,7 @@ const App = () => (
             <Route path="/:citySlug/calculator" element={<CityLayout><Calculator /></CityLayout>} />
 
             <Route path="/admin" element={<Admin />} />
+            <Route path="/admin/catalog" element={<AdminCatalog />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

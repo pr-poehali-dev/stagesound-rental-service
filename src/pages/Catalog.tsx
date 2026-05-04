@@ -1,10 +1,11 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import Icon from "@/components/ui/icon";
-import { equipment, categories, soundSubcategories } from "@/data/equipment";
+import { Equipment } from "@/data/equipment";
 import { useSeo } from "@/hooks/useSeo";
 import { useCity } from "@/context/CityContext";
 import { CITY_CONTENT } from "@/data/cityContent";
+import func2url from "../../backend/func2url.json";
 
 const categoryMeta: Record<string, { image: string; desc: string; icon: string }> = {
   Звук: {
@@ -46,23 +47,42 @@ const sortOptions = [
   { value: "rating", label: "По рейтингу" },
 ];
 
-const catCounts = Object.fromEntries(
-  categories.slice(1).map((c) => [c, equipment.filter((e) => e.category === c).length])
-);
-
 export default function Catalog() {
   useSeo({ page: "catalog" });
   const { city } = useCity();
   const content = CITY_CONTENT[city.id] ?? CITY_CONTENT.moscow;
   const [searchParams] = useSearchParams();
+
+  const [equipment, setEquipment] = useState<Equipment[]>([]);
+  const [categories, setCategories] = useState<string[]>(["Все"]);
+  const [subcategories, setSubcategories] = useState<{ name: string; category: string }[]>([]);
+  const [catalogLoading, setCatalogLoading] = useState(true);
+
+  useEffect(() => {
+    fetch((func2url as Record<string, string>)["get-catalog"])
+      .then((r) => r.json())
+      .then((data) => {
+        setCategories(["Все", ...(data.categories || [])]);
+        setSubcategories(data.subcategories || []);
+        setEquipment(data.equipment || []);
+        setCatalogLoading(false);
+      })
+      .catch(() => setCatalogLoading(false));
+  }, []);
+
   const [activeCategory, setActiveCategory] = useState(
     categories.find((c) => c.toLowerCase() === searchParams.get("category")) || "Все"
   );
   const [activeSubcategory, setActiveSubcategory] = useState<string | null>(null);
   const [sort, setSort] = useState("popular");
   const [search, setSearch] = useState("");
-  const [priceMax, setPriceMax] = useState(() => Math.max(...equipment.map((e) => e.price)));
-  const [selectedItem, setSelectedItem] = useState<null | (typeof equipment)[0]>(null);
+  const [priceMax, setPriceMax] = useState(500000);
+  const [selectedItem, setSelectedItem] = useState<null | Equipment>(null);
+
+  const catCounts = Object.fromEntries(
+    categories.slice(1).map((c) => [c, equipment.filter((e) => e.category === c).length])
+  );
+  const soundSubcategories = subcategories.filter((s) => s.category === activeCategory).map((s) => s.name);
 
   const handleCategoryChange = (cat: string) => {
     setActiveCategory(cat);
@@ -72,14 +92,7 @@ export default function Catalog() {
   const filtered = useMemo(() => {
     let result = [...equipment];
     if (activeCategory !== "Все") result = result.filter((e) => e.category === activeCategory);
-    if (activeCategory === "Звук" && activeSubcategory) {
-      result = result.filter((e) => e.subcategory === activeSubcategory);
-    }
-    if (activeCategory === "Сцена" && activeSubcategory) {
-      const tagMap: Record<string, string> = { "Подиум": "подиум", "С крышей": "крыша", "С порталами": "порталы" };
-      const tag = tagMap[activeSubcategory];
-      if (tag) result = result.filter((e) => e.tags.includes(tag));
-    }
+    if (activeSubcategory) result = result.filter((e) => e.subcategory === activeSubcategory);
     if (search) result = result.filter((e) => e.name.toLowerCase().includes(search.toLowerCase()) || e.tags.some((t) => t.includes(search.toLowerCase())));
     result = result.filter((e) => e.price <= priceMax);
     if (sort === "popular") result = result.sort((a, b) => (b.popular ? 1 : 0) - (a.popular ? 1 : 0));
@@ -87,7 +100,7 @@ export default function Catalog() {
     if (sort === "price-desc") result = result.sort((a, b) => b.price - a.price);
     if (sort === "rating") result = result.sort((a, b) => b.rating - a.rating);
     return result;
-  }, [activeCategory, activeSubcategory, search, priceMax, sort]);
+  }, [activeCategory, activeSubcategory, search, priceMax, sort, equipment]);
 
   return (
     <div className="pb-16">
@@ -144,8 +157,8 @@ export default function Catalog() {
 
 
 
-      {/* Subcategory bar for Сцена */}
-      {activeCategory === "Сцена" && (
+      {/* Subcategory bar (dynamic — for any category that has subcategories) */}
+      {soundSubcategories.length > 0 && (
         <div className="border-b border-amber-500/10 bg-black/20">
           <div className="container mx-auto px-4">
             <div className="flex overflow-x-auto gap-0 scrollbar-none">
@@ -153,61 +166,19 @@ export default function Catalog() {
                 onClick={() => setActiveSubcategory(null)}
                 className={`px-4 py-3 text-sm whitespace-nowrap border-b-2 transition-all ${activeSubcategory === null ? "border-amber-500/60 text-amber-400" : "border-transparent text-gray-600 hover:text-gray-300"}`}
               >
-                Все
-              </button>
-              {["Подиум", "С крышей", "С порталами"].map((tag) => {
-                const tagMap: Record<string, string> = { "Подиум": "подиум", "С крышей": "крыша", "С порталами": "порталы" };
-                const count = equipment.filter((e) => e.category === "Сцена" && e.tags.includes(tagMap[tag])).length;
-                return (
-                  <button
-                    key={tag}
-                    onClick={() => setActiveSubcategory(tag)}
-                    className={`flex items-center gap-2 px-4 py-3 text-sm whitespace-nowrap border-b-2 transition-all ${activeSubcategory === tag ? "border-amber-500/60 text-amber-400" : "border-transparent text-gray-600 hover:text-gray-300"}`}
-                  >
-                    {tag}
-                    {count > 0 && (
-                      <span className={`text-xs px-1.5 py-0.5 rounded-full ${activeSubcategory === tag ? "bg-amber-500/20 text-amber-400" : "bg-gray-800 text-gray-600"}`}>{count}</span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Subcategory bar (only for Звук) */}
-      {activeCategory === "Звук" && (
-        <div className="border-b border-amber-500/10 bg-black/20">
-          <div className="container mx-auto px-4">
-            <div className="flex overflow-x-auto gap-0 scrollbar-none">
-              <button
-                onClick={() => setActiveSubcategory(null)}
-                className={`px-4 py-3 text-sm whitespace-nowrap border-b-2 transition-all ${
-                  activeSubcategory === null
-                    ? "border-amber-500/60 text-amber-400"
-                    : "border-transparent text-gray-600 hover:text-gray-300"
-                }`}
-              >
                 Все подразделы
               </button>
               {soundSubcategories.map((sub) => {
-                const count = equipment.filter((e) => e.category === "Звук" && e.subcategory === sub).length;
+                const count = equipment.filter((e) => e.category === activeCategory && e.subcategory === sub).length;
                 return (
                   <button
                     key={sub}
                     onClick={() => setActiveSubcategory(sub)}
-                    className={`flex items-center gap-2 px-4 py-3 text-sm whitespace-nowrap border-b-2 transition-all ${
-                      activeSubcategory === sub
-                        ? "border-amber-500/60 text-amber-400"
-                        : "border-transparent text-gray-600 hover:text-gray-300"
-                    }`}
+                    className={`flex items-center gap-2 px-4 py-3 text-sm whitespace-nowrap border-b-2 transition-all ${activeSubcategory === sub ? "border-amber-500/60 text-amber-400" : "border-transparent text-gray-600 hover:text-gray-300"}`}
                   >
                     {sub}
                     {count > 0 && (
-                      <span className={`text-xs px-1.5 py-0.5 rounded-full ${activeSubcategory === sub ? "bg-amber-500/20 text-amber-400" : "bg-gray-800 text-gray-600"}`}>
-                        {count}
-                      </span>
+                      <span className={`text-xs px-1.5 py-0.5 rounded-full ${activeSubcategory === sub ? "bg-amber-500/20 text-amber-400" : "bg-gray-800 text-gray-600"}`}>{count}</span>
                     )}
                   </button>
                 );
@@ -253,7 +224,20 @@ export default function Catalog() {
               </div>
             </div>
 
-            {filtered.length === 0 ? (
+            {catalogLoading ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <div key={i} className="glass-card rounded-sm overflow-hidden animate-pulse">
+                    <div className="h-48 bg-amber-500/5" />
+                    <div className="p-4 space-y-2">
+                      <div className="h-4 bg-amber-500/10 rounded w-3/4" />
+                      <div className="h-3 bg-amber-500/5 rounded w-1/2" />
+                      <div className="h-6 bg-amber-500/10 rounded w-1/3 mt-3" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : filtered.length === 0 ? (
               <div className="glass-card rounded-sm p-16 text-center">
                 <Icon name="PackageSearch" size={48} className="text-gray-600 mx-auto mb-4" />
                 <p className="text-gray-500">Ничего не найдено. Попробуйте другие фильтры.</p>

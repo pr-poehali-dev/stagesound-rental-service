@@ -103,6 +103,13 @@ export default function Admin() {
           </div>
           <div className="flex items-center gap-3">
             <span className="text-gray-500 text-sm">{orders.length} заявок</span>
+            <a
+              href="/admin/catalog"
+              className="flex items-center gap-2 border border-amber-500/20 text-gray-400 hover:text-amber-500 px-4 py-2 rounded-sm text-sm transition-colors"
+            >
+              <Icon name="LayoutDashboard" size={14} />
+              Каталог
+            </a>
             <button
               onClick={refresh}
               disabled={loading}
