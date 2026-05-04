@@ -13,8 +13,9 @@ def handler(event: dict, context) -> dict:
     if event.get("httpMethod") == "OPTIONS":
         return {"statusCode": 200, "headers": cors, "body": ""}
 
-    headers = event.get("headers") or {}
-    password = headers.get("X-Admin-Password", "")
+    raw_headers = event.get("headers") or {}
+    headers = {k.lower(): v for k, v in raw_headers.items()}
+    password = headers.get("x-admin-password", "")
     if password != os.environ.get("ADMIN_PASSWORD", ""):
         return {"statusCode": 401, "headers": cors, "body": json.dumps({"error": "Unauthorized"})}
 
