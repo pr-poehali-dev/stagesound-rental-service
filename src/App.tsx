@@ -15,6 +15,8 @@ import Contacts from "./pages/Contacts";
 import Calculator from "./pages/Calculator";
 import Admin from "./pages/Admin";
 import AdminCatalog from "./pages/AdminCatalog";
+import AdminQuote from "./pages/AdminQuote";
+import QuoteApproval from "./pages/QuoteApproval";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -47,6 +49,8 @@ const App = () => (
 
             <Route path="/admin" element={<Admin />} />
             <Route path="/admin/catalog" element={<AdminCatalog />} />
+            <Route path="/admin/quote" element={<AdminQuote />} />
+            <Route path="/quote/:token" element={<QuoteApproval />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

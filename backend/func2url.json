@@ -1,4 +1,6 @@
 {
+  "manage-quotes": "https://functions.poehali.dev/12a1df8d-bd20-465d-b342-0fae81725c67",
+  "get-contracts": "https://functions.poehali.dev/2aa64b35-ad56-4c0c-b3f6-dd3f20476871",
   "upload-image": "https://functions.poehali.dev/e0c7d98a-c53d-439a-bd51-febc406362eb",
   "get-catalog": "https://functions.poehali.dev/cb84eb2a-ca41-48cc-9e8d-b4f24216f08a",
   "manage-catalog": "https://functions.poehali.dev/dfe39e56-581b-4e31-ab35-09384c65a955",
