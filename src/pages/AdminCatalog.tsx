@@ -60,29 +60,37 @@ export default function AdminCatalog() {
     return res;
   };
 
-  const load = async () => {
+  const load = async (pwd?: string) => {
     setLoading(true);
-    const [cRes, sRes, eRes] = await Promise.all([
-      api("/categories"),
-      api("/subcategories"),
-      api("/equipment"),
-    ]);
-    if (cRes.status === 401) { setAuthError(true); setLoading(false); return; }
-    const cData = await cRes.json();
-    const sData = await sRes.json();
-    const eData = await eRes.json();
-    setCategories(cData.categories || []);
-    setSubcategories(sData.subcategories || []);
-    setEquipment(eData.equipment || []);
-    setAuthed(true);
-    setLoading(false);
+    const usePwd = pwd ?? password;
+    const hdrs = { "Content-Type": "application/json", "X-Admin-Password": usePwd };
+    try {
+      const [cRes, sRes, eRes] = await Promise.all([
+        fetch(`${BASE_URL}/categories`, { headers: hdrs }),
+        fetch(`${BASE_URL}/subcategories`, { headers: hdrs }),
+        fetch(`${BASE_URL}/equipment`, { headers: hdrs }),
+      ]);
+      if (cRes.status === 401) { setAuthError(true); setLoading(false); return; }
+      const cData = await cRes.json();
+      const sData = await sRes.json();
+      const eData = await eRes.json();
+      setCategories(cData.categories || []);
+      setSubcategories(sData.subcategories || []);
+      setEquipment(eData.equipment || []);
+      setAuthed(true);
+    } catch (err) {
+      console.error("Ошибка загрузки каталога:", err);
+      setAuthError(true);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const login = async () => {
     setLoading(true);
     setAuthError(false);
     sessionStorage.setItem("adminPwd", password);
-    await load();
+    await load(password);
   };
 
   // ── Equipment CRUD ────────────────────────────────────────────────
