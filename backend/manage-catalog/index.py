@@ -22,7 +22,8 @@ def get_conn():
 def check_auth(event):
     headers = {k.lower(): v for k, v in (event.get("headers") or {}).items()}
     password = headers.get("x-admin-password", "")
-    return password == os.environ.get("ADMIN_PASSWORD", "")
+    expected = os.environ.get("ADMIN_PASSWORD", "Qwert12345")
+    return password == expected
 
 
 def handler(event: dict, context) -> dict:
