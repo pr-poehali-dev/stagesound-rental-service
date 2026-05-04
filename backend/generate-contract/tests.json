@@ -1,0 +1,22 @@
+{
+  "tests": [
+    {
+      "name": "OPTIONS preflight",
+      "method": "OPTIONS",
+      "path": "/",
+      "expectedStatus": 200
+    },
+    {
+      "name": "GET without password returns 401",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 401
+    },
+    {
+      "name": "GET without contract_id returns 400",
+      "method": "GET",
+      "path": "/?pwd=Qwert12345",
+      "expectedStatus": 400
+    }
+  ]
+}

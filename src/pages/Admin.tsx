@@ -61,6 +61,8 @@ export default function Admin() {
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [contractsLoading, setContractsLoading] = useState(false);
   const [selectedContract, setSelectedContract] = useState<Contract | null>(null);
+  const [generatingPdf, setGeneratingPdf] = useState(false);
+  const [pdfUrl, setPdfUrl] = useState("");
 
   const login = async () => {
     setLoading(true);
@@ -124,6 +126,23 @@ export default function Admin() {
     });
     loadContracts();
     setSelectedContract(null);
+  };
+
+  const generatePdf = async (contractId: number) => {
+    setGeneratingPdf(true);
+    setPdfUrl("");
+    try {
+      const res = await fetch(
+        `${URLS["generate-contract"]}?pwd=${encodeURIComponent(password)}&contract_id=${contractId}`
+      );
+      const data = await res.json();
+      if (data.pdf_url) {
+        setPdfUrl(data.pdf_url);
+        window.open(data.pdf_url, "_blank");
+      }
+    } finally {
+      setGeneratingPdf(false);
+    }
   };
 
   if (!authed) {
@@ -420,7 +439,7 @@ export default function Admin() {
       {selectedContract && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
           style={{ background: "rgba(0,0,0,0.85)", backdropFilter: "blur(8px)" }}
-          onClick={() => setSelectedContract(null)}>
+          onClick={() => { setSelectedContract(null); setPdfUrl(""); }}>
           <div className="glass-card neon-border rounded-sm max-w-lg w-full max-h-[90vh] overflow-y-auto p-8"
             onClick={(e) => e.stopPropagation()}>
             <div className="flex items-start justify-between mb-6">
@@ -429,7 +448,7 @@ export default function Admin() {
                 <h2 className="font-oswald text-2xl font-bold text-white mt-1">{selectedContract.quote_title}</h2>
                 <p className="text-gray-500 text-xs mt-1">{formatDate(selectedContract.created_at)}</p>
               </div>
-              <button onClick={() => setSelectedContract(null)} className="text-gray-600 hover:text-gray-300">
+              <button onClick={() => { setSelectedContract(null); setPdfUrl(""); }} className="text-gray-600 hover:text-gray-300">
                 <Icon name="X" size={20} />
               </button>
             </div>
@@ -459,11 +478,26 @@ export default function Admin() {
               </a>
             )}
 
-            <div className="flex gap-3 mt-4">
+            {/* Кнопка генерации PDF */}
+            <button
+              onClick={() => generatePdf(selectedContract.id)}
+              disabled={generatingPdf}
+              className="neon-btn w-full py-3 rounded-sm text-sm flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed mb-3"
+            >
+              <Icon name={generatingPdf ? "Loader2" : "FileDown"} size={16} className={generatingPdf ? "animate-spin" : ""} />
+              {generatingPdf ? "Генерирую договор..." : "Скачать договор PDF"}
+            </button>
+            {pdfUrl && (
+              <a href={pdfUrl} target="_blank" rel="noopener noreferrer"
+                className="flex items-center gap-2 border border-green-500/30 text-green-400 hover:bg-green-500/10 px-4 py-2 rounded-sm text-sm transition-colors mb-3 justify-center">
+                <Icon name="ExternalLink" size={14} /> Открыть PDF снова
+              </a>
+            )}
+            <div className="flex gap-3">
               {selectedContract.status === "pending" && (
                 <button onClick={() => markContractReviewed(selectedContract.id)}
-                  className="neon-btn flex-1 py-2 rounded-sm text-sm flex items-center justify-center gap-2">
-                  <Icon name="Check" size={14} /> Отметить просмотренным
+                  className="flex-1 border border-amber-500/30 text-amber-500 hover:bg-amber-500/10 py-2 rounded-sm text-sm flex items-center justify-center gap-2 transition-colors">
+                  <Icon name="Check" size={14} /> Просмотрено
                 </button>
               )}
               {selectedContract.phone && (
