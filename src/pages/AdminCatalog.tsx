@@ -49,10 +49,13 @@ export default function AdminCatalog() {
   const [specsStr, setSpecsStr] = useState("");
   const [newSpecsStr, setNewSpecsStr] = useState("");
 
-  const api = async (path: string, method = "GET", body?: object, pwd?: string) => {
+  // resource = "categories" | "subcategories" | "equipment"
+  // id — опционально для PUT/DELETE
+  const api = async (resource: string, method = "GET", body?: object, id?: number, pwd?: string) => {
     const usePwd = pwd ?? password;
-    const url = `${BASE_URL}${path}?pwd=${encodeURIComponent(usePwd)}`;
-    const res = await fetch(url, {
+    const params = new URLSearchParams({ pwd: usePwd, resource });
+    if (id !== undefined) params.set("id", String(id));
+    const res = await fetch(`${BASE_URL}?${params}`, {
       method,
       headers: { "Content-Type": "application/json" },
       body: body ? JSON.stringify(body) : undefined,
@@ -65,9 +68,9 @@ export default function AdminCatalog() {
     const usePwd = pwd ?? password;
     try {
       const [cRes, sRes, eRes] = await Promise.all([
-        api("/categories", "GET", undefined, usePwd),
-        api("/subcategories", "GET", undefined, usePwd),
-        api("/equipment", "GET", undefined, usePwd),
+        api("categories", "GET", undefined, undefined, usePwd),
+        api("subcategories", "GET", undefined, undefined, usePwd),
+        api("equipment", "GET", undefined, undefined, usePwd),
       ]);
       if (cRes.status === 401) { setAuthError(true); return; }
       const cData = await cRes.json();
@@ -96,14 +99,14 @@ export default function AdminCatalog() {
   const saveItem = async () => {
     if (!editItem) return;
     const specs = parseSpecs(specsStr);
-    await api(`/equipment/${editItem.id}`, "PUT", { ...editItem, specs });
+    await api("equipment", "PUT", { ...editItem, specs }, editItem.id);
     setEditItem(null);
     load();
   };
 
   const createItem = async () => {
     const specs = parseSpecs(newSpecsStr);
-    await api("/equipment", "POST", { ...newItem, specs });
+    await api("equipment", "POST", { ...newItem, specs });
     setShowNewItem(false);
     setNewItem(EMPTY_ITEM);
     setNewSpecsStr("");
@@ -112,26 +115,26 @@ export default function AdminCatalog() {
 
   const deleteItem = async (id: number) => {
     if (!confirm("Удалить позицию?")) return;
-    await api(`/equipment/${id}`, "DELETE");
+    await api("equipment", "DELETE", undefined, id);
     load();
   };
 
   const toggleActive = async (item: EquipmentItem) => {
-    await api(`/equipment/${item.id}`, "PUT", { ...item, is_active: !item.is_active });
+    await api("equipment", "PUT", { ...item, is_active: !item.is_active }, item.id);
     load();
   };
 
   // ── Categories CRUD ───────────────────────────────────────────────
   const saveCat = async () => {
     if (!editCat) return;
-    await api(`/categories/${editCat.id}`, "PUT", editCat);
+    await api("categories", "PUT", editCat, editCat.id);
     setEditCat(null);
     load();
   };
 
   const createCat = async () => {
     if (!newCatName.trim()) return;
-    await api("/categories", "POST", { name: newCatName.trim(), sort_order: categories.length });
+    await api("categories", "POST", { name: newCatName.trim(), sort_order: categories.length });
     setShowNewCat(false);
     setNewCatName("");
     load();
@@ -139,21 +142,21 @@ export default function AdminCatalog() {
 
   const deleteCat = async (id: number) => {
     if (!confirm("Удалить раздел? Все подкатегории этого раздела тоже будут удалены.")) return;
-    await api(`/categories/${id}`, "DELETE");
+    await api("categories", "DELETE", undefined, id);
     load();
   };
 
   // ── Subcategories CRUD ────────────────────────────────────────────
   const saveSub = async () => {
     if (!editSub) return;
-    await api(`/subcategories/${editSub.id}`, "PUT", editSub);
+    await api("subcategories", "PUT", editSub, editSub.id);
     setEditSub(null);
     load();
   };
 
   const createSub = async () => {
     if (!newSubName.trim() || !newSubCat) return;
-    await api("/subcategories", "POST", { name: newSubName.trim(), category: newSubCat, sort_order: 0 });
+    await api("subcategories", "POST", { name: newSubName.trim(), category: newSubCat, sort_order: 0 });
     setShowNewSub(false);
     setNewSubName("");
     setNewSubCat("");
@@ -162,7 +165,7 @@ export default function AdminCatalog() {
 
   const deleteSub = async (id: number) => {
     if (!confirm("Удалить подраздел?")) return;
-    await api(`/subcategories/${id}`, "DELETE");
+    await api("subcategories", "DELETE", undefined, id);
     load();
   };
 
