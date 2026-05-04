@@ -1,14 +1,14 @@
 """
-Генерация PDF договора аренды оборудования по данным договора из БД.
+Генерация PDF договора аренды оборудования.
 GET /?pwd=X&contract_id=N — сгенерировать PDF, сохранить в S3, вернуть URL
+Шрифт DejaVu кешируется в S3 при первом вызове.
 """
-import io, json, os
+import json, os, io
 from datetime import datetime
 import psycopg2
 import boto3
-import urllib.request
+import requests
 
-# ReportLab
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 from reportlab.lib import colors
@@ -28,35 +28,99 @@ CORS = {
     "Content-Type": "application/json",
 }
 
-# ── Шрифты ──────────────────────────────────────────────────────────────────
 _FONTS_OK = False
 
-FONT_URLS = {
-    "PT": "https://fonts.gstatic.com/s/ptsans/v17/jizaRExUiTo99u79P0U.ttf",
-    "PT-Bold": "https://fonts.gstatic.com/s/ptsans/v17/jizaBo-dKScqlMqCygY.ttf",
-}
+# Источники шрифта — cdnjs Roboto поддерживает кириллицу (от pdfmake)
+_FONT_SOURCES = [
+    lambda key_id: f"https://cdn.poehali.dev/projects/{key_id}/bucket/fonts/DejaVuSans.ttf",
+    lambda _: "https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/fonts/Roboto/Roboto-Regular.ttf",
+]
+_BOLD_SOURCES = [
+    lambda key_id: f"https://cdn.poehali.dev/projects/{key_id}/bucket/fonts/DejaVuSans-Bold.ttf",
+    lambda _: "https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/fonts/Roboto/Roboto-Medium.ttf",
+]
+
+
+def get_s3():
+    return boto3.client("s3", endpoint_url="https://bucket.poehali.dev",
+                        aws_access_key_id=os.environ["AWS_ACCESS_KEY_ID"],
+                        aws_secret_access_key=os.environ["AWS_SECRET_ACCESS_KEY"])
+
+
+def fetch_font(path_local: str, s3_key: str, sources: list):
+    """Скачивает шрифт: сначала наш S3, потом внешние источники. Кеширует в S3."""
+    key_id = os.environ.get("AWS_ACCESS_KEY_ID", "")
+    s3 = get_s3()
+
+    # 1. Пробуем скачать с нашего S3
+    try:
+        obj = s3.get_object(Bucket="files", Key=s3_key)
+        with open(path_local, "wb") as f:
+            f.write(obj["Body"].read())
+        return
+    except Exception:
+        pass
+
+    # 2. Пробуем внешние источники
+    for source_fn in sources:
+        url = source_fn(key_id)
+        try:
+            resp = requests.get(url, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
+            if resp.status_code == 200 and len(resp.content) > 10000:
+                with open(path_local, "wb") as f:
+                    f.write(resp.content)
+                # Кешируем в S3
+                try:
+                    s3.put_object(Bucket="files", Key=s3_key,
+                                  Body=resp.content, ContentType="font/ttf")
+                except Exception:
+                    pass
+                return
+        except Exception:
+            continue
+
+    raise RuntimeError(f"Не удалось загрузить шрифт из всех источников")
+
+
+def is_valid_ttf(path: str) -> bool:
+    """Проверяет что файл является TTF (начинается с корректной сигнатуры)."""
+    try:
+        with open(path, "rb") as f:
+            header = f.read(4)
+        # TTF: 00 01 00 00 или OTF: 4F 54 54 4F
+        return header in (b"\x00\x01\x00\x00", b"OTTO", b"true", b"typ1")
+    except Exception:
+        return False
 
 
 def ensure_fonts():
     global _FONTS_OK
     if _FONTS_OK:
         return
-    for name, url in FONT_URLS.items():
-        path = f"/tmp/font_{name}.ttf"
-        if not os.path.exists(path):
-            urllib.request.urlretrieve(url, path)
-        pdfmetrics.registerFont(TTFont(name, path))
+    for name, local, s3key, sources in [
+        ("F",  "/tmp/font_F.ttf",  "fonts/DejaVuSans.ttf",      _FONT_SOURCES),
+        ("FB", "/tmp/font_FB.ttf", "fonts/DejaVuSans-Bold.ttf",  _BOLD_SOURCES),
+    ]:
+        # Удаляем невалидный кеш
+        if os.path.exists(local) and not is_valid_ttf(local):
+            os.remove(local)
+        if not os.path.exists(local):
+            fetch_font(local, s3key, sources)
+        pdfmetrics.registerFont(TTFont(name, local))
     _FONTS_OK = True
 
 
-# ── Хелперы ─────────────────────────────────────────────────────────────────
 def get_db():
     return psycopg2.connect(os.environ["DATABASE_URL"])
 
 
+def fn(n: int) -> str:
+    return f"{n:,}".replace(",", "\u00a0")
+
+
 def fmt_date(d: str) -> str:
     if not d:
-        return "«___» __________ _____ г."
+        return "«___» ___________ _____ г."
     try:
         dt = datetime.strptime(d.strip(), "%Y-%m-%d")
         months = ["января","февраля","марта","апреля","мая","июня",
@@ -66,136 +130,98 @@ def fmt_date(d: str) -> str:
         return d
 
 
-_ONES = ["","один","два","три","четыре","пять","шесть","семь","восемь","девять",
-         "десять","одиннадцать","двенадцать","тринадцать","четырнадцать","пятнадцать",
-         "шестнадцать","семнадцать","восемнадцать","девятнадцать"]
-_ONES_F = ["","одна","две","три","четыре","пять","шесть","семь","восемь","девять",
-           "десять","одиннадцать","двенадцать","тринадцать","четырнадцать","пятнадцать",
-           "шестнадцать","семнадцать","восемнадцать","девятнадцать"]
-_TENS = ["","десять","двадцать","тридцать","сорок","пятьдесят",
-         "шестьдесят","семьдесят","восемьдесят","девяносто"]
-_HUND = ["","сто","двести","триста","четыреста","пятьсот",
-         "шестьсот","семьсот","восемьсот","девятьсот"]
-
-
-def _chunk(n, female=False):
-    parts = []
-    h = n // 100
-    t = n % 100
-    if h:
-        parts.append(_HUND[h])
-    if t >= 20:
-        parts.append(_TENS[t // 10])
-        r = t % 10
-        if r:
-            parts.append((_ONES_F if female else _ONES)[r])
-    elif t:
-        parts.append((_ONES_F if female else _ONES)[t])
-    return parts
-
-
 def money_words(amount: int) -> str:
-    if amount == 0:
+    ones_f = ["","одна","две","три","четыре","пять","шесть","семь","восемь","девять",
+              "десять","одиннадцать","двенадцать","тринадцать","четырнадцать","пятнадцать",
+              "шестнадцать","семнадцать","восемнадцать","девятнадцать"]
+    ones_m = ["","один","два","три","четыре","пять","шесть","семь","восемь","девять",
+              "десять","одиннадцать","двенадцать","тринадцать","четырнадцать","пятнадцать",
+              "шестнадцать","семнадцать","восемнадцать","девятнадцать"]
+    tens  = ["","десять","двадцать","тридцать","сорок","пятьдесят",
+             "шестьдесят","семьдесят","восемьдесят","девяносто"]
+    hunds = ["","сто","двести","триста","четыреста","пятьсот",
+             "шестьсот","семьсот","восемьсот","девятьсот"]
+    def chunk(n, female=False):
+        p = []
+        h, t = n // 100, n % 100
+        if h: p.append(hunds[h])
+        if t >= 20:
+            p.append(tens[t // 10])
+            r = t % 10
+            if r: p.append((ones_f if female else ones_m)[r])
+        elif t:
+            p.append((ones_f if female else ones_m)[t])
+        return p
+    n = int(amount)
+    if n == 0:
         return "ноль рублей 00 копеек"
     parts = []
-    millions = amount // 1_000_000
-    thousands = (amount % 1_000_000) // 1000
-    remainder = amount % 1000
-
-    if millions:
-        p = _chunk(millions)
-        last = millions % 10
-        if millions % 100 in range(11, 20):
-            suffix = "миллионов"
-        elif last == 1:
-            suffix = "миллион"
-        elif last in (2, 3, 4):
-            suffix = "миллиона"
-        else:
-            suffix = "миллионов"
-        parts.extend(p)
-        parts.append(suffix)
-
-    if thousands:
-        p = _chunk(thousands, female=True)
-        last = thousands % 10
-        if thousands % 100 in range(11, 20):
-            suffix = "тысяч"
-        elif last == 1:
-            suffix = "тысяча"
-        elif last in (2, 3, 4):
-            suffix = "тысячи"
-        else:
-            suffix = "тысяч"
-        parts.extend(p)
-        parts.append(suffix)
-
-    if remainder:
-        parts.extend(_chunk(remainder))
-
-    words = " ".join(p for p in parts if p)
+    mil = n // 1_000_000
+    tho = (n % 1_000_000) // 1000
+    rem = n % 1000
+    if mil:
+        p = chunk(mil)
+        last = mil % 10
+        suf = "миллионов" if mil%100 in range(11,20) else ("миллион" if last==1 else "миллиона" if last in(2,3,4) else "миллионов")
+        parts += p + [suf]
+    if tho:
+        p = chunk(tho, female=True)
+        last = tho % 10
+        suf = "тысяч" if tho%100 in range(11,20) else ("тысяча" if last==1 else "тысячи" if last in(2,3,4) else "тысяч")
+        parts += p + [suf]
+    if rem:
+        parts += chunk(rem)
+    words = " ".join(x for x in parts if x)
     return f"{amount:,} ({words}) рублей 00 копеек".replace(",", "\u00a0")
 
 
-# ── PDF ──────────────────────────────────────────────────────────────────────
 def build_pdf(contract: dict, quote: dict) -> bytes:
     ensure_fonts()
 
     buf = io.BytesIO()
-    doc = SimpleDocTemplate(
-        buf, pagesize=A4,
-        leftMargin=25*mm, rightMargin=20*mm,
-        topMargin=20*mm, bottomMargin=20*mm,
-        title="Договор аренды оборудования",
-    )
+    doc = SimpleDocTemplate(buf, pagesize=A4,
+                            leftMargin=25*mm, rightMargin=20*mm,
+                            topMargin=20*mm, bottomMargin=20*mm)
 
-    F  = "PT"
-    FB = "PT-Bold"
-    BK = colors.HexColor("#1a1a1a")
-    GR = colors.HexColor("#555555")
-    LG = colors.HexColor("#999999")
-    AM = colors.HexColor("#b45309")   # amber-700
+    F, FB = "F", "FB"
+    BK = colors.HexColor("#111111")
+    GR = colors.HexColor("#666666")
+    AM = colors.HexColor("#92400e")
 
-    def sty(name, **kw):
-        base = dict(fontName=F, fontSize=10, leading=15, textColor=BK, spaceAfter=0)
-        base.update(kw)
-        return ParagraphStyle(name, **base)
+    def S(name, **kw):
+        d = dict(fontName=F, fontSize=9, leading=14, textColor=BK, spaceAfter=0)
+        d.update(kw)
+        return ParagraphStyle(name, **d)
 
-    S = {
-        "title":   sty("title",  fontName=FB, fontSize=14, alignment=TA_CENTER, spaceAfter=2, leading=18),
-        "sub":     sty("sub",    fontSize=10, alignment=TA_CENTER, textColor=GR),
-        "h2":      sty("h2",     fontName=FB, fontSize=10, textColor=AM, spaceAfter=1),
-        "body":    sty("body",   fontSize=9,  alignment=TA_JUSTIFY, leading=14),
-        "bodyL":   sty("bodyL",  fontSize=9,  alignment=TA_LEFT, leading=14),
-        "center":  sty("center", fontSize=9,  alignment=TA_CENTER, leading=14),
-        "small":   sty("small",  fontSize=8,  textColor=GR, leading=12),
-        "smallB":  sty("smallB", fontName=FB, fontSize=8, leading=12),
-        "bold":    sty("bold",   fontName=FB, fontSize=9, leading=14),
-        "boldC":   sty("boldC",  fontName=FB, fontSize=9, alignment=TA_CENTER, leading=14),
-        "right":   sty("right",  fontSize=9,  alignment=TA_RIGHT, leading=14),
-        "boldR":   sty("boldR",  fontName=FB, fontSize=9, alignment=TA_RIGHT, leading=14),
-        "label":   sty("label",  fontSize=7,  textColor=LG, spaceAfter=1, leading=10),
-        "sign":    sty("sign",   fontSize=9,  textColor=GR, leading=14),
+    Ss = {
+        "title":  S("title",  fontName=FB, fontSize=13, alignment=TA_CENTER, leading=18),
+        "sub":    S("sub",    fontSize=9,  alignment=TA_CENTER, textColor=GR),
+        "h2":     S("h2",     fontName=FB, fontSize=9, textColor=AM),
+        "body":   S("body",   fontSize=8.5, alignment=TA_JUSTIFY, leading=13),
+        "bodyL":  S("bodyL",  fontSize=8.5, leading=13),
+        "center": S("center", fontSize=8.5, alignment=TA_CENTER, leading=13),
+        "small":  S("small",  fontSize=8,  textColor=GR, leading=12),
+        "smallB": S("smallB", fontName=FB, fontSize=8, leading=12),
+        "bold":   S("bold",   fontName=FB, fontSize=8.5, leading=13),
+        "boldC":  S("boldC",  fontName=FB, fontSize=8.5, alignment=TA_CENTER, leading=13),
+        "right":  S("right",  fontSize=8.5, alignment=TA_RIGHT, leading=13),
+        "boldR":  S("boldR",  fontName=FB, fontSize=8.5, alignment=TA_RIGHT, leading=13),
+        "sign":   S("sign",   fontSize=8.5, textColor=GR, leading=13),
     }
 
     today = datetime.now()
-    contract_num = f"А-{contract['id']:04d}"
+    num   = f"А-{contract['id']:04d}"
     ctype = contract.get("client_type", "individual")
 
     if ctype == "individual":
         cname  = contract.get("full_name") or "_______________"
         clabel = "Физическое лицо"
-        ps = contract.get("passport_series") or "____"
-        pn = contract.get("passport_number") or "______"
-        pi = contract.get("passport_issued") or "_______________"
-        pd = fmt_date(contract.get("passport_date") or "")
-        bd = fmt_date(contract.get("birth_date") or "")
-        ra = contract.get("address") or "_______________"
-        creq_lines = [
-            f"Паспорт: серия {ps} № {pn}",
-            f"Выдан: {pi}, {pd}",
-            f"Дата рождения: {bd}",
-            f"Адрес: {ra}",
+        creq   = [
+            ("Паспорт", f"{contract.get('passport_series') or '____'} {contract.get('passport_number') or '______'}"),
+            ("Выдан", contract.get("passport_issued") or "_______________"),
+            ("Дата выдачи", fmt_date(contract.get("passport_date") or "")),
+            ("Дата рождения", fmt_date(contract.get("birth_date") or "")),
+            ("Адрес", contract.get("address") or "_______________"),
         ]
     else:
         company  = contract.get("company_name") or "_______________"
@@ -204,325 +230,227 @@ def build_pdf(contract: dict, quote: dict) -> bytes:
         ogrn     = contract.get("ogrn") or "_______________"
         la       = contract.get("legal_address") or "_______________"
         director = contract.get("director") or "_______________"
-        cname  = company
-        clabel = "Юридическое лицо"
-        kpp_str = f"  КПП: {kpp}" if kpp else ""
-        creq_lines = [
-            f"ИНН: {inn}{kpp_str}",
-            f"ОГРН: {ogrn}",
-            f"Юр. адрес: {la}",
-            f"Директор: {director}",
+        cname    = company
+        clabel   = "Юридическое лицо"
+        creq     = [
+            ("ИНН", inn + (f" / КПП: {kpp}" if kpp else "")),
+            ("ОГРН", ogrn),
+            ("Юр. адрес", la),
+            ("Директор", director),
         ]
 
-    phone = contract.get("phone") or "_______________"
-    email = contract.get("email") or "_______________"
-    items           = quote.get("items") or []
-    extras          = quote.get("extras") or []
-    days            = int(quote.get("days") or 1)
-    delivery        = quote.get("delivery") or "Без доставки"
-    delivery_p      = int(quote.get("delivery_price") or 0)
-    total           = int(quote.get("total") or 0)
-    qtitle          = quote.get("title") or "Аренда оборудования"
-    event_date      = quote.get("event_date") or ""
-    delivery_address = quote.get("delivery_address") or ""
+    phone    = contract.get("phone") or "_______________"
+    email    = contract.get("email") or "_______________"
+    items    = quote.get("items") or []
+    extras   = quote.get("extras") or []
+    days     = int(quote.get("days") or 1)
+    delivery = quote.get("delivery") or "Без доставки"
+    deliv_p  = int(quote.get("delivery_price") or 0)
+    total    = int(quote.get("total") or 0)
+    qtitle   = quote.get("title") or "Аренда оборудования"
+    ev_date  = quote.get("event_date") or ""
+    ev_addr  = quote.get("delivery_address") or ""
 
-    if days == 1:
-        days_str = "1 (один) календарный день"
-    elif 2 <= days <= 4:
-        _mw = money_words(days)
-        _word = _mw.split("(")[1].split(")")[0] if "(" in _mw else str(days)
-        days_str = f"{days} ({_word}) календарных дня"
-    else:
-        days_str = f"{days} календарных дней"
+    days_str   = "1 (один) календарный день" if days == 1 else f"{days} календарных {'дня' if days in (2,3,4) else 'дней'}"
+    event_str  = fmt_date(ev_date) if ev_date else "по согласованию Сторон"
+    addr_str   = ev_addr if ev_addr else "по адресу, согласованному Сторонами"
+    deliv_str  = delivery if delivery and delivery != "Без доставки" else "самовывоз"
 
-    W = doc.width  # полная ширина текста
-
+    W = doc.width
     story = []
 
-    # ── ШАПКА ──────────────────────────────────────────────────────────────
-    story.append(Paragraph("ДОГОВОР АРЕНДЫ ОБОРУДОВАНИЯ", S["title"]))
-    story.append(Paragraph(f"№&nbsp;{contract_num}", S["sub"]))
-    story.append(Spacer(1, 6*mm))
-
-    # Город + дата
-    loc_table = Table(
-        [[Paragraph("г. Москва", S["body"]),
-          Paragraph(f"«&nbsp;&nbsp;&nbsp;»&nbsp;_______________&nbsp;{today.year}&nbsp;г.", S["right"])]],
-        colWidths=[W/2, W/2]
-    )
-    loc_table.setStyle(TableStyle([
-        ("LEFTPADDING",  (0,0),(-1,-1), 0),
-        ("RIGHTPADDING", (0,0),(-1,-1), 0),
-        ("TOPPADDING",   (0,0),(-1,-1), 0),
-        ("BOTTOMPADDING",(0,0),(-1,-1), 0),
-    ]))
-    story.append(loc_table)
-    story.append(Spacer(1, 6*mm))
-
-    # ── ПРЕАМБУЛА ───────────────────────────────────────────────────────────
-    story.append(Paragraph(
-        f'<b>ООО «Stage Sound»</b>, именуемое в дальнейшем <b>«Арендодатель»</b>, '
-        f'с одной стороны, и '
-        f'<b>{cname}</b> ({clabel}), именуемый(-ая) в дальнейшем <b>«Арендатор»</b>, '
-        f'с другой стороны, совместно именуемые «Стороны», заключили настоящий Договор '
-        f'о нижеследующем:',
-        S["body"]
-    ))
+    # Шапка
+    story.append(Paragraph("ДОГОВОР АРЕНДЫ ОБОРУДОВАНИЯ", Ss["title"]))
+    story.append(Spacer(1, 1*mm))
+    story.append(Paragraph(f"&#8470;&nbsp;{num}", Ss["sub"]))
     story.append(Spacer(1, 5*mm))
-    story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#dddddd")))
+    loc = Table([[Paragraph("г. Москва", Ss["body"]),
+                  Paragraph(f"&laquo;&nbsp;&nbsp;&nbsp;&raquo; _______________ {today.year}&nbsp;г.", Ss["right"])]],
+                colWidths=[W/2, W/2])
+    loc.setStyle(TableStyle([("LEFTPADDING",(0,0),(-1,-1),0),("RIGHTPADDING",(0,0),(-1,-1),0),
+                              ("TOPPADDING",(0,0),(-1,-1),0),("BOTTOMPADDING",(0,0),(-1,-1),0)]))
+    story.append(loc)
+    story.append(Spacer(1, 5*mm))
+    story.append(Paragraph(
+        f'<b>ООО &laquo;Stage Sound&raquo;</b>, именуемое далее <b>&laquo;Арендодатель&raquo;</b>, '
+        f'и <b>{cname}</b> ({clabel}), именуемый(-ая) далее <b>&laquo;Арендатор&raquo;</b>, '
+        f'заключили настоящий Договор о нижеследующем:', Ss["body"]))
     story.append(Spacer(1, 4*mm))
+    story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#cccccc")))
+    story.append(Spacer(1, 3*mm))
 
-    # ── СТАТЬИ ──────────────────────────────────────────────────────────────
-    def section(num, title, *paras):
-        items_block = [
-            Paragraph(f"{num}.&nbsp;{title}", S["h2"]),
-            Spacer(1, 2*mm),
-        ]
+    def section(n, title, *paras):
+        block = [Paragraph(f"{n}. {title}", Ss["h2"]), Spacer(1, 1.5*mm)]
         for p in paras:
-            items_block.append(Paragraph(p, S["body"]))
-            items_block.append(Spacer(1, 1.5*mm))
-        items_block.append(Spacer(1, 3*mm))
-        story.append(KeepTogether(items_block))
-
-    event_date_str   = fmt_date(event_date) if event_date else "«&nbsp;&nbsp;&nbsp;»&nbsp;_______________&nbsp;______&nbsp;г."
-    address_str      = delivery_address if delivery_address else "по адресу, согласованному Сторонами"
-    delivery_str     = f"{delivery}" if delivery and delivery != "Без доставки" else "самовывоз"
+            block.append(Paragraph(p, Ss["body"]))
+            block.append(Spacer(1, 1*mm))
+        block.append(Spacer(1, 2*mm))
+        story.append(KeepTogether(block))
 
     section("1", "ПРЕДМЕТ ДОГОВОРА",
-        "1.1. Арендодатель обязуется предоставить Арендатору во временное платное пользование "
-        "оборудование согласно Перечню (Приложение №&nbsp;1), а Арендатор обязуется принять "
-        "его, оплатить аренду и вернуть в исправном состоянии.",
+        f"1.1. Арендодатель предоставляет Арендатору во временное пользование оборудование согласно Приложению &numero;1.",
         f"1.2. Назначение: <b>{qtitle}</b>.",
-        f"1.3. Дата мероприятия: <b>{event_date_str}</b>.",
-        f"1.4. Адрес доставки/проведения: <b>{address_str}</b>.",
-        f"1.5. Способ доставки: <b>{delivery_str}</b>.",
+        f"1.3. Дата мероприятия: <b>{event_str}</b>.",
+        f"1.4. Адрес: <b>{addr_str}</b>.",
+        f"1.5. Доставка: <b>{deliv_str}</b>.",
         f"1.6. Срок аренды: <b>{days_str}</b>.",
     )
     section("2", "СТОИМОСТЬ И ПОРЯДОК РАСЧЁТОВ",
-        f"2.1. Общая стоимость аренды по настоящему Договору составляет: "
-        f"<b>{money_words(total)}</b>.",
-        "2.2. Оплата производится в полном объёме до начала срока аренды путём безналичного "
-        "перечисления на расчётный счёт Арендодателя либо иным согласованным Сторонами способом.",
-        "2.3. Датой исполнения обязательства по оплате считается дата поступления денежных "
-        "средств на расчётный счёт Арендодателя.",
+        f"2.1. Общая стоимость аренды: <b>{money_words(total)}</b>.",
+        "2.2. Оплата производится до начала срока аренды путём безналичного перечисления.",
     )
     section("3", "ПРАВА И ОБЯЗАННОСТИ СТОРОН",
-        "3.1. Арендодатель обязуется: передать Оборудование в исправном техническом состоянии; "
-        "обеспечить доставку и монтаж в соответствии с условиями настоящего Договора (при наличии "
-        "соответствующих услуг в Приложении №&nbsp;1); своевременно устранять неисправности, "
-        "возникшие не по вине Арендатора.",
-        "3.2. Арендатор обязуется: использовать Оборудование строго по его назначению; "
-        "обеспечить сохранность Оборудования и не передавать его третьим лицам без письменного "
-        "согласия Арендодателя; своевременно вернуть Оборудование по окончании срока аренды "
-        "в том же состоянии, в котором оно было получено, с учётом нормального износа.",
+        "3.1. Арендодатель передаёт Оборудование в исправном состоянии и обеспечивает доставку/монтаж при наличии в Приложении &numero;1.",
+        "3.2. Арендатор использует Оборудование по назначению, обеспечивает сохранность и возвращает в срок.",
+        "3.3. Арендатор не вправе передавать Оборудование третьим лицам без согласия Арендодателя.",
     )
-    section("4", "ОТВЕТСТВЕННОСТЬ СТОРОН",
-        "4.1. В случае несвоевременного возврата Оборудования Арендатор уплачивает неустойку "
-        "в размере 0,5&nbsp;% от суммы настоящего Договора за каждый день просрочки.",
-        "4.2. В случае повреждения, порчи или утраты Оборудования Арендатор возмещает "
-        "Арендодателю его полную рыночную стоимость на дату причинения ущерба.",
-        "4.3. Стороны освобождаются от ответственности за неисполнение обязательств, "
-        "если это вызвано обстоятельствами непреодолимой силы (форс-мажор).",
+    section("4", "ОТВЕТСТВЕННОСТЬ",
+        "4.1. При просрочке возврата — неустойка 0,5% от суммы Договора за каждый день.",
+        "4.2. При повреждении или утрате — полная рыночная стоимость Оборудования.",
+        "4.3. Форс-мажор освобождает Стороны от ответственности.",
     )
-    section("5", "ПОРЯДОК РАЗРЕШЕНИЯ СПОРОВ",
-        "5.1. Все разногласия Стороны стремятся урегулировать путём переговоров.",
-        "5.2. При недостижении соглашения спор передаётся на рассмотрение арбитражного суда "
-        "по месту нахождения Арендодателя в соответствии с законодательством РФ.",
-    )
-    section("6", "ПРОЧИЕ УСЛОВИЯ",
-        "6.1. Настоящий Договор вступает в силу с момента подписания обеими Сторонами.",
-        "6.2. Любые изменения и дополнения к Договору действительны лишь при условии их "
-        "оформления в письменном виде и подписания уполномоченными представителями Сторон.",
-        "6.3. Договор составлен в двух экземплярах, имеющих равную юридическую силу, "
-        "по одному для каждой из Сторон.",
+    section("5", "ПРОЧИЕ УСЛОВИЯ",
+        "5.1. Договор вступает в силу с момента подписания.",
+        "5.2. Споры — переговоры, затем суд по месту Арендодателя.",
+        "5.3. Два равных экземпляра.",
     )
 
-    # ── РЕКВИЗИТЫ И ПОДПИСИ ─────────────────────────────────────────────────
-    story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#dddddd")))
-    story.append(Spacer(1, 4*mm))
-    story.append(Paragraph("7. РЕКВИЗИТЫ И ПОДПИСИ СТОРОН", S["h2"]))
+    story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#cccccc")))
+    story.append(Spacer(1, 3*mm))
+    story.append(Paragraph("6. РЕКВИЗИТЫ И ПОДПИСИ", Ss["h2"]))
     story.append(Spacer(1, 3*mm))
 
-    def req_col(header, lines, sign_label=""):
-        items_col = [Paragraph(header, S["smallB"]), Spacer(1, 2*mm)]
-        for ln in lines:
-            items_col.append(Paragraph(ln, S["small"]))
-        items_col.append(Spacer(1, 5*mm))
-        items_col.append(Paragraph(sign_label or "Подпись: ________________________", S["sign"]))
-        if "Арендодатель" in header:
-            items_col.append(Spacer(1, 2*mm))
-            items_col.append(Paragraph("М.П.", S["small"]))
-        elif "company" in (ctype if "Арендатор" not in header else ""):
-            pass
-        return items_col
+    def make_col(title_text, rows, with_stamp=False):
+        col = [Paragraph(title_text, Ss["smallB"]), Spacer(1, 2*mm)]
+        for label, val in rows:
+            col.append(Paragraph(f'<font color="#666">{label}:</font> {val}', Ss["small"]))
+        col.append(Spacer(1, 5*mm))
+        col.append(Paragraph("Подпись: _____________________", Ss["sign"]))
+        if with_stamp:
+            col.append(Spacer(1, 2*mm))
+            col.append(Paragraph("М.П.", Ss["small"]))
+        return col
 
-    arend_col = req_col(
-        "АРЕНДОДАТЕЛЬ",
-        [
-            "ООО «Stage Sound»",
-            "ИНН: _____________   ОГРН: _____________",
-            "Адрес: г. Москва",
-            "Email: info@global.promo",
-        ],
+    arend_col = make_col("АРЕНДОДАТЕЛЬ", [
+        ("Организация", "ООО &laquo;Stage Sound&raquo;"),
+        ("ИНН", "_______________"),
+        ("ОГРН", "_______________"),
+        ("Адрес", "г. Москва"),
+        ("Email", "info@global.promo"),
+    ], with_stamp=True)
+
+    client_col = make_col("АРЕНДАТОР",
+        [("Наименование", f"<b>{cname}</b>"), ("Тип", clabel)] + creq +
+        [("Тел.", phone), ("Email", email)],
+        with_stamp=(ctype == "company")
     )
-    arend_col.append(Spacer(1, 2*mm))
-    arend_col.append(Paragraph("М.П.", S["small"]))
 
-    client_col_lines = [cname, clabel] + creq_lines + [f"Тел.: {phone}", f"Email: {email}"]
-    client_col = req_col("АРЕНДАТОР", client_col_lines)
-    if ctype == "company":
-        client_col.append(Spacer(1, 2*mm))
-        client_col.append(Paragraph("М.П.", S["small"]))
-
-    def col_to_para(items_list):
-        result = []
-        for el in items_list:
-            result.append(el)
-        return result
-
-    req_t = Table(
-        [[col_to_para(arend_col), col_to_para(client_col)]],
-        colWidths=[W/2 - 5*mm, W/2 + 5*mm]
-    )
+    req_t = Table([[arend_col, client_col]], colWidths=[W/2 - 3*mm, W/2 + 3*mm])
     req_t.setStyle(TableStyle([
         ("VALIGN",        (0,0),(-1,-1), "TOP"),
         ("LEFTPADDING",   (0,0),(-1,-1), 0),
-        ("RIGHTPADDING",  (0,0),(-1,-1), 4),
+        ("RIGHTPADDING",  (0,0),(0,-1),  6),
         ("TOPPADDING",    (0,0),(-1,-1), 0),
         ("BOTTOMPADDING", (0,0),(-1,-1), 0),
-        ("LINEAFTER",     (0,0),(0,-1),  0.5, colors.HexColor("#dddddd")),
+        ("LINEAFTER",     (0,0),(0,-1),  0.5, colors.HexColor("#cccccc")),
         ("LEFTPADDING",   (1,0),(1,-1),  8),
     ]))
     story.append(req_t)
 
-    # ── ПРИЛОЖЕНИЕ №1 ────────────────────────────────────────────────────────
-    story.append(Spacer(1, 10*mm))
-    story.append(HRFlowable(width="100%", thickness=1.5, color=colors.HexColor("#b45309")))
-    story.append(Spacer(1, 5*mm))
-    story.append(Paragraph(f"ПРИЛОЖЕНИЕ №&nbsp;1 к Договору аренды оборудования №&nbsp;{contract_num}", S["sub"]))
+    # Приложение №1
+    story.append(Spacer(1, 8*mm))
+    story.append(HRFlowable(width="100%", thickness=1.5, color=AM))
+    story.append(Spacer(1, 4*mm))
+    story.append(Paragraph(f"ПРИЛОЖЕНИЕ &numero;1 к Договору &numero;&nbsp;{num}", Ss["sub"]))
     story.append(Spacer(1, 1*mm))
-    story.append(Paragraph("ПЕРЕЧЕНЬ АРЕНДУЕМОГО ОБОРУДОВАНИЯ И УСЛУГ", S["title"]))
-    story.append(Spacer(1, 5*mm))
+    story.append(Paragraph("ПЕРЕЧЕНЬ ОБОРУДОВАНИЯ И УСЛУГ", Ss["title"]))
+    story.append(Spacer(1, 4*mm))
 
-    # Таблица оборудования
-    COL_W = [8*mm, 78*mm, 14*mm, 22*mm, 13*mm, 22*mm]
+    CW = [8*mm, 77*mm, 14*mm, 22*mm, 13*mm, 22*mm]
+    rows = [[Paragraph("&numero;", Ss["boldC"]),
+             Paragraph("Наименование", Ss["bold"]),
+             Paragraph("Кол-во", Ss["boldC"]),
+             Paragraph("Цена/ед., руб.", Ss["boldC"]),
+             Paragraph("Дней", Ss["boldC"]),
+             Paragraph("Сумма, руб.", Ss["boldR"])]]
 
-    header_row = [
-        Paragraph("№", S["boldC"]),
-        Paragraph("Наименование", S["bold"]),
-        Paragraph("Кол-во", S["boldC"]),
-        Paragraph("Цена/ед., ₽", S["boldC"]),
-        Paragraph("Дней", S["boldC"]),
-        Paragraph("Сумма, ₽", S["boldR"]),
-    ]
-    eq_rows = [header_row]
-
-    equip_sum = 0
     for i, item in enumerate(items, 1):
         pr = int(item.get("price") or 0)
         qt = int(item.get("qty") or 1)
-        nm = item.get("name") or "—"
-        un = item.get("unit") or "день"
         st = pr * qt * days
-        equip_sum += st
-        eq_rows.append([
-            Paragraph(str(i), S["center"]),
-            Paragraph(nm, S["bodyL"]),
-            Paragraph(str(qt), S["center"]),
-            Paragraph(f"{pr:,}".replace(",", "\u00a0"), S["right"]),
-            Paragraph(str(days), S["center"]),
-            Paragraph(f"{st:,}".replace(",", "\u00a0"), S["right"]),
+        rows.append([
+            Paragraph(str(i),                   Ss["center"]),
+            Paragraph(item.get("name") or "—",  Ss["bodyL"]),
+            Paragraph(str(qt),                  Ss["center"]),
+            Paragraph(fn(pr),                   Ss["right"]),
+            Paragraph(str(days),                Ss["center"]),
+            Paragraph(fn(st),                   Ss["right"]),
         ])
 
-    # Доп. услуги
     if extras:
-        eq_rows.append([
-            Paragraph("", S["body"]),
-            Paragraph("Дополнительные услуги:", S["bold"]),
-            Paragraph("", S["body"]),
-            Paragraph("", S["body"]),
-            Paragraph("", S["body"]),
-            Paragraph("", S["body"]),
-        ])
+        rows.append([Paragraph("", Ss["body"])] * 6)
         for ex in extras:
             ep = int(ex.get("price") or 0)
-            eq_rows.append([
-                Paragraph("—", S["center"]),
-                Paragraph(ex.get("name") or "—", S["bodyL"]),
-                Paragraph("1", S["center"]),
-                Paragraph(f"{ep:,}".replace(",", "\u00a0"), S["right"]),
-                Paragraph("—", S["center"]),
-                Paragraph(f"{ep:,}".replace(",", "\u00a0"), S["right"]),
+            rows.append([
+                Paragraph("—",                      Ss["center"]),
+                Paragraph(ex.get("name") or "—",    Ss["bodyL"]),
+                Paragraph("1",                      Ss["center"]),
+                Paragraph(fn(ep),                   Ss["right"]),
+                Paragraph("—",                      Ss["center"]),
+                Paragraph(fn(ep),                   Ss["right"]),
             ])
 
-    # Доставка
-    if delivery_p > 0:
-        eq_rows.append([
-            Paragraph("—", S["center"]),
-            Paragraph(f"Доставка: {delivery}", S["bodyL"]),
-            Paragraph("1", S["center"]),
-            Paragraph(f"{delivery_p:,}".replace(",", "\u00a0"), S["right"]),
-            Paragraph("—", S["center"]),
-            Paragraph(f"{delivery_p:,}".replace(",", "\u00a0"), S["right"]),
+    if deliv_p > 0:
+        rows.append([
+            Paragraph("—",                          Ss["center"]),
+            Paragraph(f"Доставка: {delivery}",      Ss["bodyL"]),
+            Paragraph("1",                          Ss["center"]),
+            Paragraph(fn(deliv_p),                  Ss["right"]),
+            Paragraph("—",                          Ss["center"]),
+            Paragraph(fn(deliv_p),                  Ss["right"]),
         ])
 
-    # Итого
-    eq_rows.append([
-        Paragraph("", S["body"]),
-        Paragraph("ИТОГО:", S["bold"]),
-        Paragraph("", S["body"]),
-        Paragraph("", S["body"]),
-        Paragraph("", S["body"]),
-        Paragraph(f"{total:,}".replace(",", "\u00a0"), S["boldR"]),
+    rows.append([
+        Paragraph("", Ss["body"]),
+        Paragraph("ИТОГО:", Ss["bold"]),
+        Paragraph("", Ss["body"]),
+        Paragraph("", Ss["body"]),
+        Paragraph("", Ss["body"]),
+        Paragraph(fn(total), Ss["boldR"]),
     ])
 
-    eq_t = Table(eq_rows, colWidths=COL_W, repeatRows=1)
-    eq_t.setStyle(TableStyle([
-        # Шапка
-        ("BACKGROUND",    (0, 0), (-1, 0),  colors.HexColor("#fef3c7")),
-        ("LINEBELOW",     (0, 0), (-1, 0),  1, colors.HexColor("#b45309")),
-        # Сетка данных
-        ("GRID",          (0, 1), (-1, -2), 0.3, colors.HexColor("#e5e7eb")),
-        # Итого
-        ("LINEABOVE",     (0, -1), (-1, -1), 1, colors.HexColor("#b45309")),
-        ("BACKGROUND",    (0, -1), (-1, -1), colors.HexColor("#fffbeb")),
-        # Отступы
-        ("TOPPADDING",    (0, 0), (-1, -1), 4),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-        ("LEFTPADDING",   (0, 0), (-1, -1), 4),
-        ("RIGHTPADDING",  (0, 0), (-1, -1), 4),
-        ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
-        # Чередование строк
-        ("ROWBACKGROUNDS",(0, 1), (-1, -2), [colors.white, colors.HexColor("#fafafa")]),
+    tbl = Table(rows, colWidths=CW, repeatRows=1)
+    tbl.setStyle(TableStyle([
+        ("BACKGROUND",    (0,0),(-1,0),   colors.HexColor("#fef3c7")),
+        ("LINEBELOW",     (0,0),(-1,0),   1, AM),
+        ("GRID",          (0,1),(-1,-2),  0.3, colors.HexColor("#e5e7eb")),
+        ("ROWBACKGROUNDS",(0,1),(-1,-2),  [colors.white, colors.HexColor("#fafafa")]),
+        ("LINEABOVE",     (0,-1),(-1,-1), 1, AM),
+        ("BACKGROUND",    (0,-1),(-1,-1), colors.HexColor("#fffbeb")),
+        ("TOPPADDING",    (0,0),(-1,-1),  4),
+        ("BOTTOMPADDING", (0,0),(-1,-1),  4),
+        ("LEFTPADDING",   (0,0),(-1,-1),  4),
+        ("RIGHTPADDING",  (0,0),(-1,-1),  4),
+        ("VALIGN",        (0,0),(-1,-1),  "MIDDLE"),
     ]))
-    story.append(eq_t)
-
+    story.append(tbl)
     story.append(Spacer(1, 4*mm))
-    story.append(Paragraph(
-        f"<b>Итого по Договору:</b> {money_words(total)}.",
-        S["body"]
-    ))
+    story.append(Paragraph(f"<b>Итого по Договору:</b> {money_words(total)}.", Ss["body"]))
     story.append(Spacer(1, 8*mm))
 
-    # Подписи к приложению
-    sign_t = Table(
-        [[Paragraph("Арендодатель: ________________________&nbsp;/&nbsp;________________/ М.П.", S["sign"]),
-          Paragraph("Арендатор: ________________________&nbsp;/&nbsp;________________/", S["sign"])]],
+    sign = Table(
+        [[Paragraph("Арендодатель: _____________________________ М.П.", Ss["sign"]),
+          Paragraph("Арендатор: _____________________________", Ss["sign"])]],
         colWidths=[W/2, W/2]
     )
-    sign_t.setStyle(TableStyle([
-        ("LEFTPADDING",  (0,0),(-1,-1), 0),
-        ("RIGHTPADDING", (0,0),(-1,-1), 0),
-        ("TOPPADDING",   (0,0),(-1,-1), 0),
-        ("BOTTOMPADDING",(0,0),(-1,-1), 0),
-    ]))
-    story.append(sign_t)
+    sign.setStyle(TableStyle([("LEFTPADDING",(0,0),(-1,-1),0),("RIGHTPADDING",(0,0),(-1,-1),0),
+                               ("TOPPADDING",(0,0),(-1,-1),0),("BOTTOMPADDING",(0,0),(-1,-1),0)]))
+    story.append(sign)
 
     doc.build(story)
     return buf.getvalue()
 
 
-# ── HANDLER ──────────────────────────────────────────────────────────────────
 def handler(event: dict, context) -> dict:
     if event.get("httpMethod") == "OPTIONS":
         return {"statusCode": 200, "headers": CORS, "body": ""}
@@ -537,8 +465,8 @@ def handler(event: dict, context) -> dict:
         return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "contract_id required"})}
 
     schema = os.environ.get("MAIN_DB_SCHEMA", "public")
-    conn = get_db()
-    cur  = conn.cursor()
+    conn   = get_db()
+    cur    = conn.cursor()
     cur.execute(
         f"""SELECT c.id, c.quote_id, c.client_type,
             c.full_name, c.passport_series, c.passport_number, c.passport_issued,
@@ -561,7 +489,8 @@ def handler(event: dict, context) -> dict:
     keys_c = ["id","quote_id","client_type","full_name","passport_series","passport_number",
               "passport_issued","passport_date","birth_date","address",
               "company_name","inn","kpp","ogrn","legal_address","director","phone","email"]
-    keys_q = ["title","items","days","delivery","delivery_price","extras","total","event_date","delivery_address"]
+    keys_q = ["title","items","days","delivery","delivery_price","extras","total",
+              "event_date","delivery_address"]
     data     = dict(zip(keys_c + keys_q, row))
     contract = {k: data[k] for k in keys_c}
     quote    = {k: data[k] for k in keys_q}
@@ -572,9 +501,7 @@ def handler(event: dict, context) -> dict:
     pdf_bytes = build_pdf(contract, quote)
 
     key = f"contracts/contract_{contract['id']:04d}.pdf"
-    s3 = boto3.client("s3", endpoint_url="https://bucket.poehali.dev",
-                      aws_access_key_id=os.environ["AWS_ACCESS_KEY_ID"],
-                      aws_secret_access_key=os.environ["AWS_SECRET_ACCESS_KEY"])
+    s3  = get_s3()
     s3.put_object(Bucket="files", Key=key, Body=pdf_bytes, ContentType="application/pdf")
     cdn = f"https://cdn.poehali.dev/projects/{os.environ['AWS_ACCESS_KEY_ID']}/bucket/{key}"
 
