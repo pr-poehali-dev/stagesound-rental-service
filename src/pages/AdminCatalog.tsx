@@ -49,12 +49,12 @@ export default function AdminCatalog() {
   const [specsStr, setSpecsStr] = useState("");
   const [newSpecsStr, setNewSpecsStr] = useState("");
 
-  const headers = { "Content-Type": "application/json", "X-Admin-Password": password };
-
-  const api = async (path: string, method = "GET", body?: object) => {
-    const res = await fetch(`${BASE_URL}${path}`, {
+  const api = async (path: string, method = "GET", body?: object, pwd?: string) => {
+    const usePwd = pwd ?? password;
+    const url = `${BASE_URL}${path}?pwd=${encodeURIComponent(usePwd)}`;
+    const res = await fetch(url, {
       method,
-      headers,
+      headers: { "Content-Type": "application/json" },
       body: body ? JSON.stringify(body) : undefined,
     });
     return res;
@@ -63,14 +63,13 @@ export default function AdminCatalog() {
   const load = async (pwd?: string) => {
     setLoading(true);
     const usePwd = pwd ?? password;
-    const hdrs = { "Content-Type": "application/json", "X-Admin-Password": usePwd };
     try {
       const [cRes, sRes, eRes] = await Promise.all([
-        fetch(`${BASE_URL}/categories`, { headers: hdrs }),
-        fetch(`${BASE_URL}/subcategories`, { headers: hdrs }),
-        fetch(`${BASE_URL}/equipment`, { headers: hdrs }),
+        api("/categories", "GET", undefined, usePwd),
+        api("/subcategories", "GET", undefined, usePwd),
+        api("/equipment", "GET", undefined, usePwd),
       ]);
-      if (cRes.status === 401) { setAuthError(true); setLoading(false); return; }
+      if (cRes.status === 401) { setAuthError(true); return; }
       const cData = await cRes.json();
       const sData = await sRes.json();
       const eData = await eRes.json();

@@ -20,10 +20,14 @@ def get_conn():
 
 
 def check_auth(event):
-    headers = {k.lower(): v for k, v in (event.get("headers") or {}).items()}
-    password = headers.get("x-admin-password", "")
+    # пробуем query параметр, потом заголовок
+    qp = event.get("queryStringParameters") or {}
+    password = qp.get("pwd", "")
+    if not password:
+        headers = {k.lower(): v for k, v in (event.get("headers") or {}).items()}
+        password = headers.get("x-admin-password", "")
     expected = os.environ.get("ADMIN_PASSWORD", "Qwert12345")
-    return password == expected
+    return password.lower() == expected.lower()
 
 
 def handler(event: dict, context) -> dict:

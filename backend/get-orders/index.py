@@ -16,7 +16,7 @@ def handler(event: dict, context) -> dict:
     raw_headers = event.get("headers") or {}
     headers = {k.lower(): v for k, v in raw_headers.items()}
     password = headers.get("x-admin-password", "")
-    if password != os.environ.get("ADMIN_PASSWORD", "Qwert12345"):
+    if password.lower() != os.environ.get("ADMIN_PASSWORD", "Qwert12345").lower():
         return {"statusCode": 401, "headers": cors, "body": json.dumps({"error": "Unauthorized"})}
 
     schema = os.environ.get("MAIN_DB_SCHEMA", "public")
