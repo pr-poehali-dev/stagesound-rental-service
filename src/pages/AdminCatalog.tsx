@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import Icon from "@/components/ui/icon";
 import func2url from "../../backend/func2url.json";
 
@@ -305,6 +305,7 @@ export default function AdminCatalog() {
                   setSpecsStr={setNewSpecsStr}
                   categories={categories}
                   subcategories={subcategories}
+                  password={password}
                 />
                 <div className="flex gap-3 mt-4">
                   <button onClick={createItem} className="neon-btn px-6 py-2 rounded-sm text-sm flex items-center gap-2">
@@ -382,6 +383,7 @@ export default function AdminCatalog() {
                         setSpecsStr={setSpecsStr}
                         categories={categories}
                         subcategories={subcategories}
+                        password={password}
                       />
                       <div className="flex gap-3 mt-4">
                         <button onClick={saveItem} className="neon-btn px-6 py-2 rounded-sm text-sm flex items-center gap-2">
@@ -587,7 +589,7 @@ export default function AdminCatalog() {
 
 // ── ItemForm Component ────────────────────────────────────────────────
 function ItemForm({
-  item, setItem, specsStr, setSpecsStr, categories, subcategories,
+  item, setItem, specsStr, setSpecsStr, categories, subcategories, password,
 }: {
   item: Omit<EquipmentItem, "id"> & { id?: number };
   setItem: (v: Omit<EquipmentItem, "id"> & { id?: number }) => void;
@@ -595,8 +597,38 @@ function ItemForm({
   setSpecsStr: (v: string) => void;
   categories: Category[];
   subcategories: Subcategory[];
+  password: string;
 }) {
+  const [uploading, setUploading] = React.useState(false);
+  const [uploadError, setUploadError] = React.useState("");
   const catSubs = subcategories.filter((s) => s.category === item.category);
+  const UPLOAD_URL = (func2url as Record<string, string>)["upload-image"];
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    setUploadError("");
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      try {
+        const base64 = (ev.target?.result as string) || "";
+        const res = await fetch(`${UPLOAD_URL}?pwd=${encodeURIComponent(password)}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ file: base64, name: file.name }),
+        });
+        const data = await res.json();
+        if (!res.ok) { setUploadError(data.error || "Ошибка загрузки"); setUploading(false); return; }
+        setItem({ ...item, image: data.url });
+      } catch {
+        setUploadError("Ошибка загрузки");
+      } finally {
+        setUploading(false);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
 
   const field = (label: string, el: React.ReactNode) => (
     <div>
@@ -673,7 +705,28 @@ function ItemForm({
           />
         ))}
       </div>
-      {field("URL изображения", inp("image", "text", "https://..."))}
+      <div className="md:col-span-2">
+        <label className="text-xs text-gray-600 uppercase tracking-wider block mb-2">Изображение</label>
+        <div className="flex gap-3 items-start">
+          {item.image && (
+            <img src={item.image} alt="" className="w-20 h-20 object-cover rounded-sm border border-amber-500/20 shrink-0" />
+          )}
+          <div className="flex-1 space-y-2">
+            <label className={`inline-flex items-center gap-2 px-4 py-2 rounded-sm border border-amber-500/30 text-amber-500 hover:bg-amber-500/10 cursor-pointer transition-colors text-sm ${uploading ? "opacity-50 pointer-events-none" : ""}`}>
+              <Icon name={uploading ? "Loader2" : "Upload"} size={14} className={uploading ? "animate-spin" : ""} />
+              {uploading ? "Загружаю..." : "Загрузить файл"}
+              <input type="file" accept="image/*" className="hidden" onChange={handleFileUpload} disabled={uploading} />
+            </label>
+            {uploadError && <p className="text-red-400 text-xs">{uploadError}</p>}
+            <input
+              value={item.image || ""}
+              onChange={(e) => setItem({ ...item, image: e.target.value })}
+              placeholder="или вставьте URL вручную"
+              className="w-full bg-transparent border border-amber-500/20 rounded-sm px-3 py-2 text-sm text-white placeholder-gray-700 focus:outline-none focus:border-amber-500/50"
+            />
+          </div>
+        </div>
+      </div>
       {field("Применение",
         <select
           value={item.usage || ""}
