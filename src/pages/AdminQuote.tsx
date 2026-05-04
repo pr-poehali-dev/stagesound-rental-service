@@ -21,7 +21,7 @@ const deliveryZones = [
 
 type Eq = {
   id: number; name: string; category: string; price: number; unit: string;
-  image?: string; is_active: boolean;
+  image?: string;
 };
 type CartItem = { id: number; qty: number };
 
@@ -70,7 +70,7 @@ export default function AdminQuote() {
     if (!authed) return;
     fetch(URLS["get-catalog"])
       .then((r) => r.json())
-      .then((d) => { setEquipment((d.equipment || []).filter((e: Eq) => e.is_active)); setLoading(false); })
+      .then((d) => { setEquipment(d.equipment || []); setLoading(false); })
       .catch(() => setLoading(false));
   }, [authed]);
 
