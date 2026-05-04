@@ -20,6 +20,7 @@ type Contract = {
   full_name: string; company_name: string; phone: string; email: string;
   status: string; created_at: string; quote_title: string; total: number;
   passport_file_url: string | null;
+  event_date?: string; delivery_address?: string;
 };
 
 const formatDate = (iso: string | null) => {
@@ -459,6 +460,28 @@ export default function Admin() {
                 {selectedContract.client_type === "individual" ? "Физическое лицо" : "Юридическое лицо"}
               </span>
             </div>
+
+            {/* Дата и адрес мероприятия */}
+            {(selectedContract.event_date || selectedContract.delivery_address) && (
+              <div className="bg-amber-500/5 border border-amber-500/20 rounded-sm p-3 mb-4 space-y-1.5">
+                {selectedContract.event_date && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <Icon name="Calendar" size={13} className="text-amber-500 shrink-0" />
+                    <span className="text-gray-500">Дата:</span>
+                    <span className="text-white">
+                      {new Date(selectedContract.event_date).toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" })}
+                    </span>
+                  </div>
+                )}
+                {selectedContract.delivery_address && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <Icon name="MapPin" size={13} className="text-amber-500 shrink-0" />
+                    <span className="text-gray-500">Адрес:</span>
+                    <span className="text-white">{selectedContract.delivery_address}</span>
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="space-y-2 text-sm mb-6">
               {selectedContract.client_type === "individual" ? (
