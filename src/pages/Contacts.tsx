@@ -42,7 +42,7 @@ export default function Contacts() {
                 { icon: "Phone", label: "Телефон", value: city.phoneDisplay, sub: city.name },
                 { icon: "Mail", label: "Email", value: city.email, sub: "Ответим за 30 минут" },
                 { icon: "MapPin", label: "Адрес склада", value: city.address, sub: `${city.workdays} / ${city.weekend}` },
-                { icon: "Send", label: "Telegram", value: "+7 933 322-20-28", sub: "Оперативная связь" },
+                { icon: "Send", label: "Telegram", value: "@GLOBALRENTA", sub: "Оперативная связь" },
               ].map((item) => (
                 <div key={item.label} className="glass-card p-5 rounded-sm flex items-center gap-4">
                   <div className="w-11 h-11 flex items-center justify-center border border-amber-500/20 rounded-sm shrink-0">
@@ -58,7 +58,7 @@ export default function Contacts() {
             </div>
 
             {/* Мессенджеры */}
-            <div className="grid grid-cols-2 gap-3 mb-4">
+            <div className="grid grid-cols-2 gap-3">
               <a
                 href="https://max.ru/+79333222028"
                 target="_blank"
@@ -69,7 +69,7 @@ export default function Contacts() {
                 Написать в MAX
               </a>
               <a
-                href="https://t.me/+79333222028"
+                href="https://t.me/GLOBALRENTA"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center justify-center gap-2 border border-sky-500/30 text-sky-400 hover:bg-sky-500/10 rounded-sm py-3 text-sm font-medium transition-colors"
@@ -77,21 +77,6 @@ export default function Contacts() {
                 <Icon name="Send" size={16} />
                 Написать в Telegram
               </a>
-            </div>
-
-            <div className="glass-card p-6 rounded-sm">
-              <h3 className="font-oswald text-xl font-bold text-white uppercase mb-4">Как добраться</h3>
-              <div className="rounded-sm overflow-hidden border border-amber-500/10 h-48 flex items-center justify-center" style={{ background: "var(--surface-2)" }}>
-                <div className="text-center">
-                  <Icon name="MapPin" size={32} className="text-amber-500 mx-auto mb-2" />
-                  <p className="text-gray-500 text-sm">м. Профсоюзная, 5 мин. пешком</p>
-                  <p className="text-gray-600 text-xs">ул. Профсоюзная, 65, стр. 2</p>
-                </div>
-              </div>
-              <div className="mt-4 text-sm text-gray-500 space-y-1">
-                <div className="flex items-center gap-2"><Icon name="Train" size={14} className="text-amber-500" /> м. Профсоюзная — 5 минут пешком</div>
-                <div className="flex items-center gap-2"><Icon name="Car" size={14} className="text-amber-500" /> Парковка для клиентов — бесплатно</div>
-              </div>
             </div>
           </div>
 

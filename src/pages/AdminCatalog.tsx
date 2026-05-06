@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import Icon from "@/components/ui/icon";
 import func2url from "../../backend/func2url.json";
+import { useDiscount } from "@/hooks/useDiscount";
 
 type Category = { id: number; name: string; sort_order: number };
 type Subcategory = { id: number; name: string; category: string; sort_order: number };
@@ -26,6 +27,8 @@ export default function AdminCatalog() {
   const [loading, setLoading] = useState(false);
 
   const [tab, setTab] = useState<"equipment" | "categories" | "subcategories">("equipment");
+  const { discount, setDiscount } = useDiscount();
+  const [discountInput, setDiscountInput] = useState<string>(String(discount || ""));
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [subcategories, setSubcategories] = useState<Subcategory[]>([]);
@@ -246,6 +249,52 @@ export default function AdminCatalog() {
               Обновить
             </button>
           </div>
+        </div>
+
+        {/* Global Discount */}
+        <div className="glass-card rounded-sm p-5 mb-6 flex flex-wrap items-center gap-4">
+          <div className="flex items-center gap-2 text-amber-500">
+            <Icon name="Tag" size={18} />
+            <span className="font-oswald text-lg font-bold uppercase">Скидка на весь каталог</span>
+          </div>
+          <div className="flex items-center gap-2 flex-1 min-w-[220px]">
+            {[0, 5, 10, 15, 20, 25, 30].map((pct) => (
+              <button
+                key={pct}
+                onClick={() => { setDiscount(pct); setDiscountInput(String(pct || "")); }}
+                className={`px-3 py-1.5 rounded-sm text-sm font-medium transition-colors ${
+                  discount === pct
+                    ? "bg-amber-500 text-black"
+                    : "border border-amber-500/20 text-gray-400 hover:border-amber-500/50 hover:text-white"
+                }`}
+              >
+                {pct === 0 ? "Нет" : `${pct}%`}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              min={0}
+              max={90}
+              value={discountInput}
+              onChange={(e) => setDiscountInput(e.target.value)}
+              placeholder="0"
+              className="w-20 bg-transparent border border-amber-500/20 rounded-sm px-3 py-1.5 text-sm text-white focus:outline-none focus:border-amber-500/50 text-center"
+            />
+            <span className="text-gray-500 text-sm">%</span>
+            <button
+              onClick={() => { const v = Math.min(90, Math.max(0, Number(discountInput) || 0)); setDiscount(v); setDiscountInput(String(v || "")); }}
+              className="neon-btn px-4 py-1.5 rounded-sm text-sm"
+            >
+              Применить
+            </button>
+          </div>
+          {discount > 0 && (
+            <span className="text-green-400 text-sm font-medium">
+              ✓ Скидка {discount}% активна на всём сайте
+            </span>
+          )}
         </div>
 
         {/* Tabs */}

@@ -3,6 +3,7 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import Icon from "@/components/ui/icon";
 import { Equipment } from "@/data/equipment";
 import { useCity } from "@/context/CityContext";
+import { useDiscount } from "@/hooks/useDiscount";
 import func2url from "../../backend/func2url.json";
 
 function slugify(name: string): string {
@@ -27,6 +28,7 @@ export default function EquipmentItem() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { city } = useCity();
+  const { discount, applyDiscount } = useDiscount();
   const [item, setItem] = useState<Equipment | null>(null);
   const [related, setRelated] = useState<Equipment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -223,8 +225,18 @@ export default function EquipmentItem() {
               </div>
 
               <div className="mb-4">
-                <div className="font-oswald text-4xl font-bold neon-text leading-none">{item.price.toLocaleString()} ₽</div>
-                <div className="text-gray-500 text-sm mt-1">за {item.unit}</div>
+                {discount > 0 ? (
+                  <>
+                    <div className="text-gray-500 text-sm line-through leading-none mb-0.5">{item.price.toLocaleString()} ₽</div>
+                    <div className="font-oswald text-4xl font-bold text-green-400 leading-none">{applyDiscount(item.price).toLocaleString()} ₽</div>
+                    <div className="text-green-500 text-sm mt-1">Скидка {discount}% · за {item.unit}</div>
+                  </>
+                ) : (
+                  <>
+                    <div className="font-oswald text-4xl font-bold neon-text leading-none">{item.price.toLocaleString()} ₽</div>
+                    <div className="text-gray-500 text-sm mt-1">за {item.unit}</div>
+                  </>
+                )}
               </div>
 
               <Link to="/calculator" className="neon-btn w-full py-3 rounded-sm text-sm flex items-center justify-center gap-2 mb-3">

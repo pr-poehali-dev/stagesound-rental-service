@@ -7,6 +7,7 @@ import { useCity } from "@/context/CityContext";
 import { CITY_CONTENT } from "@/data/cityContent";
 import func2url from "../../backend/func2url.json";
 import { slugify } from "./EquipmentItem";
+import { useDiscount } from "@/hooks/useDiscount";
 
 const categoryMeta: Record<string, { image: string; desc: string; icon: string }> = {
   Звук: {
@@ -59,6 +60,7 @@ export default function Catalog() {
   const [subcategories, setSubcategories] = useState<{ name: string; category: string }[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(true);
 
+  const { discount, applyDiscount } = useDiscount();
   const [activeCategory, setActiveCategory] = useState("Все");
   const [activeSubcategory, setActiveSubcategory] = useState<string | null>(null);
   const [sort, setSort] = useState("popular");
@@ -326,8 +328,18 @@ export default function Catalog() {
                       {/* Price + CTA */}
                       <div className="flex items-center justify-between pt-3 border-t border-amber-500/10">
                         <div>
-                          <div className="font-oswald text-2xl font-bold neon-text leading-none">{item.price.toLocaleString()} ₽</div>
-                          <div className="text-gray-600 text-xs">за {item.unit}</div>
+                          {discount > 0 ? (
+                            <>
+                              <div className="text-gray-500 text-xs line-through leading-none">{item.price.toLocaleString()} ₽</div>
+                              <div className="font-oswald text-2xl font-bold text-green-400 leading-none">{applyDiscount(item.price).toLocaleString()} ₽</div>
+                              <div className="text-green-500 text-xs">−{discount}%</div>
+                            </>
+                          ) : (
+                            <>
+                              <div className="font-oswald text-2xl font-bold neon-text leading-none">{item.price.toLocaleString()} ₽</div>
+                              <div className="text-gray-600 text-xs">за {item.unit}</div>
+                            </>
+                          )}
                         </div>
                         <div className="flex items-center gap-2">
                           <Link
