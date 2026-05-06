@@ -65,6 +65,7 @@ export default function Admin() {
   const [generatingPdf, setGeneratingPdf] = useState(false);
   const [pdfUrl, setPdfUrl] = useState("");
   const [exportingXlsx, setExportingXlsx] = useState(false);
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
 
   const login = async () => {
     setLoading(true);
@@ -130,15 +131,16 @@ export default function Admin() {
     setSelectedContract(null);
   };
 
-  const exportCatalogXlsx = async () => {
+  const exportCatalogXlsx = async (mode: "basic" | "full") => {
+    setExportMenuOpen(false);
     setExportingXlsx(true);
     try {
-      const res = await fetch(`${URLS["export-catalog"]}?pwd=${encodeURIComponent(password)}`);
+      const res = await fetch(`${URLS["export-catalog"]}?pwd=${encodeURIComponent(password)}&mode=${mode}`);
       const data = await res.json();
       if (data.url) {
         const a = document.createElement("a");
         a.href = data.url;
-        a.download = `catalog_${new Date().toISOString().slice(0, 10)}.xlsx`;
+        a.download = `catalog_${mode}_${new Date().toISOString().slice(0, 10)}.xlsx`;
         a.click();
       }
     } finally {
@@ -200,13 +202,47 @@ export default function Admin() {
               className="neon-btn flex items-center gap-2 px-4 py-2 rounded-sm text-sm">
               <Icon name="FilePlus" size={14} /> Новое КП
             </button>
-            <button onClick={exportCatalogXlsx} disabled={exportingXlsx}
-              className="flex items-center gap-2 border border-green-500/30 text-green-400 hover:text-green-300 hover:border-green-400/50 px-4 py-2 rounded-sm text-sm transition-colors disabled:opacity-40">
-              {exportingXlsx
-                ? <Icon name="Loader2" size={14} className="animate-spin" />
-                : <Icon name="FileSpreadsheet" size={14} />}
-              {exportingXlsx ? "Генерация..." : "Excel каталог"}
-            </button>
+            <div className="relative">
+              <button
+                onClick={() => !exportingXlsx && setExportMenuOpen(o => !o)}
+                disabled={exportingXlsx}
+                className="flex items-center gap-2 border border-green-500/30 text-green-400 hover:text-green-300 hover:border-green-400/50 px-4 py-2 rounded-sm text-sm transition-colors disabled:opacity-40"
+              >
+                {exportingXlsx
+                  ? <Icon name="Loader2" size={14} className="animate-spin" />
+                  : <Icon name="FileSpreadsheet" size={14} />}
+                {exportingXlsx ? "Генерация..." : "Excel каталог"}
+                {!exportingXlsx && <Icon name="ChevronDown" size={12} />}
+              </button>
+              {exportMenuOpen && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setExportMenuOpen(false)} />
+                  <div className="absolute right-0 top-full mt-1 z-20 w-56 rounded-sm border border-green-500/20 bg-[#0f1117] shadow-xl overflow-hidden">
+                    <button
+                      onClick={() => exportCatalogXlsx("basic")}
+                      className="w-full flex items-start gap-3 px-4 py-3 text-left hover:bg-green-500/10 transition-colors"
+                    >
+                      <Icon name="Table" size={14} className="text-green-400 mt-0.5 shrink-0" />
+                      <div>
+                        <div className="text-green-300 text-sm font-medium">Базовый</div>
+                        <div className="text-gray-500 text-xs">Название, категория, цена</div>
+                      </div>
+                    </button>
+                    <div className="border-t border-green-500/10" />
+                    <button
+                      onClick={() => exportCatalogXlsx("full")}
+                      className="w-full flex items-start gap-3 px-4 py-3 text-left hover:bg-green-500/10 transition-colors"
+                    >
+                      <Icon name="TableProperties" size={14} className="text-green-400 mt-0.5 shrink-0" />
+                      <div>
+                        <div className="text-green-300 text-sm font-medium">Расширенный</div>
+                        <div className="text-gray-500 text-xs">+ характеристики, теги, описание, рейтинг</div>
+                      </div>
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
             <a href="/admin/catalog"
               className="flex items-center gap-2 border border-amber-500/20 text-gray-400 hover:text-amber-500 px-4 py-2 rounded-sm text-sm transition-colors">
               <Icon name="LayoutDashboard" size={14} /> Каталог
