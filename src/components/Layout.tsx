@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef } from "react";
-import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { Link, useLocation } from "react-router-dom";
 import Icon from "@/components/ui/icon";
-import { useCity, CITIES, CityData } from "@/context/CityContext";
+import { useCity } from "@/context/CityContext";
 
 const NAV_PAGES = [
   { page: "", label: "Главная" },
@@ -12,27 +12,13 @@ const NAV_PAGES = [
   { page: "contacts", label: "Контакты" },
 ];
 
-function buildPath(citySlug: string | undefined, page: string): string {
-  if (!citySlug) return page ? `/${page}` : "/";
-  return page ? `/${citySlug}/${page}` : `/${citySlug}`;
-}
-
-function getCurrentPage(pathname: string, citySlug: string | undefined): string {
-  if (!citySlug) return pathname.replace(/^\//, "");
-  return pathname.replace(`/${citySlug}`, "").replace(/^\//, "");
-}
-
 export default function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
-  const navigate = useNavigate();
-  const { citySlug } = useParams<{ citySlug?: string }>();
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [cityDropdown, setCityDropdown] = useState(false);
-  const cityRef = useRef<HTMLDivElement>(null);
-  const { city, setCity } = useCity();
+  const { city } = useCity();
 
-  const currentPage = getCurrentPage(location.pathname, citySlug);
+  const currentPage = location.pathname.replace(/^\//, "");
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 40);
@@ -44,23 +30,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     setMenuOpen(false);
   }, [location.pathname]);
 
-  useEffect(() => {
-    const handleClick = (e: MouseEvent) => {
-      if (cityRef.current && !cityRef.current.contains(e.target as Node)) {
-        setCityDropdown(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, []);
-
-  const handleCityChange = (c: CityData) => {
-    setCity(c);
-    setCityDropdown(false);
-    // Переключаем URL на новый город, сохраняя текущую страницу
-    navigate(buildPath(c.id, currentPage), { replace: true });
-  };
-
   return (
     <div className="min-h-screen flex flex-col" style={{ background: "var(--surface)" }}>
       <header
@@ -69,15 +38,15 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         }`}
       >
         <div className="container mx-auto px-4 flex items-center justify-between h-16">
-          <Link to={buildPath(citySlug, "")} className="flex items-center gap-2">
+          <Link to="/" className="flex items-center gap-2">
             <span className="font-oswald text-xl font-bold tracking-widest text-white uppercase">
-              Global<span className="neon-text">Renta</span>
+              Stage<span className="neon-text">Sound</span>
             </span>
           </Link>
 
           <nav className="hidden md:flex items-center gap-1">
             {NAV_PAGES.map((link) => {
-              const to = buildPath(citySlug, link.page);
+              const to = link.page ? `/${link.page}` : "/";
               const isActive = currentPage === link.page;
               return (
                 <Link
@@ -97,38 +66,16 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </nav>
 
           <div className="hidden md:flex items-center gap-3">
-            {/* City selector */}
-            <div className="relative" ref={cityRef}>
-              <button
-                onClick={() => setCityDropdown(!cityDropdown)}
-                className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors border border-amber-500/20 rounded-sm px-3 py-1.5 hover:border-amber-500/40"
-              >
-                <Icon name="MapPin" size={13} className="text-amber-500" />
-                {city.name}
-                <Icon name="ChevronDown" size={13} className={`transition-transform ${cityDropdown ? "rotate-180" : ""}`} />
-              </button>
-              {cityDropdown && (
-                <div className="absolute right-0 top-full mt-1 glass-card border border-amber-500/20 rounded-sm overflow-hidden z-50 min-w-[180px]">
-                  {CITIES.map((c) => (
-                    <button
-                      key={c.id}
-                      onClick={() => handleCityChange(c)}
-                      className={`w-full text-left px-4 py-2.5 text-sm flex items-center gap-2 transition-colors ${
-                        c.id === city.id ? "text-amber-500 bg-amber-500/10" : "text-gray-400 hover:text-white hover:bg-white/5"
-                      }`}
-                    >
-                      {c.id === city.id && <Icon name="Check" size={12} className="text-amber-500" />}
-                      {c.id !== city.id && <span className="w-3" />}
-                      {c.name}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-            <a href={`tel:${city.phone}`} className="text-sm text-gray-400 hover:text-white transition-colors">
+            {city.telegram && (
+              <a href={city.telegram} target="_blank" rel="noopener noreferrer"
+                className="w-8 h-8 flex items-center justify-center border border-amber-500/20 rounded-sm text-gray-400 hover:text-amber-500 hover:border-amber-500/50 transition-colors">
+                <Icon name="Send" size={14} />
+              </a>
+            )}
+            <a href={`tel:${city.phone}`} className="text-sm text-gray-400 hover:text-white transition-colors font-medium">
               {city.phoneDisplay}
             </a>
-            <Link to={buildPath(citySlug, "contacts")} className="neon-btn px-4 py-2 text-sm rounded-sm">
+            <Link to="/contacts" className="neon-btn px-4 py-2 text-sm rounded-sm">
               Оставить заявку
             </Link>
           </div>
@@ -145,7 +92,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <div className="md:hidden glass-card border-t border-amber-500/10 py-4">
             <div className="container mx-auto px-4 flex flex-col gap-2">
               {NAV_PAGES.map((link) => {
-                const to = buildPath(citySlug, link.page);
+                const to = link.page ? `/${link.page}` : "/";
                 const isActive = currentPage === link.page;
                 return (
                   <Link
@@ -161,29 +108,19 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   </Link>
                 );
               })}
-              <div className="pt-2 border-t border-amber-500/10">
-                <div className="px-4 py-2 flex flex-col gap-1">
-                  <span className="text-xs text-gray-600 uppercase tracking-wider">Ваш город</span>
-                  <div className="flex gap-2 flex-wrap">
-                    {CITIES.map((c) => (
-                      <button
-                        key={c.id}
-                        onClick={() => handleCityChange(c)}
-                        className={`text-xs px-3 py-1.5 rounded-sm border transition-colors ${
-                          c.id === city.id
-                            ? "border-amber-500 text-amber-500 bg-amber-500/10"
-                            : "border-amber-500/20 text-gray-400 hover:border-amber-500/40 hover:text-white"
-                        }`}
-                      >
-                        {c.name}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <a href={`tel:${city.phone}`} className="block px-4 py-2 text-sm text-gray-400">
+              <div className="pt-2 border-t border-amber-500/10 flex flex-col gap-2 px-4">
+                <a href={`tel:${city.phone}`} className="py-2 text-sm text-gray-400 flex items-center gap-2">
+                  <Icon name="Phone" size={14} className="text-amber-500" />
                   {city.phoneDisplay}
                 </a>
-                <Link to={buildPath(citySlug, "contacts")} className="neon-btn block text-center px-4 py-2 text-sm rounded-sm mt-2 mx-4">
+                {city.telegram && (
+                  <a href={city.telegram} target="_blank" rel="noopener noreferrer"
+                    className="py-2 text-sm text-gray-400 flex items-center gap-2">
+                    <Icon name="Send" size={14} className="text-amber-500" />
+                    Написать в Telegram
+                  </a>
+                )}
+                <Link to="/contacts" className="neon-btn block text-center px-4 py-2 text-sm rounded-sm mt-1">
                   Оставить заявку
                 </Link>
               </div>
@@ -202,12 +139,26 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <div>
               <div className="flex items-center gap-2 mb-3">
                 <span className="font-oswald text-xl font-bold tracking-widest text-white uppercase">
-                  Global<span className="neon-text">Renta</span>
+                  Stage<span className="neon-text">Sound</span>
                 </span>
               </div>
-              <p className="text-gray-500 text-sm leading-relaxed">
-                Профессиональная аренда оборудования для мероприятий любого масштаба
+              <p className="text-gray-500 text-sm leading-relaxed mb-4">
+                Профессиональная аренда звука, света и сцены для мероприятий любого масштаба в Санкт-Петербурге
               </p>
+              <div className="flex gap-2">
+                {city.telegram && (
+                  <a href={city.telegram} target="_blank" rel="noopener noreferrer"
+                    className="w-8 h-8 flex items-center justify-center border border-amber-500/20 rounded-sm text-gray-500 hover:text-amber-500 hover:border-amber-500/50 transition-colors">
+                    <Icon name="Send" size={14} />
+                  </a>
+                )}
+                {city.vk && (
+                  <a href={city.vk} target="_blank" rel="noopener noreferrer"
+                    className="w-8 h-8 flex items-center justify-center border border-amber-500/20 rounded-sm text-gray-500 hover:text-amber-500 hover:border-amber-500/50 transition-colors">
+                    <Icon name="Users" size={14} />
+                  </a>
+                )}
+              </div>
             </div>
             <div>
               <h4 className="text-white font-semibold uppercase tracking-wider text-sm mb-4">Разделы</h4>
@@ -215,7 +166,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 {NAV_PAGES.map((link) => (
                   <li key={link.page}>
                     <Link
-                      to={buildPath(citySlug, link.page)}
+                      to={link.page ? `/${link.page}` : "/"}
                       className="text-gray-500 hover:text-amber-500 text-sm transition-colors"
                     >
                       {link.label}
@@ -225,16 +176,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               </ul>
             </div>
             <div>
-              <h4 className="text-white font-semibold uppercase tracking-wider text-sm mb-4">Города</h4>
-              <ul className="space-y-2">
-                {CITIES.map((c) => (
-                  <li key={c.id}>
-                    <Link
-                      to={`/${c.id}`}
-                      className="text-gray-500 hover:text-amber-500 text-sm transition-colors"
-                    >
-                      {c.name}
-                    </Link>
+              <h4 className="text-white font-semibold uppercase tracking-wider text-sm mb-4">Мероприятия</h4>
+              <ul className="space-y-2 text-sm text-gray-500">
+                {["Корпоративы", "Свадьбы", "Дни рождения", "Концерты", "Конференции", "Речные прогулки", "Фестивали"].map((t) => (
+                  <li key={t}>
+                    <Link to="/services" className="hover:text-amber-500 transition-colors">{t}</Link>
                   </li>
                 ))}
               </ul>
@@ -242,17 +188,29 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <div>
               <h4 className="text-white font-semibold uppercase tracking-wider text-sm mb-4">Контакты</h4>
               <div className="space-y-2 text-sm text-gray-500">
-                <div>{city.phoneDisplay}</div>
-                <div>{city.email}</div>
-                <div className="text-xs">{city.address}</div>
-                <div className="text-xs">{city.workdays}</div>
+                <a href={`tel:${city.phone}`} className="flex items-center gap-2 hover:text-amber-500 transition-colors">
+                  <Icon name="Phone" size={13} className="text-amber-500 shrink-0" />
+                  {city.phoneDisplay}
+                </a>
+                <a href={`mailto:${city.email}`} className="flex items-center gap-2 hover:text-amber-500 transition-colors">
+                  <Icon name="Mail" size={13} className="text-amber-500 shrink-0" />
+                  {city.email}
+                </a>
+                <div className="flex items-start gap-2">
+                  <Icon name="MapPin" size={13} className="text-amber-500 shrink-0 mt-0.5" />
+                  <span>{city.address}</span>
+                </div>
+                <div className="flex items-start gap-2 text-xs">
+                  <Icon name="Clock" size={13} className="text-amber-500 shrink-0 mt-0.5" />
+                  <span>{city.workdays}<br />{city.weekend}</span>
+                </div>
               </div>
             </div>
           </div>
           <div className="border-t border-amber-500/10 mt-8 pt-6 flex flex-col md:flex-row items-center justify-between gap-4">
-            <p className="text-gray-600 text-xs">© 2024 Global Renta. Все права защищены.</p>
-            <div className="flex gap-4">
-              {["Аренда звука", "Аренда света", "Аренда микрофонов", "Аренда сцены"].map((tag) => (
+            <p className="text-gray-600 text-xs">© 2024 StageSound. Все права защищены.</p>
+            <div className="flex gap-4 flex-wrap">
+              {["Аренда звука", "Аренда света", "Аренда микрофонов", "Аренда сцены", "Корпоратив", "Свадьба"].map((tag) => (
                 <span key={tag} className="text-gray-700 text-xs">{tag}</span>
               ))}
             </div>

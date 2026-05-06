@@ -50,7 +50,13 @@ export default function Admin() {
   const [authed, setAuthed] = useState(false);
   const [authError, setAuthError] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [tab, setTab] = useState<"orders" | "quotes" | "contracts">("orders");
+  const [tab, setTab] = useState<"orders" | "quotes" | "contracts" | "settings">("orders");
+
+  // Settings
+  const [settings, setSettings] = useState<Record<string, string>>({});
+  const [settingsLoading, setSettingsLoading] = useState(false);
+  const [settingsSaving, setSettingsSaving] = useState(false);
+  const [settingsSaved, setSettingsSaved] = useState(false);
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -101,11 +107,49 @@ export default function Admin() {
     setContractsLoading(false);
   };
 
+  const loadSettings = async () => {
+    setSettingsLoading(true);
+    const res = await fetch(URLS["manage-settings"]);
+    if (res.ok) {
+      const data: Record<string, { value: string; label: string }> = await res.json();
+      const flat: Record<string, string> = {};
+      Object.entries(data).forEach(([k, v]) => { flat[k] = v.value; });
+      setSettings(flat);
+    }
+    setSettingsLoading(false);
+  };
+
+  const saveSettings = async () => {
+    setSettingsSaving(true);
+    await fetch(`${URLS["manage-settings"]}?pwd=${encodeURIComponent(password)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(settings),
+    });
+    // Обновляем localStorage чтобы Layout подхватил
+    const patch = {
+      phone: settings.phone_raw || settings.phone,
+      phoneDisplay: settings.phone,
+      email: settings.email,
+      address: settings.address,
+      workdays: settings.workdays,
+      weekend: settings.weekend,
+      telegram: settings.telegram,
+      whatsapp: settings.whatsapp,
+      vk: settings.vk,
+    };
+    localStorage.setItem("site_contacts", JSON.stringify(patch));
+    setSettingsSaving(false);
+    setSettingsSaved(true);
+    setTimeout(() => setSettingsSaved(false), 3000);
+  };
+
   useEffect(() => {
     if (!authed) return;
     if (tab === "orders") loadOrders();
     if (tab === "quotes") loadQuotes();
     if (tab === "contracts") loadContracts();
+    if (tab === "settings") loadSettings();
   }, [tab, authed]);
 
   const copyQuoteLink = (token: string) => {
@@ -256,6 +300,7 @@ export default function Admin() {
             { key: "orders", label: "Заявки", icon: "Inbox", count: orders.length },
             { key: "quotes", label: "КП", icon: "FileText", count: quotes.length },
             { key: "contracts", label: "Договоры", icon: "FileCheck", count: contracts.filter(c => c.status === "pending").length },
+            { key: "settings", label: "Настройки", icon: "Settings", count: 0 },
           ].map((t) => (
             <button key={t.key} onClick={() => setTab(t.key as typeof tab)}
               className={`flex items-center gap-2 px-5 py-3 text-sm transition-all border-b-2 -mb-px ${tab === t.key ? "border-amber-500 text-amber-500" : "border-transparent text-gray-500 hover:text-gray-300"}`}>
@@ -441,6 +486,64 @@ export default function Admin() {
           </div>
         )}
       </div>
+
+      {/* ── НАСТРОЙКИ ── */}
+      {tab === "settings" && (
+        <div className="max-w-2xl">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h2 className="font-oswald text-2xl font-bold text-white uppercase">Контактная информация</h2>
+              <p className="text-gray-500 text-sm mt-1">Изменения применяются на сайте сразу после сохранения</p>
+            </div>
+            {settingsSaved && (
+              <div className="flex items-center gap-2 text-green-400 text-sm">
+                <Icon name="CheckCircle" size={16} /> Сохранено
+              </div>
+            )}
+          </div>
+
+          {settingsLoading ? (
+            <div className="flex items-center gap-3 text-gray-500 py-8">
+              <Icon name="Loader2" size={18} className="animate-spin" /> Загрузка...
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {[
+                { key: "phone", label: "Телефон (для отображения)", placeholder: "+7 (812) 123-45-67" },
+                { key: "phone_raw", label: "Телефон (для ссылки tel:, только цифры)", placeholder: "+78121234567" },
+                { key: "email", label: "Email", placeholder: "info@stagesound.ru" },
+                { key: "address", label: "Адрес", placeholder: "Санкт-Петербург, ул. Примерная, 1" },
+                { key: "workdays", label: "Режим работы (будни)", placeholder: "Пн–Пт: 9:00 — 20:00" },
+                { key: "weekend", label: "Режим работы (выходные)", placeholder: "Сб–Вс: 10:00 — 17:00" },
+                { key: "telegram", label: "Ссылка Telegram", placeholder: "https://t.me/username" },
+                { key: "whatsapp", label: "WhatsApp (номер со знаком +)", placeholder: "+79001234567" },
+                { key: "vk", label: "ВКонтакте (ссылка)", placeholder: "https://vk.com/stagesound" },
+              ].map((field) => (
+                <div key={field.key} className="glass-card rounded-sm p-4">
+                  <label className="block text-xs text-gray-500 uppercase tracking-wider mb-2">{field.label}</label>
+                  <input
+                    type="text"
+                    value={settings[field.key] ?? ""}
+                    onChange={(e) => setSettings((prev) => ({ ...prev, [field.key]: e.target.value }))}
+                    placeholder={field.placeholder}
+                    className="w-full bg-transparent border border-amber-500/20 rounded-sm px-3 py-2.5 text-white text-sm placeholder-gray-600 focus:outline-none focus:border-amber-500/60 transition-colors"
+                  />
+                </div>
+              ))}
+
+              <button
+                onClick={saveSettings}
+                disabled={settingsSaving}
+                className="neon-btn w-full py-3 rounded-sm text-sm flex items-center justify-center gap-2 disabled:opacity-50 mt-4"
+              >
+                {settingsSaving
+                  ? <><Icon name="Loader2" size={16} className="animate-spin" /> Сохраняю...</>
+                  : <><Icon name="Save" size={16} /> Сохранить изменения</>}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── Modal: детали заявки ── */}
       {selectedOrder && (

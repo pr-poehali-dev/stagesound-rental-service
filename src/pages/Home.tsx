@@ -162,6 +162,108 @@ export default function Home() {
         </div>
       </section>
 
+      {/* Event Types */}
+      <section className="py-20 border-t border-amber-500/10">
+        <div className="container mx-auto px-4">
+          <div className="mb-4">
+            <p className="text-amber-500 text-xs uppercase tracking-widest mb-2">Под любой повод</p>
+            <h2 className="font-oswald text-4xl md:text-5xl font-bold uppercase text-white">
+              Обеспечим<br />любое мероприятие
+            </h2>
+          </div>
+          <p className="text-gray-500 text-sm mb-10 max-w-2xl">
+            От камерного дня рождения в ресторане до масштабного фестиваля на открытом воздухе — полный технический продакшн под ключ в Санкт-Петербурге
+          </p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            {[
+              {
+                icon: "Building2",
+                title: "Корпоративы",
+                desc: "Конференции, презентации, тимбилдинги, гала-вечера. Профессиональный звук, свет и видео для бизнес-событий любого масштаба.",
+                tags: ["Звук", "Свет", "LED-экраны"],
+                accent: "from-blue-500/10",
+              },
+              {
+                icon: "Heart",
+                title: "Свадьбы",
+                desc: "Торжественная церемония и яркая вечеринка. Беспроводные микрофоны, диджейское оборудование, световые эффекты и дым-машины.",
+                tags: ["DJ-сет", "Свет", "Микрофоны"],
+                accent: "from-pink-500/10",
+              },
+              {
+                icon: "Cake",
+                title: "Дни рождения",
+                desc: "Вечеринка в ресторане или клубе, детский праздник или банкет — подберём оборудование под любой формат и бюджет.",
+                tags: ["Звук", "Свет", "Микрофоны"],
+                accent: "from-purple-500/10",
+              },
+              {
+                icon: "Anchor",
+                title: "Речные прогулки",
+                desc: "Автономное оборудование для теплоходов: беспроводные системы, компактный свет, генераторы. Всё необходимое для праздника на воде.",
+                tags: ["Автономно", "Генератор", "Звук"],
+                accent: "from-cyan-500/10",
+              },
+              {
+                icon: "Music",
+                title: "Концерты",
+                desc: "Линейные массивы, сценические мониторы, световые шоу и LED-экраны для концертов от 200 до 10 000 зрителей.",
+                tags: ["Линейный массив", "Свет", "Сцена"],
+                accent: "from-amber-500/10",
+              },
+              {
+                icon: "Martini",
+                title: "Вечеринки",
+                desc: "DJ-оборудование, клубный свет, лазеры и дым-машины для частных вечеринок, клубных ночей и afterparty.",
+                tags: ["DJ", "Лазер", "Дым"],
+                accent: "from-green-500/10",
+              },
+              {
+                icon: "Users",
+                title: "Конференции",
+                desc: "Системы синхроперевода, делегатские микрофоны, системы голосования, проекторы и LED-экраны для деловых мероприятий.",
+                tags: ["Конференц", "Видео", "Перевод"],
+                accent: "from-indigo-500/10",
+              },
+              {
+                icon: "Flag",
+                title: "Фестивали",
+                desc: "Полный технический продакшн фестивалей и городских праздников: несколько сцен, большие массивы, генераторы, профессиональная бригада.",
+                tags: ["Под ключ", "Несколько сцен", "Бригада"],
+                accent: "from-red-500/10",
+              },
+            ].map((ev) => (
+              <Link
+                key={ev.title}
+                to="/services"
+                className={`glass-card p-5 rounded-sm group hover:border-amber-500/30 transition-all duration-300 relative overflow-hidden`}
+              >
+                <div className={`absolute inset-0 bg-gradient-to-br ${ev.accent} to-transparent opacity-0 group-hover:opacity-100 transition-opacity`} />
+                <div className="relative z-10">
+                  <div className="w-10 h-10 flex items-center justify-center border border-amber-500/20 rounded-sm mb-3 group-hover:border-amber-500/50 transition-colors">
+                    <Icon name={ev.icon} size={18} className="text-amber-500" />
+                  </div>
+                  <h3 className="font-oswald text-lg font-bold text-white uppercase mb-1">{ev.title}</h3>
+                  <p className="text-gray-500 text-xs leading-relaxed mb-3">{ev.desc}</p>
+                  <div className="flex flex-wrap gap-1">
+                    {ev.tags.map((tag) => (
+                      <span key={tag} className="text-xs px-2 py-0.5 border border-amber-500/20 text-amber-500/70 rounded-sm">{tag}</span>
+                    ))}
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+
+          <div className="text-center">
+            <Link to="/services" className="inline-flex items-center gap-2 text-amber-500 text-sm uppercase tracking-wider hover:gap-4 transition-all">
+              Все услуги и цены <Icon name="ArrowRight" size={16} />
+            </Link>
+          </div>
+        </div>
+      </section>
+
       {/* CTA Calculator */}
       <section className="py-20 relative overflow-hidden">
         <div className="absolute inset-0 grid-pattern opacity-50" />

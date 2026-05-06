@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, ReactNode } from "react";
+import { createContext, useContext, useState, ReactNode, useEffect } from "react";
 
 export interface CityData {
   id: string;
@@ -9,40 +9,29 @@ export interface CityData {
   address: string;
   workdays: string;
   weekend: string;
+  telegram?: string;
+  whatsapp?: string;
+  vk?: string;
 }
 
-export const CITIES: CityData[] = [
-  {
-    id: "moscow",
-    name: "Москва",
-    phone: "+74951234567",
-    phoneDisplay: "+7 (495) 123-45-67",
-    email: "moscow@globalrenta.ru",
-    address: "Москва, ул. Профсоюзная, 65",
-    workdays: "Пн–Пт: 9:00 — 20:00",
-    weekend: "Сб–Вс: 10:00 — 18:00",
-  },
-  {
-    id: "spb",
-    name: "Санкт-Петербург",
-    phone: "+78121234567",
-    phoneDisplay: "+7 (812) 123-45-67",
-    email: "spb@globalrenta.ru",
-    address: "Санкт-Петербург, Невский пр., 88",
-    workdays: "Пн–Пт: 9:00 — 20:00",
-    weekend: "Сб–Вс: 10:00 — 17:00",
-  },
-  {
-    id: "krasnoyarsk",
-    name: "Красноярск",
-    phone: "+73912345678",
-    phoneDisplay: "+7 (391) 234-56-78",
-    email: "krsk@globalrenta.ru",
-    address: "Красноярск, пр. Мира, 102",
-    workdays: "Пн–Пт: 9:00 — 19:00",
-    weekend: "Сб: 10:00 — 16:00",
-  },
-];
+// Единственный город — Санкт-Петербург
+// Данные загружаются из настроек (settings) через API
+export const DEFAULT_CITY: CityData = {
+  id: "spb",
+  name: "Санкт-Петербург",
+  phone: "+78121234567",
+  phoneDisplay: "+7 (812) 123-45-67",
+  email: "info@stagesound.ru",
+  address: "Санкт-Петербург, Невский пр., 88",
+  workdays: "Пн–Пт: 9:00 — 20:00",
+  weekend: "Сб–Вс: 10:00 — 17:00",
+  telegram: "https://t.me/stagesound",
+  whatsapp: "",
+  vk: "",
+};
+
+// Оставляем CITIES для совместимости с кодом, который его использует
+export const CITIES: CityData[] = [DEFAULT_CITY];
 
 interface CityContextType {
   city: CityData;
@@ -50,18 +39,45 @@ interface CityContextType {
 }
 
 const CityContext = createContext<CityContextType>({
-  city: CITIES[0],
+  city: DEFAULT_CITY,
   setCity: () => {},
 });
 
 export function CityProvider({ children }: { children: ReactNode }) {
-  const savedId = typeof window !== "undefined" ? localStorage.getItem("globalrenta_city") : null;
-  const initial = CITIES.find((c) => c.id === savedId) ?? CITIES[0];
-  const [city, setCityState] = useState<CityData>(initial);
+  const [city, setCityState] = useState<CityData>(DEFAULT_CITY);
+
+  useEffect(() => {
+    // Сначала берём из localStorage (быстро)
+    try {
+      const saved = localStorage.getItem("site_contacts");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        setCityState((prev) => ({ ...prev, ...parsed }));
+      }
+    } catch (_e) { /* ignore */ }
+
+    // Потом загружаем свежие данные из API
+    fetch("https://functions.poehali.dev/94183657-f771-4225-adc4-ca8bb6c3c9b9")
+      .then((r) => r.json())
+      .then((data: Record<string, { value: string }>) => {
+        const patch: Partial<CityData> = {};
+        if (data.phone_raw?.value) patch.phone = data.phone_raw.value;
+        if (data.phone?.value) patch.phoneDisplay = data.phone.value;
+        if (data.email?.value) patch.email = data.email.value;
+        if (data.address?.value) patch.address = data.address.value;
+        if (data.workdays?.value) patch.workdays = data.workdays.value;
+        if (data.weekend?.value) patch.weekend = data.weekend.value;
+        if (data.telegram?.value !== undefined) patch.telegram = data.telegram.value;
+        if (data.whatsapp?.value !== undefined) patch.whatsapp = data.whatsapp.value;
+        if (data.vk?.value !== undefined) patch.vk = data.vk.value;
+        setCityState((prev) => ({ ...prev, ...patch }));
+        localStorage.setItem("site_contacts", JSON.stringify(patch));
+      })
+      .catch(() => { /* fallback на дефолт */ });
+  }, []);
 
   const setCity = (c: CityData) => {
     setCityState(c);
-    localStorage.setItem("globalrenta_city", c.id);
   };
 
   return <CityContext.Provider value={{ city, setCity }}>{children}</CityContext.Provider>;
