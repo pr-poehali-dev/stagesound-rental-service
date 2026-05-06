@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import Icon from "@/components/ui/icon";
 import { useCity } from "@/context/CityContext";
+import { useHiddenPages } from "@/hooks/useHiddenPages";
 
 const NAV_PAGES = [
   { page: "", label: "Главная" },
@@ -17,8 +18,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const { city } = useCity();
+  const { isHidden } = useHiddenPages();
 
   const currentPage = location.pathname.replace(/^\//, "");
+  const visibleNav = NAV_PAGES.filter((link) => !isHidden(link.page));
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 40);
@@ -45,7 +48,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </Link>
 
           <nav className="hidden md:flex items-center gap-1">
-            {NAV_PAGES.map((link) => {
+            {visibleNav.map((link) => {
               const to = link.page ? `/${link.page}` : "/";
               const isActive = currentPage === link.page;
               return (
@@ -91,7 +94,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         {menuOpen && (
           <div className="md:hidden glass-card border-t border-amber-500/10 py-4">
             <div className="container mx-auto px-4 flex flex-col gap-2">
-              {NAV_PAGES.map((link) => {
+              {visibleNav.map((link) => {
                 const to = link.page ? `/${link.page}` : "/";
                 const isActive = currentPage === link.page;
                 return (
@@ -163,7 +166,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <div>
               <h4 className="text-white font-semibold uppercase tracking-wider text-sm mb-4">Разделы</h4>
               <ul className="space-y-2">
-                {NAV_PAGES.map((link) => (
+                {visibleNav.map((link) => (
                   <li key={link.page}>
                     <Link
                       to={link.page ? `/${link.page}` : "/"}

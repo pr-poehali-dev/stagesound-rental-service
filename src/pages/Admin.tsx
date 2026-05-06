@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Icon from "@/components/ui/icon";
 import func2url from "../../backend/func2url.json";
+import { useHiddenPages, usePortfolioItems, ALL_PAGES, type PortfolioItem } from "@/hooks/useHiddenPages";
 
 const URLS = func2url as Record<string, string>;
 
@@ -50,7 +51,21 @@ export default function Admin() {
   const [authed, setAuthed] = useState(false);
   const [authError, setAuthError] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [tab, setTab] = useState<"orders" | "quotes" | "contracts" | "settings">("orders");
+  const [tab, setTab] = useState<"orders" | "quotes" | "contracts" | "settings" | "pages" | "portfolio">("orders");
+
+  // Pages visibility
+  const { hidden, togglePage } = useHiddenPages();
+
+  // Portfolio management
+  const { items: portfolioItems, addItem, updateItem, deleteItem } = usePortfolioItems();
+  const [editingProject, setEditingProject] = useState<PortfolioItem | null>(null);
+  const [showNewProject, setShowNewProject] = useState(false);
+  const PORTFOLIO_CATEGORIES = ["Концерты", "Конференции", "Корпоративы", "Фестивали", "Шоу"];
+  const emptyProject: Omit<PortfolioItem, "id"> = {
+    title: "", category: "Концерты", date: "", guests: 0,
+    equipment: [], description: "", tags: [], highlight: false,
+  };
+  const [newProject, setNewProject] = useState<Omit<PortfolioItem, "id">>(emptyProject);
 
   // Settings
   const [settings, setSettings] = useState<Record<string, string>>({});
@@ -301,6 +316,8 @@ export default function Admin() {
             { key: "quotes", label: "КП", icon: "FileText", count: quotes.length },
             { key: "contracts", label: "Договоры", icon: "FileCheck", count: contracts.filter(c => c.status === "pending").length },
             { key: "settings", label: "Настройки", icon: "Settings", count: 0 },
+            { key: "pages", label: "Разделы", icon: "EyeOff", count: hidden.length },
+            { key: "portfolio", label: "Портфолио", icon: "Images", count: portfolioItems.length },
           ].map((t) => (
             <button key={t.key} onClick={() => setTab(t.key as typeof tab)}
               className={`flex items-center gap-2 px-5 py-3 text-sm transition-all border-b-2 -mb-px ${tab === t.key ? "border-amber-500 text-amber-500" : "border-transparent text-gray-500 hover:text-gray-300"}`}>
@@ -696,6 +713,193 @@ export default function Admin() {
           </div>
         </div>
       )}
+
+      {/* ── РАЗДЕЛЫ ── */}
+      {tab === "pages" && (
+        <div className="max-w-xl">
+          <p className="text-gray-500 text-sm mb-6">Скрытые разделы пропадают из навигации и подвала сайта. Страница по-прежнему доступна по прямой ссылке.</p>
+          <div className="space-y-3">
+            {ALL_PAGES.map((p) => {
+              const isHid = hidden.includes(p.page);
+              return (
+                <div key={p.page} className="glass-card rounded-sm p-4 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Icon name={isHid ? "EyeOff" : "Eye"} size={16} className={isHid ? "text-gray-600" : "text-amber-500"} />
+                    <span className={`font-medium text-sm ${isHid ? "text-gray-500 line-through" : "text-white"}`}>{p.label}</span>
+                    {isHid && <span className="text-xs border border-red-500/30 text-red-400 px-2 py-0.5 rounded-sm">Скрыт</span>}
+                  </div>
+                  <button
+                    onClick={() => togglePage(p.page)}
+                    className={`px-4 py-1.5 rounded-sm text-xs font-medium transition-colors ${
+                      isHid
+                        ? "border border-green-500/30 text-green-400 hover:bg-green-500/10"
+                        : "border border-red-500/30 text-red-400 hover:bg-red-500/10"
+                    }`}
+                  >
+                    {isHid ? "Показать" : "Скрыть"}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── ПОРТФОЛИО ── */}
+      {tab === "portfolio" && (
+        <div>
+          <div className="flex items-center justify-between mb-6">
+            <span className="text-gray-400 text-sm">{portfolioItems.length} проектов</span>
+            <button
+              onClick={() => { setNewProject(emptyProject); setShowNewProject(true); setEditingProject(null); }}
+              className="neon-btn flex items-center gap-2 px-4 py-2 rounded-sm text-sm"
+            >
+              <Icon name="Plus" size={14} /> Добавить проект
+            </button>
+          </div>
+
+          {/* Форма нового проекта */}
+          {showNewProject && (
+            <div className="glass-card neon-border rounded-sm p-6 mb-6">
+              <h3 className="font-oswald text-lg font-bold text-white uppercase mb-4">Новый проект</h3>
+              <PortfolioForm
+                data={newProject}
+                categories={PORTFOLIO_CATEGORIES}
+                onChange={setNewProject}
+                onSave={() => { addItem(newProject); setShowNewProject(false); }}
+                onCancel={() => setShowNewProject(false)}
+              />
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {portfolioItems.map((project) => (
+              <div key={project.id} className="glass-card rounded-sm p-5">
+                {editingProject?.id === project.id ? (
+                  <>
+                    <h3 className="font-oswald text-base font-bold text-white uppercase mb-4">Редактирование</h3>
+                    <PortfolioForm
+                      data={editingProject}
+                      categories={PORTFOLIO_CATEGORIES}
+                      onChange={(d) => setEditingProject({ ...editingProject, ...d })}
+                      onSave={() => { updateItem(editingProject); setEditingProject(null); }}
+                      onCancel={() => setEditingProject(null)}
+                    />
+                  </>
+                ) : (
+                  <>
+                    <div className="flex items-start justify-between gap-3 mb-2">
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-xs border border-amber-500/30 text-amber-500/70 px-2 py-0.5 rounded-sm">{project.category}</span>
+                          {project.highlight && <span className="text-xs bg-amber-500 text-black px-2 py-0.5 font-bold">Избранное</span>}
+                        </div>
+                        <h3 className="font-oswald text-lg font-bold text-white">{project.title}</h3>
+                        <div className="flex items-center gap-3 text-xs text-gray-600 mt-1">
+                          <span>{project.date}</span>
+                          <span>{project.guests.toLocaleString()} гостей</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          onClick={() => setEditingProject(project)}
+                          className="w-8 h-8 flex items-center justify-center border border-amber-500/20 text-gray-400 hover:text-amber-500 hover:border-amber-500/50 rounded-sm transition-colors"
+                        >
+                          <Icon name="Pencil" size={14} />
+                        </button>
+                        <button
+                          onClick={() => { if (confirm("Удалить проект?")) deleteItem(project.id); }}
+                          className="w-8 h-8 flex items-center justify-center border border-red-500/20 text-gray-600 hover:text-red-400 hover:border-red-500/40 rounded-sm transition-colors"
+                        >
+                          <Icon name="Trash2" size={14} />
+                        </button>
+                      </div>
+                    </div>
+                    <p className="text-gray-500 text-xs line-clamp-2">{project.description}</p>
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PortfolioForm({
+  data, categories, onChange, onSave, onCancel,
+}: {
+  data: Omit<PortfolioItem, "id">;
+  categories: string[];
+  onChange: (d: Omit<PortfolioItem, "id">) => void;
+  onSave: () => void;
+  onCancel: () => void;
+}) {
+  const set = (field: string, val: unknown) => onChange({ ...data, [field]: val });
+
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="text-xs text-gray-600 uppercase tracking-wider block mb-1">Название *</label>
+          <input value={data.title} onChange={(e) => set("title", e.target.value)}
+            className="w-full bg-transparent border border-amber-500/20 rounded-sm px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50" />
+        </div>
+        <div>
+          <label className="text-xs text-gray-600 uppercase tracking-wider block mb-1">Категория</label>
+          <select value={data.category} onChange={(e) => set("category", e.target.value)}
+            className="w-full bg-transparent border border-amber-500/20 rounded-sm px-3 py-2 text-sm text-gray-300 focus:outline-none focus:border-amber-500/50">
+            {categories.map((c) => <option key={c} value={c} className="bg-gray-900">{c}</option>)}
+          </select>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="text-xs text-gray-600 uppercase tracking-wider block mb-1">Дата (напр. Март 2024)</label>
+          <input value={data.date} onChange={(e) => set("date", e.target.value)}
+            className="w-full bg-transparent border border-amber-500/20 rounded-sm px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50" />
+        </div>
+        <div>
+          <label className="text-xs text-gray-600 uppercase tracking-wider block mb-1">Гостей</label>
+          <input type="number" value={data.guests} onChange={(e) => set("guests", Number(e.target.value))}
+            className="w-full bg-transparent border border-amber-500/20 rounded-sm px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50" />
+        </div>
+      </div>
+      <div>
+        <label className="text-xs text-gray-600 uppercase tracking-wider block mb-1">Описание</label>
+        <textarea value={data.description} onChange={(e) => set("description", e.target.value)} rows={2}
+          className="w-full bg-transparent border border-amber-500/20 rounded-sm px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50 resize-none" />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="text-xs text-gray-600 uppercase tracking-wider block mb-1">Оборудование (через запятую)</label>
+          <input
+            value={data.equipment.join(", ")}
+            onChange={(e) => set("equipment", e.target.value.split(",").map((s) => s.trim()).filter(Boolean))}
+            className="w-full bg-transparent border border-amber-500/20 rounded-sm px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50"
+          />
+        </div>
+        <div>
+          <label className="text-xs text-gray-600 uppercase tracking-wider block mb-1">Теги (через запятую)</label>
+          <input
+            value={data.tags.join(", ")}
+            onChange={(e) => set("tags", e.target.value.split(",").map((s) => s.trim()).filter(Boolean))}
+            className="w-full bg-transparent border border-amber-500/20 rounded-sm px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50"
+          />
+        </div>
+      </div>
+      <label className="flex items-center gap-2 cursor-pointer text-sm text-gray-400">
+        <input type="checkbox" checked={data.highlight} onChange={(e) => set("highlight", e.target.checked)}
+          className="accent-amber-500 w-4 h-4" />
+        Избранный проект (отображается с пометкой «Избранное»)
+      </label>
+      <div className="flex gap-3 pt-2">
+        <button onClick={onSave} disabled={!data.title}
+          className="neon-btn px-6 py-2 rounded-sm text-sm disabled:opacity-40">Сохранить</button>
+        <button onClick={onCancel}
+          className="border border-amber-500/20 text-gray-400 hover:text-white px-6 py-2 rounded-sm text-sm transition-colors">Отмена</button>
+      </div>
     </div>
   );
 }

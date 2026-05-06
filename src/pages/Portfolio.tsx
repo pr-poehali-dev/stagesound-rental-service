@@ -3,82 +3,15 @@ import Icon from "@/components/ui/icon";
 import { useSeo } from "@/hooks/useSeo";
 import { useCity } from "@/context/CityContext";
 import { CITY_CONTENT } from "@/data/cityContent";
+import { usePortfolioItems } from "@/hooks/useHiddenPages";
 
 const portfolioFilters = ["Все", "Концерты", "Конференции", "Корпоративы", "Фестивали", "Шоу"];
-
-const projects = [
-  {
-    id: 1,
-    title: "TechForum 2024",
-    category: "Конференции",
-    date: "Март 2024",
-    guests: 1200,
-    equipment: ["LED-экран 200 м²", "Конференц-система Bosch", "Лазерный проектор 30000 лм"],
-    description: "Крупнейшая IT-конференция года. Обеспечили полное техническое оснащение трёх залов и центральной сцены.",
-    tags: ["LED-экран", "конференц-система", "проектор"],
-    highlight: true,
-  },
-  {
-    id: 2,
-    title: "Фестиваль Aurora 2024",
-    category: "Фестивали",
-    date: "Июль 2024",
-    guests: 5000,
-    equipment: ["Line Array JBL VTX", "Лазерное шоу 10 кВт", "Сцена 20×12 м"],
-    description: "Трёхдневный музыкальный фестиваль под открытым небом. Полный звуко-световой комплекс.",
-    tags: ["line array", "лазер", "сцена"],
-    highlight: true,
-  },
-  {
-    id: 3,
-    title: "Гала-вечер X5 Group",
-    category: "Корпоративы",
-    date: "Декабрь 2023",
-    guests: 800,
-    equipment: ["Звуковая система d&b", "Световой rig 60 приборов", "Дым и спецэффекты"],
-    description: "Новогодний корпоратив с тематическим световым шоу и живой музыкой.",
-    tags: ["корпоратив", "свет", "спецэффекты"],
-    highlight: false,
-  },
-  {
-    id: 4,
-    title: "Концерт Иванова",
-    category: "Концерты",
-    date: "Октябрь 2023",
-    guests: 3000,
-    equipment: ["Line Array 32 блока", "Диммерная ферма 24 прибора", "LED-экран сцены"],
-    description: "Сольный концерт в СК Лужники. Полный технический райдер исполнителя.",
-    tags: ["концерт", "line array", "свет"],
-    highlight: true,
-  },
-  {
-    id: 5,
-    title: "Brand Forum 2024",
-    category: "Конференции",
-    date: "Апрель 2024",
-    guests: 400,
-    equipment: ["Конференц-система 400 мест", "Синхронный перевод 4 языка", "Потоковое вещание"],
-    description: "Международный форум брендов. Синхронный перевод, потоковая трансляция на 15 000 онлайн-зрителей.",
-    tags: ["форум", "перевод", "стриминг"],
-    highlight: false,
-  },
-  {
-    id: 6,
-    title: "Cirque du Lumière",
-    category: "Шоу",
-    date: "Февраль 2024",
-    guests: 650,
-    equipment: ["Световые роботы 48 ед.", "Лазеры RGB 5 кВт", "Пиротехника сцены"],
-    description: "Цирковое шоу с элементами световой инсталляции и лазерного перформанса.",
-    tags: ["шоу", "лазер", "роботы"],
-    highlight: true,
-  },
-];
 
 export default function Portfolio() {
   useSeo({ page: "portfolio" });
   const { city } = useCity();
   const content = CITY_CONTENT[city.id] ?? CITY_CONTENT.moscow;
+  const { items: projects } = usePortfolioItems();
   const [activeFilter, setActiveFilter] = useState("Все");
   const [selected, setSelected] = useState<null | (typeof projects)[0]>(null);
 
