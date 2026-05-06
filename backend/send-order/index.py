@@ -31,7 +31,7 @@ def send_confirmation_email(to_email: str, order_number: str, name: str, total: 
 <body style="margin:0;padding:0;background:#0a0a0a;font-family:Arial,sans-serif;">
   <div style="max-width:560px;margin:40px auto;background:#111111;border:1px solid #222;border-radius:6px;overflow:hidden;">
     <div style="background:#161616;padding:28px 32px;border-bottom:2px solid #f59e0b;">
-      <p style="color:#f59e0b;font-size:11px;letter-spacing:2px;text-transform:uppercase;margin:0 0 6px;">Stage Sound</p>
+      <p style="color:#f59e0b;font-size:11px;letter-spacing:2px;text-transform:uppercase;margin:0 0 6px;">Global Renta</p>
       <h1 style="color:#fff;font-size:22px;margin:0;font-weight:bold;">Заявка принята в работу</h1>
     </div>
     <div style="padding:32px;">
@@ -72,8 +72,8 @@ def send_confirmation_email(to_email: str, order_number: str, name: str, total: 
 """
 
     msg = MIMEMultipart("alternative")
-    msg["Subject"] = f"Заявка {order_number} принята — Stage Sound"
-    msg["From"] = f"Stage Sound <{smtp_user}>"
+    msg["Subject"] = f"Заявка {order_number} принята — Global Renta"
+    msg["From"] = f"Global Renta <{smtp_user}>"
     msg["To"] = to_email
     msg.attach(MIMEText(html, "html", "utf-8"))
 

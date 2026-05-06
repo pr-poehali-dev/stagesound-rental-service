@@ -283,7 +283,7 @@ def build_pdf(contract: dict, quote: dict) -> bytes:
     story.append(loc)
     story.append(Spacer(1, 5*mm))
     story.append(Paragraph(
-        f'<b>ООО &laquo;Stage Sound&raquo;</b>, именуемое далее <b>&laquo;Арендодатель&raquo;</b>, '
+        f'<b>ООО &laquo;Global Renta&raquo;</b>, именуемое далее <b>&laquo;Арендодатель&raquo;</b>, '
         f'и <b>{cname}</b> ({clabel}), именуемый(-ая) далее <b>&laquo;Арендатор&raquo;</b>, '
         f'заключили настоящий Договор о нижеследующем:', Ss["body"]))
     story.append(Spacer(1, 4*mm))
@@ -343,11 +343,11 @@ def build_pdf(contract: dict, quote: dict) -> bytes:
         return col
 
     arend_col = make_col("АРЕНДОДАТЕЛЬ", [
-        ("Организация", "ООО &laquo;Stage Sound&raquo;"),
+        ("Организация", "ООО &laquo;Global Renta&raquo;"),
         ("ИНН", "_______________"),
         ("ОГРН", "_______________"),
-        ("Адрес", "г. Москва"),
-        ("Email", "info@global.promo"),
+        ("Адрес", "Санкт-Петербург, Невский пр., 88"),
+        ("Email", "info@globalrenta.ru"),
     ], with_stamp=True)
 
     client_col = make_col("АРЕНДАТОР",

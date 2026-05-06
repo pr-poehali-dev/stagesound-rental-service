@@ -40,7 +40,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         <div className="container mx-auto px-4 flex items-center justify-between h-16">
           <Link to="/" className="flex items-center gap-2">
             <span className="font-oswald text-xl font-bold tracking-widest text-white uppercase">
-              Stage<span className="neon-text">Sound</span>
+              Global<span className="neon-text">Renta</span>
             </span>
           </Link>
 
@@ -139,7 +139,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <div>
               <div className="flex items-center gap-2 mb-3">
                 <span className="font-oswald text-xl font-bold tracking-widest text-white uppercase">
-                  Stage<span className="neon-text">Sound</span>
+                  Global<span className="neon-text">Renta</span>
                 </span>
               </div>
               <p className="text-gray-500 text-sm leading-relaxed mb-4">
@@ -208,7 +208,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             </div>
           </div>
           <div className="border-t border-amber-500/10 mt-8 pt-6 flex flex-col md:flex-row items-center justify-between gap-4">
-            <p className="text-gray-600 text-xs">© 2024 StageSound. Все права защищены.</p>
+            <p className="text-gray-600 text-xs">© 2024 Global Renta. Все права защищены.</p>
             <div className="flex gap-4 flex-wrap">
               {["Аренда звука", "Аренда света", "Аренда микрофонов", "Аренда сцены", "Корпоратив", "Свадьба"].map((tag) => (
                 <span key={tag} className="text-gray-700 text-xs">{tag}</span>

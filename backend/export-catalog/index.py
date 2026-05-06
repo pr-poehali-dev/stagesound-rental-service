@@ -64,7 +64,7 @@ def build_excel_basic(rows: list) -> bytes:
     COLS = 7
     ws.merge_cells(f"A1:{get_column_letter(COLS)}1")
     tc = ws["A1"]
-    tc.value = f"Каталог оборудования Stage Sound — {datetime.now().strftime('%d.%m.%Y')}  |  Базовый"
+    tc.value = f"Каталог оборудования Global Renta — {datetime.now().strftime('%d.%m.%Y')}  |  Базовый"
     tc.font = tfont; tc.fill = title_fill; tc.alignment = c_al
     ws.row_dimensions[1].height = 28
     ws.merge_cells(f"A2:{get_column_letter(COLS)}2")
@@ -149,7 +149,7 @@ def build_excel_full(rows: list) -> bytes:
     COLS = 11
     ws.merge_cells(f"A1:{get_column_letter(COLS)}1")
     tc = ws["A1"]
-    tc.value = f"Каталог оборудования Stage Sound — {datetime.now().strftime('%d.%m.%Y')}  |  Расширенный"
+    tc.value = f"Каталог оборудования Global Renta — {datetime.now().strftime('%d.%m.%Y')}  |  Расширенный"
     tc.font = tfont; tc.fill = title_fill; tc.alignment = c_al
     ws.row_dimensions[1].height = 28
     ws.merge_cells(f"A2:{get_column_letter(COLS)}2")

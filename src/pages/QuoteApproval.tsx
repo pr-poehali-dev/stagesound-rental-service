@@ -191,7 +191,7 @@ export default function QuoteApproval() {
       <div className="max-w-3xl mx-auto">
         {/* Logo */}
         <div className="text-center mb-8">
-          <p className="text-amber-500 text-xs uppercase tracking-widest mb-1">Stage Sound</p>
+          <p className="text-amber-500 text-xs uppercase tracking-widest mb-1">Global Renta</p>
           <h1 className="font-oswald text-3xl md:text-4xl font-bold text-white uppercase">Коммерческое предложение</h1>
           {q.title && <p className="text-gray-500 mt-1">{q.title}</p>}
         </div>
