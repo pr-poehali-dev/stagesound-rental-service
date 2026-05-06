@@ -22,6 +22,7 @@ export interface PortfolioItem {
   description: string;
   tags: string[];
   highlight: boolean;
+  image?: string;
 }
 
 const DEFAULT_PORTFOLIO: PortfolioItem[] = [

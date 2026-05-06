@@ -66,14 +66,20 @@ export default function Portfolio() {
               className="glass-card rounded-sm overflow-hidden cursor-pointer group hover:border-amber-500/30 transition-all"
               onClick={() => setSelected(project)}
             >
-              {/* Image placeholder */}
+              {/* Image */}
               <div className="h-48 relative overflow-hidden" style={{ background: "var(--surface-2)" }}>
-                <div className="absolute inset-0 grid-pattern opacity-40" />
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="font-oswald text-7xl font-bold opacity-10 text-amber-500 select-none">
-                    {project.guests.toLocaleString()}
-                  </div>
-                </div>
+                {project.image ? (
+                  <img src={project.image} alt={project.title} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                ) : (
+                  <>
+                    <div className="absolute inset-0 grid-pattern opacity-40" />
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="font-oswald text-7xl font-bold opacity-10 text-amber-500 select-none">
+                        {project.guests.toLocaleString()}
+                      </div>
+                    </div>
+                  </>
+                )}
                 {project.highlight && (
                   <div className="absolute top-3 left-3 flex items-center gap-1.5 text-xs bg-amber-500 text-black font-bold px-2 py-0.5 uppercase">
                     <Icon name="Star" size={10} />

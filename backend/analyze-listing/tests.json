@@ -1,0 +1,27 @@
+{
+  "tests": [
+    {
+      "name": "CORS preflight",
+      "method": "OPTIONS",
+      "path": "/",
+      "expectedStatus": 200
+    },
+    {
+      "name": "Анализ объявления",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "title": "Аренда колонок JBL",
+        "description": "Сдаем в аренду профессиональные колонки JBL. Доставка по городу.",
+        "price": "5000",
+        "category": "Звук",
+        "city": "Санкт-Петербург",
+        "has_photo": false,
+        "photo_count": 0
+      },
+      "expectedStatus": 200,
+      "expectedBody": {"title": "string"},
+      "bodyMatcher": "partial"
+    }
+  ]
+}

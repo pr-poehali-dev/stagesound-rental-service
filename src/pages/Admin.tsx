@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Icon from "@/components/ui/icon";
 import func2url from "../../backend/func2url.json";
+import { useRef } from "react";
 import { useHiddenPages, usePortfolioItems, ALL_PAGES, type PortfolioItem } from "@/hooks/useHiddenPages";
 
 const URLS = func2url as Record<string, string>;
@@ -51,7 +52,7 @@ export default function Admin() {
   const [authed, setAuthed] = useState(false);
   const [authError, setAuthError] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [tab, setTab] = useState<"orders" | "quotes" | "contracts" | "settings" | "pages" | "portfolio">("orders");
+  const [tab, setTab] = useState<"orders" | "quotes" | "contracts" | "settings" | "pages" | "portfolio" | "ai">("orders");
 
   // Pages visibility
   const { hidden, togglePage } = useHiddenPages();
@@ -66,6 +67,36 @@ export default function Admin() {
     equipment: [], description: "", tags: [], highlight: false,
   };
   const [newProject, setNewProject] = useState<Omit<PortfolioItem, "id">>(emptyProject);
+
+  // AI Assistant
+  const [aiForm, setAiForm] = useState({ title: "", description: "", price: "", category: "Звук", city: "Санкт-Петербург", photo_count: 0 });
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiResult, setAiResult] = useState<null | {
+    score: number; title: string; description: string;
+    price_recommendation: string; photo_tips: string[];
+    strengths: string[]; weaknesses: string[]; why: string;
+  }>(null);
+  const [aiError, setAiError] = useState("");
+
+  const runAiAnalysis = async () => {
+    setAiLoading(true);
+    setAiError("");
+    setAiResult(null);
+    try {
+      const res = await fetch(URLS["analyze-listing"], {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...aiForm, has_photo: aiForm.photo_count > 0 }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Ошибка AI");
+      setAiResult(data);
+    } catch (e: unknown) {
+      setAiError(e instanceof Error ? e.message : "Ошибка запроса");
+    } finally {
+      setAiLoading(false);
+    }
+  };
 
   // Settings
   const [settings, setSettings] = useState<Record<string, string>>({});
@@ -318,6 +349,7 @@ export default function Admin() {
             { key: "settings", label: "Настройки", icon: "Settings", count: 0 },
             { key: "pages", label: "Разделы", icon: "EyeOff", count: hidden.length },
             { key: "portfolio", label: "Портфолио", icon: "Images", count: portfolioItems.length },
+            { key: "ai", label: "AI Авито", icon: "Sparkles", count: 0 },
           ].map((t) => (
             <button key={t.key} onClick={() => setTab(t.key as typeof tab)}
               className={`flex items-center gap-2 px-5 py-3 text-sm transition-all border-b-2 -mb-px ${tab === t.key ? "border-amber-500 text-amber-500" : "border-transparent text-gray-500 hover:text-gray-300"}`}>
@@ -768,6 +800,7 @@ export default function Admin() {
                 onChange={setNewProject}
                 onSave={() => { addItem(newProject); setShowNewProject(false); }}
                 onCancel={() => setShowNewProject(false)}
+                password={password}
               />
             </div>
           )}
@@ -784,6 +817,7 @@ export default function Admin() {
                       onChange={(d) => setEditingProject({ ...editingProject, ...d })}
                       onSave={() => { updateItem(editingProject); setEditingProject(null); }}
                       onCancel={() => setEditingProject(null)}
+                      password={password}
                     />
                   </>
                 ) : (
@@ -823,23 +857,275 @@ export default function Admin() {
           </div>
         </div>
       )}
+      {/* ── AI АВИТО ── */}
+      {tab === "ai" && (
+        <div className="max-w-4xl">
+          <div className="flex items-center gap-3 mb-2">
+            <Icon name="Sparkles" size={20} className="text-amber-500" />
+            <h2 className="font-oswald text-2xl font-bold text-white uppercase">AI-ассистент для Авито</h2>
+          </div>
+          <p className="text-gray-500 text-sm mb-6">Опишите что вы хотите разместить на Авито — AI проанализирует и выдаст готовый текст, цену и советы по фото.</p>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Форма */}
+            <div className="glass-card rounded-sm p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-gray-600 uppercase tracking-wider block mb-1">Категория</label>
+                  <select value={aiForm.category} onChange={(e) => setAiForm(f => ({ ...f, category: e.target.value }))}
+                    className="w-full bg-transparent border border-amber-500/20 rounded-sm px-3 py-2 text-sm text-gray-300 focus:outline-none focus:border-amber-500/50">
+                    {["Звук", "Свет", "Видео", "Сцена", "Конференц", "Генераторы"].map(c => (
+                      <option key={c} value={c} className="bg-gray-900">{c}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-gray-600 uppercase tracking-wider block mb-1">Город</label>
+                  <input value={aiForm.city} onChange={(e) => setAiForm(f => ({ ...f, city: e.target.value }))}
+                    className="w-full bg-transparent border border-amber-500/20 rounded-sm px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50" />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs text-gray-600 uppercase tracking-wider block mb-1">Текущий заголовок объявления</label>
+                <input
+                  value={aiForm.title}
+                  onChange={(e) => setAiForm(f => ({ ...f, title: e.target.value }))}
+                  placeholder="Напр.: Аренда колонок JBL"
+                  className="w-full bg-transparent border border-amber-500/20 rounded-sm px-3 py-2 text-sm text-white placeholder-gray-700 focus:outline-none focus:border-amber-500/50"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs text-gray-600 uppercase tracking-wider block mb-1">Текущее описание</label>
+                <textarea
+                  value={aiForm.description}
+                  onChange={(e) => setAiForm(f => ({ ...f, description: e.target.value }))}
+                  placeholder="Опишите оборудование, условия аренды, что входит в стоимость..."
+                  rows={4}
+                  className="w-full bg-transparent border border-amber-500/20 rounded-sm px-3 py-2 text-sm text-white placeholder-gray-700 focus:outline-none focus:border-amber-500/50 resize-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-gray-600 uppercase tracking-wider block mb-1">Текущая цена (₽)</label>
+                  <input
+                    value={aiForm.price}
+                    onChange={(e) => setAiForm(f => ({ ...f, price: e.target.value }))}
+                    placeholder="5000"
+                    className="w-full bg-transparent border border-amber-500/20 rounded-sm px-3 py-2 text-sm text-white placeholder-gray-700 focus:outline-none focus:border-amber-500/50"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-600 uppercase tracking-wider block mb-1">Кол-во фото</label>
+                  <input
+                    type="number" min={0} max={20}
+                    value={aiForm.photo_count}
+                    onChange={(e) => setAiForm(f => ({ ...f, photo_count: Number(e.target.value) }))}
+                    className="w-full bg-transparent border border-amber-500/20 rounded-sm px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50"
+                  />
+                </div>
+              </div>
+
+              <button
+                onClick={runAiAnalysis}
+                disabled={aiLoading || (!aiForm.title && !aiForm.description)}
+                className="neon-btn w-full py-3 rounded-sm text-sm flex items-center justify-center gap-2 disabled:opacity-40"
+              >
+                {aiLoading
+                  ? <><Icon name="Loader2" size={16} className="animate-spin" /> Анализирую...</>
+                  : <><Icon name="Sparkles" size={16} /> Улучшить объявление</>}
+              </button>
+
+              {aiError && (
+                <div className="border border-red-500/30 text-red-400 rounded-sm px-4 py-3 text-sm">{aiError}</div>
+              )}
+            </div>
+
+            {/* Результат */}
+            <div>
+              {!aiResult && !aiLoading && (
+                <div className="glass-card rounded-sm p-8 h-full flex flex-col items-center justify-center text-center">
+                  <Icon name="Sparkles" size={40} className="text-amber-500/30 mb-4" />
+                  <p className="text-gray-600 text-sm">Заполните форму слева и нажмите «Улучшить» — AI выдаст готовое объявление с ценой и советами по фото</p>
+                </div>
+              )}
+
+              {aiLoading && (
+                <div className="glass-card rounded-sm p-8 h-full flex flex-col items-center justify-center text-center">
+                  <Icon name="Loader2" size={36} className="text-amber-500 animate-spin mb-4" />
+                  <p className="text-gray-400 text-sm">AI анализирует объявление и рынок...</p>
+                </div>
+              )}
+
+              {aiResult && (
+                <div className="space-y-4">
+                  {/* Оценка */}
+                  <div className="glass-card rounded-sm p-4 flex items-center justify-between">
+                    <span className="text-gray-400 text-sm">Текущее качество объявления</span>
+                    <div className="flex items-center gap-2">
+                      <div className="flex gap-1">
+                        {Array.from({ length: 10 }).map((_, i) => (
+                          <div key={i} className={`w-3 h-3 rounded-sm ${i < aiResult.score ? "bg-amber-500" : "bg-gray-800"}`} />
+                        ))}
+                      </div>
+                      <span className="text-amber-500 font-bold font-oswald text-lg">{aiResult.score}/10</span>
+                    </div>
+                  </div>
+
+                  {/* Новый заголовок */}
+                  <div className="glass-card neon-border rounded-sm p-4">
+                    <div className="text-xs text-amber-500 uppercase tracking-wider mb-2 flex items-center gap-1">
+                      <Icon name="Type" size={12} /> Улучшенный заголовок
+                    </div>
+                    <p className="text-white font-semibold">{aiResult.title}</p>
+                    <button onClick={() => navigator.clipboard.writeText(aiResult.title)}
+                      className="mt-2 text-xs text-gray-600 hover:text-amber-500 flex items-center gap-1 transition-colors">
+                      <Icon name="Copy" size={11} /> Скопировать
+                    </button>
+                  </div>
+
+                  {/* Новое описание */}
+                  <div className="glass-card rounded-sm p-4">
+                    <div className="text-xs text-amber-500 uppercase tracking-wider mb-2 flex items-center gap-1">
+                      <Icon name="FileText" size={12} /> Улучшенное описание
+                    </div>
+                    <p className="text-gray-300 text-sm leading-relaxed whitespace-pre-line">{aiResult.description}</p>
+                    <button onClick={() => navigator.clipboard.writeText(aiResult.description)}
+                      className="mt-2 text-xs text-gray-600 hover:text-amber-500 flex items-center gap-1 transition-colors">
+                      <Icon name="Copy" size={11} /> Скопировать
+                    </button>
+                  </div>
+
+                  {/* Цена */}
+                  <div className="glass-card rounded-sm p-4">
+                    <div className="text-xs text-amber-500 uppercase tracking-wider mb-2 flex items-center gap-1">
+                      <Icon name="Tag" size={12} /> Рекомендуемая цена
+                    </div>
+                    <p className="text-green-400 font-semibold">{aiResult.price_recommendation}</p>
+                  </div>
+
+                  {/* Советы по фото */}
+                  <div className="glass-card rounded-sm p-4">
+                    <div className="text-xs text-amber-500 uppercase tracking-wider mb-3 flex items-center gap-1">
+                      <Icon name="Camera" size={12} /> Советы по фото
+                    </div>
+                    <ul className="space-y-2">
+                      {aiResult.photo_tips.map((tip, i) => (
+                        <li key={i} className="flex items-start gap-2 text-sm text-gray-400">
+                          <Icon name="ChevronRight" size={14} className="text-amber-500 mt-0.5 shrink-0" />
+                          {tip}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  {/* Сильные/слабые стороны */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="glass-card rounded-sm p-4">
+                      <div className="text-xs text-green-500 uppercase tracking-wider mb-2">Сильные стороны</div>
+                      <ul className="space-y-1">
+                        {aiResult.strengths.map((s, i) => (
+                          <li key={i} className="text-xs text-gray-400 flex items-start gap-1">
+                            <Icon name="CheckCircle" size={12} className="text-green-500 mt-0.5 shrink-0" />{s}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div className="glass-card rounded-sm p-4">
+                      <div className="text-xs text-red-400 uppercase tracking-wider mb-2">Слабые стороны</div>
+                      <ul className="space-y-1">
+                        {aiResult.weaknesses.map((w, i) => (
+                          <li key={i} className="text-xs text-gray-400 flex items-start gap-1">
+                            <Icon name="AlertCircle" size={12} className="text-red-400 mt-0.5 shrink-0" />{w}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+
+                  {/* Пояснение */}
+                  <div className="border border-amber-500/10 rounded-sm p-4 text-xs text-gray-500 italic">
+                    {aiResult.why}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
 
 function PortfolioForm({
-  data, categories, onChange, onSave, onCancel,
+  data, categories, onChange, onSave, onCancel, password,
 }: {
   data: Omit<PortfolioItem, "id">;
   categories: string[];
   onChange: (d: Omit<PortfolioItem, "id">) => void;
   onSave: () => void;
   onCancel: () => void;
+  password?: string;
 }) {
   const set = (field: string, val: unknown) => onChange({ ...data, [field]: val });
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const base64 = reader.result as string;
+        const res = await fetch(`${(func2url as Record<string, string>)["upload-image"]}?pwd=${encodeURIComponent(password || "")}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ file: base64, name: file.name }),
+        });
+        const result = await res.json();
+        if (result.url) set("image", result.url);
+      } finally {
+        setUploading(false);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
 
   return (
     <div className="space-y-3">
+      {/* Фото */}
+      <div>
+        <label className="text-xs text-gray-600 uppercase tracking-wider block mb-1">Фото проекта</label>
+        <div className="flex items-center gap-3">
+          {(data as PortfolioItem & { image?: string }).image ? (
+            <div className="relative w-24 h-16 rounded-sm overflow-hidden border border-amber-500/20 shrink-0">
+              <img src={(data as PortfolioItem & { image?: string }).image} alt="" className="w-full h-full object-cover" />
+              <button onClick={() => set("image", "")}
+                className="absolute top-1 right-1 w-5 h-5 bg-black/70 text-gray-300 hover:text-white rounded-sm flex items-center justify-center">
+                <Icon name="X" size={10} />
+              </button>
+            </div>
+          ) : (
+            <div className="w-24 h-16 rounded-sm border border-dashed border-amber-500/20 flex items-center justify-center shrink-0" style={{ background: "var(--surface-2)" }}>
+              <Icon name="Image" size={20} className="text-gray-700" />
+            </div>
+          )}
+          <div className="flex-1">
+            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+            <button onClick={() => fileRef.current?.click()} disabled={uploading}
+              className="flex items-center gap-2 border border-amber-500/20 text-gray-400 hover:text-white px-3 py-1.5 rounded-sm text-xs transition-colors disabled:opacity-40">
+              {uploading ? <Icon name="Loader2" size={12} className="animate-spin" /> : <Icon name="Upload" size={12} />}
+              {uploading ? "Загружаю..." : "Загрузить фото"}
+            </button>
+          </div>
+        </div>
+      </div>
+
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="text-xs text-gray-600 uppercase tracking-wider block mb-1">Название *</label>
