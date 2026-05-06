@@ -64,6 +64,7 @@ export default function Admin() {
   const [selectedContract, setSelectedContract] = useState<Contract | null>(null);
   const [generatingPdf, setGeneratingPdf] = useState(false);
   const [pdfUrl, setPdfUrl] = useState("");
+  const [exportingXlsx, setExportingXlsx] = useState(false);
 
   const login = async () => {
     setLoading(true);
@@ -129,6 +130,22 @@ export default function Admin() {
     setSelectedContract(null);
   };
 
+  const exportCatalogXlsx = async () => {
+    setExportingXlsx(true);
+    try {
+      const res = await fetch(`${URLS["export-catalog"]}?pwd=${encodeURIComponent(password)}`);
+      const data = await res.json();
+      if (data.url) {
+        const a = document.createElement("a");
+        a.href = data.url;
+        a.download = `catalog_${new Date().toISOString().slice(0, 10)}.xlsx`;
+        a.click();
+      }
+    } finally {
+      setExportingXlsx(false);
+    }
+  };
+
   const generatePdf = async (contractId: number) => {
     setGeneratingPdf(true);
     setPdfUrl("");
@@ -182,6 +199,13 @@ export default function Admin() {
             <button onClick={() => navigate("/admin/quote")}
               className="neon-btn flex items-center gap-2 px-4 py-2 rounded-sm text-sm">
               <Icon name="FilePlus" size={14} /> Новое КП
+            </button>
+            <button onClick={exportCatalogXlsx} disabled={exportingXlsx}
+              className="flex items-center gap-2 border border-green-500/30 text-green-400 hover:text-green-300 hover:border-green-400/50 px-4 py-2 rounded-sm text-sm transition-colors disabled:opacity-40">
+              {exportingXlsx
+                ? <Icon name="Loader2" size={14} className="animate-spin" />
+                : <Icon name="FileSpreadsheet" size={14} />}
+              {exportingXlsx ? "Генерация..." : "Excel каталог"}
             </button>
             <a href="/admin/catalog"
               className="flex items-center gap-2 border border-amber-500/20 text-gray-400 hover:text-amber-500 px-4 py-2 rounded-sm text-sm transition-colors">
