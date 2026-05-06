@@ -12,53 +12,160 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@300;400;500;600;700&family=Golos+Text:wght@400;500;600;700;900&display=swap" rel="stylesheet">
-    <meta name="author" content="poehali.dev"/>
+    <meta name="author" content="Global Renta"/>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <!-- LCP preload -->
+    <link rel="preload" as="image" href="https://cdn.poehali.dev/projects/bbfa4077-327f-4ddf-84d0-e92a698a19e6/files/6b27e5a8-dfd1-4749-bf9b-5f9ba48a1b99.jpg" fetchpriority="high">
     <meta property="og:type" content="website">
     <meta property="og:locale" content="ru_RU">
+    <meta property="og:site_name" content="Global Renta">
     <meta property="og:title" content="Аренда звука, света и сцены в Москве — Global Renta">
     <meta property="og:description" content="Аренда звукового оборудования, света и сцены в Москве. Микрофоны, колонки, прожекторы для концертов и мероприятий. Доставка по Москве и МО.">
-    <meta property="og:image:width" content="4800">
-    <meta property="og:image:height" content="2520">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
     <meta property="og:image:alt" content="Global Renta — аренда звука и света в Москве">
     <meta property="og:image" content="https://cdn.poehali.dev/projects/bbfa4077-327f-4ddf-84d0-e92a698a19e6/files/og-image-1776973316500.jpg">
     <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:site" content="@globalrenta">
     <meta name="twitter:title" content="Аренда звука, света и сцены в Москве — Global Renta">
-    <meta name="twitter:description" content="Аренда профессионального оборудования для мероприятий в Москве.">
+    <meta name="twitter:description" content="Аренда профессионального звука, света и сцены для мероприятий в Москве. 500+ единиц оборудования, доставка по МО.">
     <meta name="twitter:image" content="https://cdn.poehali.dev/projects/bbfa4077-327f-4ddf-84d0-e92a698a19e6/files/og-image-1776973316500.jpg">
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
-      "@type": "LocalBusiness",
-      "name": "Global Renta",
-      "description": "Аренда профессионального звука, света, микрофонов и сцены для мероприятий в Москве, Санкт-Петербурге и Красноярске",
-      "url": "https://globalrenta.ru",
-      "telephone": "+74951234567",
-      "email": "moscow@globalrenta.ru",
-      "address": {
-        "@type": "PostalAddress",
-        "streetAddress": "ул. Профсоюзная, 65",
-        "addressLocality": "Москва",
-        "addressCountry": "RU"
-      },
-      "openingHours": ["Mo-Fr 09:00-20:00", "Sa-Su 10:00-18:00"],
-      "priceRange": "₽₽",
-      "hasOfferCatalog": {
-        "@type": "OfferCatalog",
-        "name": "Аренда оборудования",
-        "itemListElement": [
-          {"@type": "Offer", "itemOffered": {"@type": "Service", "name": "Аренда звука"}},
-          {"@type": "Offer", "itemOffered": {"@type": "Service", "name": "Аренда света"}},
-          {"@type": "Offer", "itemOffered": {"@type": "Service", "name": "Аренда микрофонов"}},
-          {"@type": "Offer", "itemOffered": {"@type": "Service", "name": "Аренда сцены"}},
-          {"@type": "Offer", "itemOffered": {"@type": "Service", "name": "Аренда LED-экранов"}}
-        ]
-      },
-      "aggregateRating": {
-        "@type": "AggregateRating",
-        "ratingValue": "4.9",
-        "reviewCount": "1200"
-      }
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://globalrenta.ru/#organization",
+          "name": "Global Renta",
+          "url": "https://globalrenta.ru",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://globalrenta.ru/favicon.svg",
+            "width": 512,
+            "height": 512
+          },
+          "contactPoint": [
+            {
+              "@type": "ContactPoint",
+              "telephone": "+7-495-123-45-67",
+              "contactType": "customer service",
+              "areaServed": "RU",
+              "availableLanguage": "Russian"
+            }
+          ]
+        },
+        {
+          "@type": "LocalBusiness",
+          "@id": "https://globalrenta.ru/#localbusiness",
+          "name": "Global Renta — аренда звука, света и сцены",
+          "description": "Профессиональная аренда звукового оборудования, световых систем и сценических конструкций для концертов, корпоративов и мероприятий в Москве, Санкт-Петербурге и Красноярске",
+          "url": "https://globalrenta.ru",
+          "telephone": "+7-495-123-45-67",
+          "email": "moscow@globalrenta.ru",
+          "image": "https://cdn.poehali.dev/projects/bbfa4077-327f-4ddf-84d0-e92a698a19e6/files/og-image-1776973316500.jpg",
+          "address": {
+            "@type": "PostalAddress",
+            "streetAddress": "ул. Профсоюзная, 65",
+            "addressLocality": "Москва",
+            "postalCode": "117279",
+            "addressCountry": "RU"
+          },
+          "geo": {
+            "@type": "GeoCoordinates",
+            "latitude": 55.6654,
+            "longitude": 37.5649
+          },
+          "openingHoursSpecification": [
+            {
+              "@type": "OpeningHoursSpecification",
+              "dayOfWeek": ["Monday","Tuesday","Wednesday","Thursday","Friday"],
+              "opens": "09:00",
+              "closes": "20:00"
+            },
+            {
+              "@type": "OpeningHoursSpecification",
+              "dayOfWeek": ["Saturday","Sunday"],
+              "opens": "10:00",
+              "closes": "18:00"
+            }
+          ],
+          "priceRange": "₽₽",
+          "currenciesAccepted": "RUB",
+          "paymentAccepted": "Наличные, банковская карта, безналичный расчёт",
+          "hasOfferCatalog": {
+            "@type": "OfferCatalog",
+            "name": "Аренда профессионального оборудования",
+            "itemListElement": [
+              {"@type": "Offer", "itemOffered": {"@type": "Service", "name": "Аренда звукового оборудования", "description": "Линейные массивы, сабвуферы, микшерные пульты, микрофоны, мониторы"}},
+              {"@type": "Offer", "itemOffered": {"@type": "Service", "name": "Аренда светового оборудования", "description": "Прожекторы, лазерные установки, дым-машины, LED-панели"}},
+              {"@type": "Offer", "itemOffered": {"@type": "Service", "name": "Аренда сценических конструкций", "description": "Мобильные сцены от 3×4 до 14×10 м с крышей"}},
+              {"@type": "Offer", "itemOffered": {"@type": "Service", "name": "Аренда LED-экранов и проекторов"}},
+              {"@type": "Offer", "itemOffered": {"@type": "Service", "name": "Аренда конференц-оборудования", "description": "Системы голосования, синхроперевод, делегатские места"}},
+              {"@type": "Offer", "itemOffered": {"@type": "Service", "name": "Аренда генераторов", "description": "Дизельные генераторы для автономного питания мероприятий"}}
+            ]
+          },
+          "aggregateRating": {
+            "@type": "AggregateRating",
+            "ratingValue": "4.9",
+            "bestRating": "5",
+            "worstRating": "1",
+            "reviewCount": "1200"
+          },
+          "review": [
+            {
+              "@type": "Review",
+              "author": {"@type": "Person", "name": "Анастасия Волкова"},
+              "reviewRating": {"@type": "Rating", "ratingValue": "5"},
+              "reviewBody": "Работаем с Global Renta уже 3 года. Качество звукового оборудования на высшем уровне, монтажная команда — профессионалы."
+            },
+            {
+              "@type": "Review",
+              "author": {"@type": "Person", "name": "Игорь Семёнов"},
+              "reviewRating": {"@type": "Rating", "ratingValue": "5"},
+              "reviewBody": "Арендовали световое шоу на фестиваль 3000 человек. Всё было настроено идеально, техподдержка работала всю ночь."
+            }
+          ]
+        },
+        {
+          "@type": "FAQPage",
+          "@id": "https://globalrenta.ru/#faq",
+          "mainEntity": [
+            {
+              "@type": "Question",
+              "name": "Сколько стоит аренда звукового оборудования в Москве?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Стоимость аренды звукового оборудования зависит от состава и срока аренды. Небольшая акустическая система — от 5 000 руб./день, профессиональный линейный массив для концерта — от 30 000 руб./день. Точный расчёт — в онлайн-калькуляторе на сайте."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Есть ли доставка и монтаж оборудования?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Да, мы осуществляем доставку и монтаж оборудования по Москве и Московской области. В стоимость услуги входят: доставка, монтаж, настройка и демонтаж. Выезд технического специалиста на всё время мероприятия — по запросу."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "За сколько дней нужно делать заявку на аренду?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Рекомендуем оставлять заявку за 3–7 дней до мероприятия. Для крупных событий (концерты, фестивали) — за 2–4 недели. Срочная аренда возможна при наличии свободного оборудования."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Можно ли арендовать оборудование без технического специалиста?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Да, возможна аренда оборудования без технического специалиста — самовывоз или доставка без монтажа. Для профессионального оборудования (линейные массивы, световые пульты) рекомендуем заказывать с техником."
+              }
+            }
+          ]
+        }
+      ]
     }
     </script>
 

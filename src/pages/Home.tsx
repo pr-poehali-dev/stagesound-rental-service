@@ -12,12 +12,12 @@ const stats = [
 ];
 
 const categories = [
-  { icon: "Mic2", title: "Звук", desc: "Профессиональный звук для любых площадок", count: 87 },
-  { icon: "Lightbulb", title: "Свет", desc: "Световые установки и эффекты", count: 124 },
-  { icon: "Monitor", title: "Видео", desc: "Проекторы, экраны, LED-панели", count: 56 },
-  { icon: "Stage", title: "Сцена", desc: "Сценические конструкции и оборудование", count: 43 },
-  { icon: "Wifi", title: "Конференц", desc: "Системы конференц-связи и переговоров", count: 38 },
-  { icon: "Zap", title: "Генераторы", desc: "Автономное электроснабжение", count: 22 },
+  { icon: "Mic2", title: "Звук", desc: "Линейные массивы, сабвуферы, микшерные пульты, микрофоны и мониторы для концертов и корпоративов", count: 87 },
+  { icon: "Lightbulb", title: "Свет", desc: "Прожекторы, лазеры, LED-системы, дым-машины и спецэффекты для шоу любого масштаба", count: 124 },
+  { icon: "Monitor", title: "Видео", desc: "Проекторы, LED-экраны, видеопроцессоры и медиасерверы для презентаций и шоу", count: 56 },
+  { icon: "Triangle", title: "Сцена", desc: "Мобильные сцены от 3×4 до 14×10 м с крышей, боковыми порталами и помостами", count: 43 },
+  { icon: "Wifi", title: "Конференц", desc: "Системы голосования, синхроперевод, делегатские места и конференц-микрофоны", count: 38 },
+  { icon: "Zap", title: "Генераторы", desc: "Дизельные генераторы от 10 до 200 кВт для автономного питания мероприятий", count: 22 },
 ];
 
 const reviews = [
@@ -56,6 +56,7 @@ export default function Home() {
           muted
           loop
           playsInline
+          aria-label="Профессиональная аренда звукового оборудования и сцены для мероприятий"
           poster="https://cdn.poehali.dev/projects/bbfa4077-327f-4ddf-84d0-e92a698a19e6/files/6b27e5a8-dfd1-4749-bf9b-5f9ba48a1b99.jpg"
         >
           <source src="https://videos.pexels.com/video-files/3257809/3257809-uhd_2560_1440_25fps.mp4" type="video/mp4" />
