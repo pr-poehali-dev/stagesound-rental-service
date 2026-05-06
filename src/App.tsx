@@ -16,6 +16,7 @@ import Admin from "./pages/Admin";
 import AdminCatalog from "./pages/AdminCatalog";
 import AdminQuote from "./pages/AdminQuote";
 import QuoteApproval from "./pages/QuoteApproval";
+import EquipmentItem from "./pages/EquipmentItem";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -30,6 +31,7 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Layout><Home /></Layout>} />
             <Route path="/catalog" element={<Layout><Catalog /></Layout>} />
+            <Route path="/catalog/:id" element={<Layout><EquipmentItem /></Layout>} />
             <Route path="/services" element={<Layout><Services /></Layout>} />
             <Route path="/about" element={<Layout><About /></Layout>} />
             <Route path="/portfolio" element={<Layout><Portfolio /></Layout>} />

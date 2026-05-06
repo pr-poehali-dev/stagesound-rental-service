@@ -6,6 +6,7 @@ import { useSeo } from "@/hooks/useSeo";
 import { useCity } from "@/context/CityContext";
 import { CITY_CONTENT } from "@/data/cityContent";
 import func2url from "../../backend/func2url.json";
+import { slugify } from "./EquipmentItem";
 
 const categoryMeta: Record<string, { image: string; desc: string; icon: string }> = {
   Звук: {
@@ -261,6 +262,7 @@ export default function Catalog() {
                     className="glass-card rounded-sm overflow-hidden group cursor-pointer hover:border-amber-500/30 transition-all flex flex-col"
                     onClick={() => setSelectedItem(item)}
                   >
+
                     {/* Image */}
                     <div className="relative overflow-hidden" style={{ height: "200px", background: "var(--surface-2)" }}>
                       {item.image ? (
@@ -327,13 +329,22 @@ export default function Catalog() {
                           <div className="font-oswald text-2xl font-bold neon-text leading-none">{item.price.toLocaleString()} ₽</div>
                           <div className="text-gray-600 text-xs">за {item.unit}</div>
                         </div>
-                        <button
-                          className="neon-btn text-xs px-4 py-2 rounded-sm flex items-center gap-1.5"
-                          onClick={(e) => { e.stopPropagation(); window.location.href = "/calculator"; }}
-                        >
-                          <Icon name="ShoppingCart" size={12} />
-                          Арендовать
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <Link
+                            to={`/catalog/${item.id}`}
+                            className="text-xs border border-amber-500/30 text-amber-500/70 px-3 py-2 rounded-sm hover:border-amber-500/60 hover:text-amber-500 transition-colors"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            Подробнее
+                          </Link>
+                          <button
+                            className="neon-btn text-xs px-4 py-2 rounded-sm flex items-center gap-1.5"
+                            onClick={(e) => { e.stopPropagation(); window.location.href = "/calculator"; }}
+                          >
+                            <Icon name="ShoppingCart" size={12} />
+                            Арендовать
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
