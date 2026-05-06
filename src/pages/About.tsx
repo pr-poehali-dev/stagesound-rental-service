@@ -12,11 +12,11 @@ const team = [
 ];
 
 const milestones = [
-  { year: "2016", event: "Основание компании. Первый склад в Москве." },
+  { year: "2016", event: "Основание компании. Первый склад в Санкт-Петербурге." },
   { year: "2018", event: "Выход на рынок крупных фестивалей. Первый концерт 5000+ зрителей." },
   { year: "2020", event: "Расширение парка видеооборудования. Открытие отдела конференц-систем." },
   { year: "2022", event: "Партнёрство с JBL, Martin Lighting, Panasonic." },
-  { year: "2024", event: "Более 1200 успешных мероприятий. Топ-3 в Москве по аренде сценического оборудования." },
+  { year: "2024", event: "Более 1200 успешных мероприятий. Топ-10 в Санкт-Петербурге по аренде сценического оборудования." },
 ];
 
 const certificates = [
@@ -60,7 +60,7 @@ export default function About() {
                 { icon: "Package", value: "500+", label: "Единиц оборудования" },
                 { icon: "CalendarCheck", value: "1200+", label: "Мероприятий" },
                 { icon: "Users", value: "45", label: "Специалистов" },
-                { icon: "Award", value: "Top 3", label: "В Москве" },
+                { icon: "Award", value: "Top 10", label: "В Санкт-Петербурге" },
               ].map((stat) => (
                 <div key={stat.label} className="glass-card p-4 rounded-sm">
                   <Icon name={stat.icon} size={18} className="text-amber-500 mb-2" />
