@@ -52,7 +52,39 @@ export default function Admin() {
   const [authed, setAuthed] = useState(false);
   const [authError, setAuthError] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [tab, setTab] = useState<"orders" | "quotes" | "contracts" | "settings" | "pages" | "portfolio" | "ai">("orders");
+  const [tab, setTab] = useState<"orders" | "quotes" | "contracts" | "settings" | "pages" | "portfolio" | "ai" | "renters">("orders");
+
+  // Renters moderation
+  type RenterMod = { id: number; email: string; company_name: string; contact_name: string; phone: string; city: string; telegram?: string; status: string; created_at: string; };
+  type RenterEqMod = { id: number; renter_id: number; name: string; category: string; price: number; unit: string; description: string; status: string; is_active: boolean; created_at: string; renter_company?: string; renter_email?: string; image?: string; };
+  const [renters, setRenters] = useState<RenterMod[]>([]);
+  const [renterEq, setRenterEq] = useState<RenterEqMod[]>([]);
+  const [rentersLoading, setRentersLoading] = useState(false);
+  const [renterSubTab, setRenterSubTab] = useState<"equipment" | "renters">("equipment");
+
+  const loadRenters = async () => {
+    setRentersLoading(true);
+    const res = await fetch(`${URLS["renter-equipment"]}?admin=1&pwd=${encodeURIComponent(password)}`);
+    if (res.ok) {
+      const data = await res.json();
+      setRenterEq(data.equipment || []);
+      setRenters(data.renters || []);
+    }
+    setRentersLoading(false);
+  };
+
+  const approveEq = async (id: number) => {
+    await fetch(`${URLS["renter-equipment"]}?admin=1&pwd=${encodeURIComponent(password)}&action=approve&id=${id}`, { method: "POST" });
+    loadRenters();
+  };
+  const rejectEq = async (id: number) => {
+    await fetch(`${URLS["renter-equipment"]}?admin=1&pwd=${encodeURIComponent(password)}&action=reject&id=${id}`, { method: "POST" });
+    loadRenters();
+  };
+  const toggleRenterStatus = async (id: number, action: "approve_renter" | "block_renter") => {
+    await fetch(`${URLS["renter-equipment"]}?admin=1&pwd=${encodeURIComponent(password)}&action=${action}&renter_id=${id}`, { method: "POST" });
+    loadRenters();
+  };
 
   // Pages visibility
   const { hidden, togglePage } = useHiddenPages();
@@ -196,6 +228,7 @@ export default function Admin() {
     if (tab === "quotes") loadQuotes();
     if (tab === "contracts") loadContracts();
     if (tab === "settings") loadSettings();
+    if (tab === "renters") loadRenters();
   }, [tab, authed]);
 
   const copyQuoteLink = (token: string) => {
@@ -350,6 +383,7 @@ export default function Admin() {
             { key: "pages", label: "Разделы", icon: "EyeOff", count: hidden.length },
             { key: "portfolio", label: "Портфолио", icon: "Images", count: portfolioItems.length },
             { key: "ai", label: "AI Авито", icon: "Sparkles", count: 0 },
+            { key: "renters", label: "Прокатчики", icon: "Users", count: renterEq.filter(e => e.status === "pending").length },
           ].map((t) => (
             <button key={t.key} onClick={() => setTab(t.key as typeof tab)}
               className={`flex items-center gap-2 px-5 py-3 text-sm transition-all border-b-2 -mb-px ${tab === t.key ? "border-amber-500 text-amber-500" : "border-transparent text-gray-500 hover:text-gray-300"}`}>
@@ -1053,6 +1087,127 @@ export default function Admin() {
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ── ПРОКАТЧИКИ ── */}
+      {tab === "renters" && (
+        <div>
+          {/* Подвкладки */}
+          <div className="flex gap-4 mb-6 border-b border-amber-500/10">
+            {[
+              { key: "equipment", label: "Оборудование на модерации", count: renterEq.filter(e => e.status === "pending").length },
+              { key: "renters",   label: "Список прокатчиков", count: renters.length },
+            ].map(t => (
+              <button key={t.key} onClick={() => setRenterSubTab(t.key as typeof renterSubTab)}
+                className={`flex items-center gap-2 px-4 py-2.5 text-sm border-b-2 -mb-px transition-all ${
+                  renterSubTab === t.key ? "border-amber-500 text-amber-500" : "border-transparent text-gray-500 hover:text-gray-300"
+                }`}>
+                {t.label}
+                {t.count > 0 && <span className={`text-xs rounded-full px-1.5 py-0.5 ${renterSubTab === t.key ? "bg-amber-500/20 text-amber-500" : "bg-gray-800 text-gray-500"}`}>{t.count}</span>}
+              </button>
+            ))}
+            <button onClick={loadRenters} disabled={rentersLoading}
+              className="ml-auto flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-300 pb-2 transition-colors">
+              <Icon name="RefreshCw" size={12} className={rentersLoading ? "animate-spin" : ""} /> Обновить
+            </button>
+          </div>
+
+          {rentersLoading ? (
+            <div className="flex justify-center py-16"><Icon name="Loader2" size={32} className="text-amber-500 animate-spin" /></div>
+          ) : renterSubTab === "equipment" ? (
+            /* Модерация оборудования */
+            <div className="space-y-3">
+              {renterEq.length === 0 && <div className="glass-card rounded-sm p-12 text-center text-gray-500">Нет оборудования на модерации</div>}
+              {renterEq.map(eq => (
+                <div key={eq.id} className={`glass-card rounded-sm p-5 flex items-start gap-4 ${eq.status === "pending" ? "border border-amber-500/20" : ""}`}>
+                  {eq.image && (
+                    <div className="w-16 h-12 rounded-sm overflow-hidden border border-amber-500/10 shrink-0">
+                      <img src={eq.image} alt="" className="w-full h-full object-cover" />
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-3 flex-wrap">
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className={`text-xs border rounded-sm px-2 py-0.5 ${
+                            eq.status === "pending" ? "text-yellow-400 border-yellow-500/30" :
+                            eq.status === "approved" ? "text-green-400 border-green-500/30" :
+                            "text-red-400 border-red-500/30"
+                          }`}>{eq.status === "pending" ? "На модерации" : eq.status === "approved" ? "Опубликовано" : "Отклонено"}</span>
+                          <span className="text-xs border border-amber-500/20 text-amber-500/60 px-1.5 py-0.5 rounded-sm">{eq.category}</span>
+                        </div>
+                        <p className="text-white text-sm font-semibold">{eq.name}</p>
+                        <div className="flex items-center gap-3 text-xs text-gray-500 mt-1">
+                          <span className="font-oswald text-amber-500">{eq.price.toLocaleString()} ₽/{eq.unit}</span>
+                          <span>{eq.renter_company}</span>
+                          <span className="text-gray-700">{eq.renter_email}</span>
+                        </div>
+                        {eq.description && <p className="text-gray-600 text-xs mt-1 line-clamp-2">{eq.description}</p>}
+                      </div>
+                      {eq.status === "pending" && (
+                        <div className="flex gap-2 shrink-0">
+                          <button onClick={() => approveEq(eq.id)}
+                            className="flex items-center gap-1.5 border border-green-500/30 text-green-400 hover:bg-green-500/10 px-3 py-1.5 rounded-sm text-xs transition-colors">
+                            <Icon name="CheckCircle" size={12} /> Одобрить
+                          </button>
+                          <button onClick={() => rejectEq(eq.id)}
+                            className="flex items-center gap-1.5 border border-red-500/30 text-red-400 hover:bg-red-500/10 px-3 py-1.5 rounded-sm text-xs transition-colors">
+                            <Icon name="XCircle" size={12} /> Отклонить
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            /* Список прокатчиков */
+            <div className="space-y-3">
+              {renters.length === 0 && <div className="glass-card rounded-sm p-12 text-center text-gray-500">Прокатчиков пока нет</div>}
+              {renters.map(r => (
+                <div key={r.id} className="glass-card rounded-sm p-5">
+                  <div className="flex items-start justify-between gap-4 flex-wrap">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className={`text-xs border rounded-sm px-2 py-0.5 ${
+                          r.status === "active" ? "text-green-400 border-green-500/30" :
+                          r.status === "blocked" ? "text-red-400 border-red-500/30" :
+                          "text-yellow-400 border-yellow-500/30"
+                        }`}>{r.status === "active" ? "Активен" : r.status === "blocked" ? "Заблокирован" : "Ожидает"}</span>
+                      </div>
+                      <p className="text-white text-sm font-semibold">{r.company_name}</p>
+                      <div className="flex flex-wrap gap-3 text-xs text-gray-500 mt-1">
+                        <span>{r.contact_name}</span>
+                        <a href={`tel:${r.phone}`} className="text-amber-500 hover:underline">{r.phone}</a>
+                        <span className="text-gray-600">{r.email}</span>
+                        <span>{r.city}</span>
+                        {r.telegram && <a href={r.telegram} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline flex items-center gap-1"><Icon name="Send" size={10} />TG</a>}
+                      </div>
+                      <div className="text-xs text-gray-700 mt-1">
+                        Зарег. {new Date(r.created_at).toLocaleDateString("ru-RU")} ·{" "}
+                        {renterEq.filter(e => e.renter_id === r.id).length} позиций
+                      </div>
+                    </div>
+                    <div className="flex gap-2 shrink-0">
+                      {r.status !== "active" ? (
+                        <button onClick={() => toggleRenterStatus(r.id, "approve_renter")}
+                          className="flex items-center gap-1.5 border border-green-500/30 text-green-400 hover:bg-green-500/10 px-3 py-1.5 rounded-sm text-xs transition-colors">
+                          <Icon name="UserCheck" size={12} /> Активировать
+                        </button>
+                      ) : (
+                        <button onClick={() => { if (confirm("Заблокировать прокатчика?")) toggleRenterStatus(r.id, "block_renter"); }}
+                          className="flex items-center gap-1.5 border border-red-500/30 text-red-400 hover:bg-red-500/10 px-3 py-1.5 rounded-sm text-xs transition-colors">
+                          <Icon name="UserX" size={12} /> Заблокировать
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

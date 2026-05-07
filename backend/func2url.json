@@ -1,4 +1,7 @@
 {
+  "renter-orders": "https://functions.poehali.dev/ddd8baf8-9ffb-465b-ba28-9449d4147632",
+  "renter-auth": "https://functions.poehali.dev/dc68349a-774c-478f-9e6b-927d491d8852",
+  "renter-equipment": "https://functions.poehali.dev/171377d1-eb67-4926-9a05-41226418061f",
   "analyze-listing": "https://functions.poehali.dev/dc1a59bc-4359-4750-8df4-f19e8e85cb25",
   "manage-settings": "https://functions.poehali.dev/94183657-f771-4225-adc4-ca8bb6c3c9b9",
   "export-catalog": "https://functions.poehali.dev/27707d3c-b4d6-486a-b43b-0c6f72334ae3",

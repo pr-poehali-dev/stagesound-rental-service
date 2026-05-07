@@ -18,6 +18,9 @@ import AdminQuote from "./pages/AdminQuote";
 import QuoteApproval from "./pages/QuoteApproval";
 import EquipmentItem from "./pages/EquipmentItem";
 import NotFound from "./pages/NotFound";
+import RenterRegister from "./pages/RenterRegister";
+import RenterLogin from "./pages/RenterLogin";
+import RenterDashboard from "./pages/RenterDashboard";
 
 const queryClient = new QueryClient();
 
@@ -42,6 +45,11 @@ const App = () => (
             <Route path="/admin/catalog" element={<AdminCatalog />} />
             <Route path="/admin/quote" element={<AdminQuote />} />
             <Route path="/quote/:token" element={<QuoteApproval />} />
+
+            <Route path="/renter/register" element={<RenterRegister />} />
+            <Route path="/renter/login" element={<RenterLogin />} />
+            <Route path="/renter/dashboard" element={<RenterDashboard />} />
+
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

@@ -47,6 +47,29 @@ def handler(event: dict, context) -> dict:
                 "popular": r[8], "specs": r[9] or {}, "description": r[10],
                 "tags": list(r[11]) if r[11] else [], "image": r[12],
                 "usage": r[13], "sort_order": r[14],
+                "source": "own",
+            })
+
+        # Добавляем одобренное оборудование прокатчиков
+        cur.execute(f"""
+            SELECT e.id, e.name, e.category, e.subcategory, e.price, e.unit,
+                   e.description, e.specs, e.tags, e.image, r.company_name
+            FROM {schema}.renter_equipment e
+            JOIN {schema}.renters r ON r.id = e.renter_id
+            WHERE e.status = 'approved' AND e.is_active = true AND r.status = 'active'
+            ORDER BY e.created_at DESC
+        """)
+        renter_rows = cur.fetchall()
+        renter_id_offset = 100000
+        for r in renter_rows:
+            equipment.append({
+                "id": renter_id_offset + r[0], "name": r[1], "category": r[2], "subcategory": r[3],
+                "price": r[4], "unit": r[5], "rating": 5.0, "reviews": 0,
+                "popular": False, "specs": r[7] or {}, "description": r[6],
+                "tags": list(r[8]) if r[8] else [], "image": r[9],
+                "usage": None, "sort_order": 999,
+                "source": "renter", "renter_company": r[10],
+                "renter_equipment_id": r[0],
             })
 
         # Если таблица пустая — отдаём пустой каталог
