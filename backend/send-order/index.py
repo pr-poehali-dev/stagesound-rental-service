@@ -194,14 +194,15 @@ def handler(event: dict, context) -> dict:
     if item_names:
         placeholders = ",".join(["%s"] * len(item_names))
         cur.execute(
-            f"SELECT e.id, e.renter_id, e.name, r.email, r.company_name, r.contact_name "
+            f"SELECT e.id, e.renter_id, e.name, r.email, r.company_name, r.contact_name, r.telegram "
             f"FROM {schema}.renter_equipment e "
             f"JOIN {schema}.renters r ON r.id = e.renter_id "
             f"WHERE e.name IN ({placeholders}) AND e.status = 'approved' AND e.is_active = true AND r.status = 'active'",
             item_names
         )
         renter_rows = cur.fetchall()
-        for eq_id, renter_id, eq_name, renter_email, renter_company, renter_contact in renter_rows:
+        tg_token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+        for eq_id, renter_id, eq_name, renter_email, renter_company, renter_contact, renter_tg in renter_rows:
             matched = next((it for it in items if it.get("name") == eq_name), None)
             if not matched:
                 continue
@@ -230,6 +231,40 @@ def handler(event: dict, context) -> dict:
                 )
             except Exception:
                 pass
+            # Telegram прокатчику
+            if tg_token and renter_tg:
+                try:
+                    tg_chat = renter_tg.lstrip("@").strip()
+                    tg_lines = [
+                        f"📦 <b>Новый заказ на ваше оборудование!</b>",
+                        f"",
+                        f"🎛 <b>{eq_name}</b>",
+                        f"   {qty_val} шт × {days} дн. = <b>{subtotal_val:,} ₽</b>",
+                        f"",
+                        f"👤 Клиент: {name}",
+                        f"📞 <a href='tel:{phone}'>{phone}</a>",
+                    ]
+                    if date:
+                        tg_lines.append(f"📅 Дата: {date}")
+                    if place:
+                        tg_lines.append(f"📍 Место: {place}")
+                    tg_lines += [
+                        f"",
+                        f"🔖 Заявка <b>{order_number}</b>",
+                        f"",
+                        f"👉 Войдите в кабинет, чтобы принять или отклонить заказ.",
+                    ]
+                    tg_text = "\n".join(tg_lines)
+                    tg_url = f"https://api.telegram.org/bot{tg_token}/sendMessage"
+                    tg_data = urllib.parse.urlencode({
+                        "chat_id": tg_chat,
+                        "text": tg_text,
+                        "parse_mode": "HTML",
+                    }).encode()
+                    tg_req = urllib.request.Request(tg_url, data=tg_data, method="POST")
+                    urllib.request.urlopen(tg_req, timeout=5)
+                except Exception:
+                    pass
         conn.commit()
 
     cur.close()
