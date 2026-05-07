@@ -212,10 +212,19 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </div>
           <div className="border-t border-amber-500/10 mt-8 pt-6 flex flex-col md:flex-row items-center justify-between gap-4">
             <p className="text-gray-600 text-xs">© 2024 Global Renta. Все права защищены.</p>
-            <div className="flex gap-4 flex-wrap">
-              {["Аренда звука", "Аренда света", "Аренда микрофонов", "Аренда сцены", "Корпоратив", "Свадьба"].map((tag) => (
-                <span key={tag} className="text-gray-700 text-xs">{tag}</span>
-              ))}
+            <div className="flex items-center gap-4 flex-wrap justify-end">
+              <Link
+                to="/renter/register"
+                className="flex items-center gap-1.5 text-gray-600 hover:text-amber-500 text-xs transition-colors"
+              >
+                <Icon name="Building2" size={12} />
+                Стать партнёром-прокатчиком
+              </Link>
+              <div className="flex gap-4 flex-wrap">
+                {["Аренда звука", "Аренда света", "Аренда микрофонов", "Аренда сцены", "Корпоратив", "Свадьба"].map((tag) => (
+                  <span key={tag} className="text-gray-700 text-xs">{tag}</span>
+                ))}
+              </div>
             </div>
           </div>
         </div>
