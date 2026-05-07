@@ -11,7 +11,6 @@ export default function RenterLogin() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [pendingMsg, setPendingMsg] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -20,7 +19,6 @@ export default function RenterLogin() {
       return;
     }
     setError("");
-    setPendingMsg(false);
     setLoading(true);
     try {
       const res = await fetch(`${URLS["renter-auth"]}?action=login`, {
@@ -37,13 +35,7 @@ export default function RenterLogin() {
       localStorage.setItem("renter_token", token);
       localStorage.setItem("renter_status", status);
 
-      if (status === "pending") {
-        setPendingMsg(true);
-        setLoading(false);
-        return;
-      }
-
-      navigate("/renter");
+      navigate("/renter/dashboard");
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Ошибка запроса");
     } finally {
@@ -75,16 +67,6 @@ export default function RenterLogin() {
             </h1>
             <p className="text-gray-400 text-sm">Войдите в свой аккаунт прокатчика</p>
           </div>
-
-          {/* Pending notice */}
-          {pendingMsg && (
-            <div className="mb-5 flex items-start gap-3 bg-amber-500/10 border border-amber-500/30 rounded-sm px-4 py-3">
-              <Icon name="Clock" size={16} className="text-amber-500 shrink-0 mt-0.5" />
-              <p className="text-amber-400 text-sm leading-relaxed">
-                Ваш аккаунт ожидает одобрения администратором. Мы свяжемся с вами в ближайшее время.
-              </p>
-            </div>
-          )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>

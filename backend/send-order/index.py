@@ -8,6 +8,74 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
 
+def send_renter_notification_email(to_email: str, renter_name: str, order_number: str,
+                                   equipment_name: str, qty: int, days: int, subtotal: int,
+                                   client_name: str, client_phone: str, event_date: str, place: str):
+    """Письмо прокатчику о новом заказе на его оборудование."""
+    smtp_user = os.environ.get("SMTP_USER", "")
+    smtp_password = os.environ.get("SMTP_PASSWORD", "")
+    if not smtp_user or not smtp_password:
+        return
+
+    date_row = f"<p style='color:#888;font-size:13px;margin:4px 0;'>📅 Дата мероприятия: <span style='color:#fff;'>{event_date}</span></p>" if event_date else ""
+    place_row = f"<p style='color:#888;font-size:13px;margin:4px 0;'>📍 Место: <span style='color:#fff;'>{place}</span></p>" if place else ""
+
+    html = f"""<!DOCTYPE html>
+<html>
+<body style="margin:0;padding:0;background:#0a0a0a;font-family:Arial,sans-serif;">
+  <div style="max-width:560px;margin:40px auto;background:#111;border:1px solid #222;border-radius:6px;overflow:hidden;">
+    <div style="background:#161616;padding:24px 32px;border-bottom:2px solid #f59e0b;">
+      <p style="color:#f59e0b;font-size:11px;letter-spacing:2px;text-transform:uppercase;margin:0 0 4px;">Global Renta — Партнёрский кабинет</p>
+      <h1 style="color:#fff;font-size:20px;margin:0;font-weight:bold;">Новый заказ на ваше оборудование</h1>
+    </div>
+    <div style="padding:28px 32px;">
+      <p style="color:#ccc;font-size:15px;margin:0 0 16px;">Здравствуйте, <strong style="color:#fff;">{renter_name}</strong>!</p>
+      <p style="color:#999;font-size:13px;margin:0 0 20px;">Поступил заказ на ваше оборудование. Войдите в личный кабинет, чтобы подтвердить или отклонить его.</p>
+
+      <div style="background:#1a1a1a;border:1px solid rgba(245,158,11,0.2);border-radius:4px;padding:16px 20px;margin-bottom:20px;">
+        <p style="color:#888;font-size:11px;text-transform:uppercase;letter-spacing:1px;margin:0 0 4px;">Заявка</p>
+        <p style="color:#f59e0b;font-size:24px;font-weight:bold;margin:0;">{order_number}</p>
+      </div>
+
+      <p style="color:#888;font-size:12px;text-transform:uppercase;letter-spacing:1px;margin:0 0 8px;">Ваше оборудование в заказе</p>
+      <div style="background:#1a1a1a;border-radius:4px;padding:14px 18px;margin-bottom:20px;">
+        <p style="color:#fff;font-size:14px;font-weight:bold;margin:0 0 4px;">{equipment_name}</p>
+        <p style="color:#888;font-size:13px;margin:0;">{qty} шт × {days} дн. = <span style="color:#f59e0b;font-weight:bold;">{subtotal:,} ₽</span></p>
+      </div>
+
+      <p style="color:#888;font-size:12px;text-transform:uppercase;letter-spacing:1px;margin:0 0 8px;">Данные клиента</p>
+      <p style="color:#ccc;font-size:13px;margin:4px 0;">👤 {client_name}</p>
+      <p style="color:#f59e0b;font-size:13px;margin:4px 0;">📞 <a href="tel:{client_phone}" style="color:#f59e0b;">{client_phone}</a></p>
+      {date_row}{place_row}
+
+      <div style="margin-top:24px;text-align:center;">
+        <a href="https://global.promo/renter/dashboard"
+           style="display:inline-block;background:#f59e0b;color:#000;font-weight:bold;font-size:14px;padding:12px 28px;border-radius:4px;text-decoration:none;">
+          Открыть кабинет
+        </a>
+      </div>
+
+      <p style="color:#555;font-size:11px;margin:24px 0 0;text-align:center;">
+        Вопросы? Пишите: <a href="mailto:info@global.promo" style="color:#f59e0b;">info@global.promo</a>
+      </p>
+    </div>
+  </div>
+</body>
+</html>"""
+
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = f"Новый заказ {order_number} на ваше оборудование — Global Renta"
+    msg["From"] = f"Global Renta <{smtp_user}>"
+    msg["To"] = to_email
+    msg.attach(MIMEText(html, "html", "utf-8"))
+
+    with smtplib.SMTP("mail.hosting.reg.ru", 587, timeout=15) as server:
+        server.ehlo()
+        server.starttls()
+        server.login(smtp_user, smtp_password)
+        server.sendmail(smtp_user, to_email, msg.as_string())
+
+
 def send_confirmation_email(to_email: str, order_number: str, name: str, total: int, items: list, days: int, date: str, place: str, extras: list, delivery: str):
     smtp_user = os.environ["SMTP_USER"]
     smtp_password = os.environ["SMTP_PASSWORD"]
@@ -118,10 +186,54 @@ def handler(event: dict, context) -> dict:
     )
     order_id = cur.fetchone()[0]
     conn.commit()
-    cur.close()
-    conn.close()
 
     order_number = f"SS-{order_id:04d}"
+
+    # Ищем оборудование зарегистрированных прокатчиков в составе заказа
+    item_names = [it.get("name", "") for it in items if it.get("name")]
+    if item_names:
+        placeholders = ",".join(["%s"] * len(item_names))
+        cur.execute(
+            f"SELECT e.id, e.renter_id, e.name, r.email, r.company_name, r.contact_name "
+            f"FROM {schema}.renter_equipment e "
+            f"JOIN {schema}.renters r ON r.id = e.renter_id "
+            f"WHERE e.name IN ({placeholders}) AND e.status = 'approved' AND e.is_active = true AND r.status = 'active'",
+            item_names
+        )
+        renter_rows = cur.fetchall()
+        for eq_id, renter_id, eq_name, renter_email, renter_company, renter_contact in renter_rows:
+            matched = next((it for it in items if it.get("name") == eq_name), None)
+            if not matched:
+                continue
+            qty_val = int(matched.get("qty", 1))
+            subtotal_val = int(matched.get("subtotal", 0))
+            cur.execute(
+                f"INSERT INTO {schema}.renter_order_items "
+                f"(order_id, renter_id, renter_equipment_id, equipment_name, qty, days, subtotal) "
+                f"VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                (order_id, renter_id, eq_id, eq_name, qty_val, days, subtotal_val)
+            )
+            # Email прокатчику
+            try:
+                send_renter_notification_email(
+                    to_email=renter_email,
+                    renter_name=renter_contact or renter_company,
+                    order_number=order_number,
+                    equipment_name=eq_name,
+                    qty=qty_val,
+                    days=days,
+                    subtotal=subtotal_val,
+                    client_name=name,
+                    client_phone=phone,
+                    event_date=date,
+                    place=place,
+                )
+            except Exception:
+                pass
+        conn.commit()
+
+    cur.close()
+    conn.close()
 
     # Telegram
     lines = [f"🎪 <b>Заявка #{order_number}</b>", ""]
