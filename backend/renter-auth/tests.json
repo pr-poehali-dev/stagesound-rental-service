@@ -1,0 +1,35 @@
+{
+  "tests": [
+    {
+      "name": "CORS preflight",
+      "method": "OPTIONS",
+      "path": "/",
+      "expectedStatus": 200
+    },
+    {
+      "name": "Регистрация нового прокатчика",
+      "method": "POST",
+      "path": "/?action=register",
+      "body": {
+        "email": "test_renter@example.com",
+        "password": "test123",
+        "company_name": "ТестПрокат",
+        "contact_name": "Иван Иванов",
+        "phone": "+79001234567",
+        "city": "Санкт-Петербург"
+      },
+      "expectedStatus": 201,
+      "expectedBody": {"ok": true},
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Вход с неверным паролем",
+      "method": "POST",
+      "path": "/?action=login",
+      "body": {"email": "test_renter@example.com", "password": "wrong"},
+      "expectedStatus": 401,
+      "expectedBody": {"error": "string"},
+      "bodyMatcher": "partial"
+    }
+  ]
+}
