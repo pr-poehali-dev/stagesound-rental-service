@@ -4,51 +4,71 @@ import Icon from "@/components/ui/icon";
 import func2url from "../../backend/func2url.json";
 
 const URLS = func2url as Record<string, string>;
+const EQ_URL = URLS["renter-equipment"];
+const AUTH_URL = URLS["renter-auth"];
+const ORDER_URL = URLS["renter-orders"];
+const IMG_URL = URLS["upload-image"];
 
+// ── Типы ────────────────────────────────────────────────────────────────────
 type Renter = {
   id: number; email: string; company_name: string; contact_name: string;
   phone: string; city: string; telegram?: string; description?: string; status: string;
 };
-
 type RenterEq = {
   id: number; name: string; category: string; subcategory?: string;
   price: number; unit: string; description: string; specs: Record<string, string>;
   tags: string[]; image?: string; status: string; is_active: boolean; created_at: string;
 };
-
+type RenterCat = { id: number; name: string; status: string; created_at?: string; mine: boolean };
+type RenterSub = { id: number; name: string; category: string; status: string; created_at?: string; mine: boolean };
 type RenterOrder = {
   id: number; order_id: number; equipment_name: string; qty: number;
   days: number; subtotal: number; status: string; created_at: string;
-  client_name?: string; client_phone?: string; event_date?: string;
+  client_name?: string; client_phone?: string; event_date?: string; place?: string;
 };
 
-const CATEGORIES = ["Звук", "Свет", "Видео", "Сцена", "Конференц", "Генераторы"];
+// ── Helpers ──────────────────────────────────────────────────────────────────
+const specsToStr = (specs: Record<string, string>) =>
+  Object.entries(specs).map(([k, v]) => `${k}: ${v}`).join("\n");
 
-const statusEqBadge = (status: string) => {
-  const map: Record<string, { label: string; cls: string }> = {
-    pending:  { label: "На модерации", cls: "text-yellow-400 border-yellow-500/30" },
-    approved: { label: "Опубликовано", cls: "text-green-400 border-green-500/30" },
-    rejected: { label: "Отклонено",    cls: "text-red-400 border-red-500/30" },
+const parseSpecs = (str: string): Record<string, string> => {
+  const res: Record<string, string> = {};
+  str.split("\n").forEach(line => {
+    const idx = line.indexOf(":");
+    if (idx > 0) res[line.slice(0, idx).trim()] = line.slice(idx + 1).trim();
+  });
+  return res;
+};
+
+const statusBadge = (status: string, type: "eq" | "cat" | "order" = "eq") => {
+  const maps = {
+    eq: {
+      pending:  { label: "На модерации", cls: "text-yellow-400 border-yellow-500/30" },
+      approved: { label: "Опубликовано", cls: "text-green-400 border-green-500/30" },
+      rejected: { label: "Отклонено",    cls: "text-red-400 border-red-500/30" },
+    },
+    cat: {
+      pending:  { label: "На согласовании", cls: "text-yellow-400 border-yellow-500/30" },
+      approved: { label: "Принят",          cls: "text-green-400 border-green-500/30" },
+      rejected: { label: "Отклонён",        cls: "text-red-400 border-red-500/30" },
+    },
+    order: {
+      new:      { label: "Новый",   cls: "text-amber-400 border-amber-500/30" },
+      accepted: { label: "Принят",  cls: "text-green-400 border-green-500/30" },
+      declined: { label: "Отказан", cls: "text-red-400 border-red-500/30" },
+    },
   };
-  const s = map[status] || { label: status, cls: "text-gray-400 border-gray-600" };
-  return <span className={`text-xs border rounded-sm px-2 py-0.5 ${s.cls}`}>{s.label}</span>;
+  const m = (maps[type] as Record<string, { label: string; cls: string }>)[status]
+    || { label: status, cls: "text-gray-400 border-gray-600" };
+  return <span className={`text-xs border rounded-sm px-2 py-0.5 ${m.cls}`}>{m.label}</span>;
 };
 
-const statusOrderBadge = (status: string) => {
-  const map: Record<string, { label: string; cls: string }> = {
-    new:      { label: "Новый",      cls: "text-amber-400 border-amber-500/30" },
-    accepted: { label: "Принят",     cls: "text-green-400 border-green-500/30" },
-    declined: { label: "Отказан",    cls: "text-red-400 border-red-500/30" },
-  };
-  const s = map[status] || { label: status, cls: "text-gray-400 border-gray-600" };
-  return <span className={`text-xs border rounded-sm px-2 py-0.5 ${s.cls}`}>{s.label}</span>;
+const EMPTY_EQ = {
+  name: "", category: "", subcategory: "", price: 0, unit: "день",
+  description: "", tags: "", image: "", specsStr: "",
 };
 
-const emptyEq = {
-  name: "", category: "Звук", subcategory: "", price: 0, unit: "день",
-  description: "", tags: "", image: "",
-};
-
+// ── Компонент ────────────────────────────────────────────────────────────────
 export default function RenterDashboard() {
   const navigate = useNavigate();
   const token = localStorage.getItem("renter_token") || "";
@@ -57,74 +77,113 @@ export default function RenterDashboard() {
   const [renter, setRenter] = useState<Renter | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
 
-  const [tab, setTab] = useState<"equipment" | "orders">("equipment");
+  const [tab, setTab] = useState<"equipment" | "categories" | "subcategories" | "orders">("equipment");
+
+  // Оборудование
   const [equipment, setEquipment] = useState<RenterEq[]>([]);
   const [eqLoading, setEqLoading] = useState(false);
+  const [editEq, setEditEq] = useState<RenterEq | null>(null);
+  const [showNewEq, setShowNewEq] = useState(false);
+  const [newEq, setNewEq] = useState({ ...EMPTY_EQ });
+  const [uploading, setUploading] = useState(false);
+  const [eqError, setEqError] = useState("");
+  const [eqSuccess, setEqSuccess] = useState("");
+  const [eqSaving, setEqSaving] = useState(false);
+  const [editSpecsStr, setEditSpecsStr] = useState("");
+  const [newSpecsStr, setNewSpecsStr] = useState("");
+
+  // Категории
+  const [allCats, setAllCats] = useState<{ id: number; name: string }[]>([]);
+  const [mineCats, setMineCats] = useState<RenterCat[]>([]);
+  const [catsLoading, setCatsLoading] = useState(false);
+  const [newCatName, setNewCatName] = useState("");
+  const [catSaving, setCatSaving] = useState(false);
+  const [catError, setCatError] = useState("");
+  const [catSuccess, setCatSuccess] = useState("");
+
+  // Подкатегории
+  const [allSubs, setAllSubs] = useState<RenterSub[]>([]);
+  const [mineSubs, setMineSubs] = useState<RenterSub[]>([]);
+  const [subsLoading, setSubsLoading] = useState(false);
+  const [newSubName, setNewSubName] = useState("");
+  const [newSubCat, setNewSubCat] = useState("");
+  const [subSaving, setSubSaving] = useState(false);
+  const [subError, setSubError] = useState("");
+  const [subSuccess, setSubSuccess] = useState("");
+
+  // Заказы
   const [orders, setOrders] = useState<RenterOrder[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
 
-  const [showForm, setShowForm] = useState(false);
-  const [editEq, setEditEq] = useState<(RenterEq & { tags: string }) | null>(null);
-  const [form, setForm] = useState(emptyEq);
-  const [formLoading, setFormLoading] = useState(false);
-  const [formError, setFormError] = useState("");
-  const [formSuccess, setFormSuccess] = useState("");
-  const [uploading, setUploading] = useState(false);
+  const hdrs = { "X-Renter-Token": token };
 
-  // ── Авторизация ────────────────────────────────────────────────
+  // ── Авторизация ──────────────────────────────────────────────────
   useEffect(() => {
     if (!token) { navigate("/renter/login"); return; }
-    fetch(`${URLS["renter-auth"]}`, { headers: { "X-Renter-Token": token } })
+    fetch(AUTH_URL, { headers: hdrs })
       .then(r => r.json())
-      .then(data => {
-        if (data.error) { localStorage.removeItem("renter_token"); navigate("/renter/login"); return; }
-        setRenter(data);
+      .then(d => {
+        if (d.error) { localStorage.removeItem("renter_token"); navigate("/renter/login"); return; }
+        setRenter(d);
       })
       .finally(() => setAuthLoading(false));
   }, []);
 
-  // ── Загрузка оборудования ───────────────────────────────────────
+  // ── Загрузки по вкладке ──────────────────────────────────────────
   const loadEquipment = () => {
     setEqLoading(true);
-    fetch(URLS["renter-equipment"], { headers: { "X-Renter-Token": token } })
+    fetch(EQ_URL, { headers: hdrs })
       .then(r => r.json())
-      .then(data => setEquipment(Array.isArray(data) ? data : []))
+      .then(d => setEquipment(Array.isArray(d) ? d : []))
       .finally(() => setEqLoading(false));
   };
 
-  // ── Загрузка заказов ────────────────────────────────────────────
+  const loadCategories = () => {
+    setCatsLoading(true);
+    fetch(`${EQ_URL}?resource=categories`, { headers: hdrs })
+      .then(r => r.json())
+      .then(d => { setMineCats(d.mine || []); setAllCats(d.all || []); })
+      .finally(() => setCatsLoading(false));
+  };
+
+  const loadSubcategories = () => {
+    setSubsLoading(true);
+    fetch(`${EQ_URL}?resource=subcategories`, { headers: hdrs })
+      .then(r => r.json())
+      .then(d => { setMineSubs(d.mine || []); setAllSubs(d.all || []); })
+      .finally(() => setSubsLoading(false));
+  };
+
   const loadOrders = () => {
     setOrdersLoading(true);
-    fetch(URLS["renter-orders"], { headers: { "X-Renter-Token": token } })
+    fetch(ORDER_URL, { headers: hdrs })
       .then(r => r.json())
-      .then(data => setOrders(Array.isArray(data) ? data : []))
+      .then(d => setOrders(Array.isArray(d) ? d : []))
       .finally(() => setOrdersLoading(false));
   };
 
   useEffect(() => {
     if (!renter) return;
-    if (tab === "equipment") loadEquipment();
-    if (tab === "orders") loadOrders();
+    if (tab === "equipment")    loadEquipment();
+    if (tab === "categories")   loadCategories();
+    if (tab === "subcategories") loadSubcategories();
+    if (tab === "orders")       loadOrders();
   }, [tab, renter]);
 
-  // ── Выход ─────────────────────────────────────────────────────
+  // ── Выход ────────────────────────────────────────────────────────
   const logout = () => {
-    fetch(`${URLS["renter-auth"]}?action=logout`, {
-      method: "POST", headers: { "X-Renter-Token": token }
-    }).finally(() => {
-      localStorage.removeItem("renter_token");
-      navigate("/renter/login");
-    });
+    fetch(`${AUTH_URL}?action=logout`, { method: "POST", headers: hdrs })
+      .finally(() => { localStorage.removeItem("renter_token"); navigate("/renter/login"); });
   };
 
-  // ── Загрузка фото ──────────────────────────────────────────────
+  // ── Загрузка фото ────────────────────────────────────────────────
   const uploadImage = async (file: File): Promise<string | null> => {
     setUploading(true);
     return new Promise(resolve => {
       const reader = new FileReader();
       reader.onload = async () => {
         try {
-          const res = await fetch(`${URLS["upload-image"]}?pwd=noadmin`, {
+          const res = await fetch(IMG_URL, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ file: reader.result, name: file.name }),
@@ -138,56 +197,240 @@ export default function RenterDashboard() {
     });
   };
 
-  // ── Сохранить оборудование ─────────────────────────────────────
-  const saveEquipment = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setFormError(""); setFormSuccess("");
-    if (!form.name.trim() || !form.category) { setFormError("Укажите название и категорию"); return; }
-    setFormLoading(true);
+  // ── Сохранить оборудование ───────────────────────────────────────
+  const saveEq = async (isEdit: boolean) => {
+    setEqError(""); setEqSuccess(""); setEqSaving(true);
     try {
+      const base = isEdit ? editEq! : newEq;
+      const specsStr = isEdit ? editSpecsStr : newSpecsStr;
       const payload = {
-        ...form, price: Number(form.price),
-        tags: form.tags.split(",").map(t => t.trim()).filter(Boolean),
-        ...(editEq ? { id: editEq.id } : {}),
+        ...(isEdit ? { id: editEq!.id } : {}),
+        name: (base as typeof newEq).name ?? (base as RenterEq).name,
+        category: (base as typeof newEq).category ?? (base as RenterEq).category,
+        subcategory: (base as typeof newEq).subcategory ?? (base as RenterEq).subcategory,
+        price: Number((base as typeof newEq).price ?? (base as RenterEq).price),
+        unit: (base as typeof newEq).unit ?? (base as RenterEq).unit,
+        description: (base as typeof newEq).description ?? (base as RenterEq).description,
+        image: (base as typeof newEq).image ?? (base as RenterEq).image,
+        tags: typeof (base as typeof newEq).tags === "string"
+          ? (base as typeof newEq).tags.split(",").map((t: string) => t.trim()).filter(Boolean)
+          : (base as RenterEq).tags,
+        specs: parseSpecs(specsStr),
       };
-      const res = await fetch(URLS["renter-equipment"], {
-        method: editEq ? "PUT" : "POST",
-        headers: { "Content-Type": "application/json", "X-Renter-Token": token },
+      const res = await fetch(EQ_URL, {
+        method: isEdit ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json", ...hdrs },
         body: JSON.stringify(payload),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Ошибка");
-      setFormSuccess(editEq ? "Изменения отправлены на модерацию" : "Оборудование отправлено на модерацию");
-      setShowForm(false); setEditEq(null); setForm(emptyEq);
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || "Ошибка");
+      setEqSuccess(d.message || "Отправлено на модерацию");
+      setEditEq(null); setShowNewEq(false);
+      setNewEq({ ...EMPTY_EQ }); setNewSpecsStr("");
       loadEquipment();
-    } catch (err: unknown) {
-      setFormError(err instanceof Error ? err.message : "Ошибка");
-    } finally { setFormLoading(false); }
+    } catch (e: unknown) {
+      setEqError(e instanceof Error ? e.message : "Ошибка");
+    } finally { setEqSaving(false); }
   };
 
-  // ── Принять / отклонить заказ ──────────────────────────────────
-  const respondOrder = async (orderId: number, status: "accepted" | "declined") => {
-    await fetch(`${URLS["renter-orders"]}?id=${orderId}`, {
+  const openEditEq = (eq: RenterEq) => {
+    setEditEq(eq);
+    setEditSpecsStr(specsToStr(eq.specs || {}));
+    setEqError(""); setEqSuccess("");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  // ── Категории CRUD ───────────────────────────────────────────────
+  const createCat = async () => {
+    setCatError(""); setCatSuccess(""); setCatSaving(true);
+    try {
+      const res = await fetch(`${EQ_URL}?resource=categories`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...hdrs },
+        body: JSON.stringify({ name: newCatName.trim() }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || "Ошибка");
+      setCatSuccess(d.message || "Раздел отправлен на согласование");
+      setNewCatName("");
+      loadCategories();
+    } catch (e: unknown) {
+      setCatError(e instanceof Error ? e.message : "Ошибка");
+    } finally { setCatSaving(false); }
+  };
+
+  const deleteCat = async (id: number) => {
+    if (!confirm("Удалить предложение раздела?")) return;
+    await fetch(`${EQ_URL}?resource=categories&id=${id}`, { method: "DELETE", headers: hdrs });
+    loadCategories();
+  };
+
+  // ── Подкатегории CRUD ────────────────────────────────────────────
+  const createSub = async () => {
+    setSubError(""); setSubSuccess(""); setSubSaving(true);
+    try {
+      const res = await fetch(`${EQ_URL}?resource=subcategories`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...hdrs },
+        body: JSON.stringify({ name: newSubName.trim(), category: newSubCat }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || "Ошибка");
+      setSubSuccess(d.message || "Подраздел отправлен на согласование");
+      setNewSubName(""); setNewSubCat("");
+      loadSubcategories();
+    } catch (e: unknown) {
+      setSubError(e instanceof Error ? e.message : "Ошибка");
+    } finally { setSubSaving(false); }
+  };
+
+  const deleteSub = async (id: number) => {
+    if (!confirm("Удалить предложение подраздела?")) return;
+    await fetch(`${EQ_URL}?resource=subcategories&id=${id}`, { method: "DELETE", headers: hdrs });
+    loadSubcategories();
+  };
+
+  // ── Заказы ───────────────────────────────────────────────────────
+  const respondOrder = async (id: number, status: "accepted" | "declined") => {
+    await fetch(`${ORDER_URL}?id=${id}`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json", "X-Renter-Token": token },
+      headers: { "Content-Type": "application/json", ...hdrs },
       body: JSON.stringify({ status }),
     });
     loadOrders();
   };
 
-  const openEdit = (eq: RenterEq) => {
-    setEditEq({ ...eq, tags: eq.tags?.join(", ") || "" });
-    setForm({
-      name: eq.name, category: eq.category, subcategory: eq.subcategory || "",
-      price: eq.price, unit: eq.unit, description: eq.description,
-      tags: eq.tags?.join(", ") || "", image: eq.image || "",
-    });
-    setShowForm(true); setFormError(""); setFormSuccess("");
-    window.scrollTo({ top: 0, behavior: "smooth" });
+  const newOrdersCount = orders.filter(o => o.status === "new").length;
+  const pendingCatsCount = mineCats.filter(c => c.status === "pending").length;
+  const pendingSubsCount = mineSubs.filter(s => s.status === "pending").length;
+
+  // ── Список категорий для select (все одобренные + свои одобренные) ──
+  const availableCategories = allCats.map(c => c.name);
+
+  // ── Форма оборудования (переиспользуется для новой и редактирования) ──
+  const EqForm = ({ isEdit }: { isEdit: boolean }) => {
+    const base = isEdit ? editEq! : newEq;
+    const setF = isEdit
+      ? (upd: Partial<typeof newEq>) => setEditEq(e => e ? ({ ...e, ...upd } as RenterEq) : e)
+      : (upd: Partial<typeof newEq>) => setNewEq(e => ({ ...e, ...upd }));
+    const specsStr = isEdit ? editSpecsStr : newSpecsStr;
+    const setSpecsStr = isEdit ? setEditSpecsStr : setNewSpecsStr;
+    const name = (base as typeof newEq).name ?? (base as RenterEq).name ?? "";
+    const category = (base as typeof newEq).category ?? (base as RenterEq).category ?? "";
+    const subcategory = (base as typeof newEq).subcategory ?? (base as RenterEq).subcategory ?? "";
+    const price = (base as typeof newEq).price ?? (base as RenterEq).price ?? 0;
+    const unit = (base as typeof newEq).unit ?? (base as RenterEq).unit ?? "день";
+    const description = (base as typeof newEq).description ?? (base as RenterEq).description ?? "";
+    const tagsVal = typeof (base as typeof newEq).tags === "string"
+      ? (base as typeof newEq).tags
+      : ((base as RenterEq).tags || []).join(", ");
+    const image = (base as typeof newEq).image ?? (base as RenterEq).image ?? "";
+
+    return (
+      <div className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1.5">Название *</label>
+            <input value={name} onChange={e => setF({ name: e.target.value })}
+              placeholder="Напр.: Line Array JBL VTX A12"
+              className="w-full bg-transparent border border-amber-500/20 rounded-sm px-3 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500/60" />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1.5">Раздел *</label>
+            <select value={category} onChange={e => setF({ category: e.target.value })}
+              className="w-full bg-[#111] border border-amber-500/20 rounded-sm px-3 py-2.5 text-sm text-gray-300 focus:outline-none focus:border-amber-500/60">
+              <option value="">— выберите —</option>
+              {availableCategories.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1.5">Подраздел</label>
+            <select value={subcategory} onChange={e => setF({ subcategory: e.target.value })}
+              className="w-full bg-[#111] border border-amber-500/20 rounded-sm px-3 py-2.5 text-sm text-gray-300 focus:outline-none focus:border-amber-500/60">
+              <option value="">— без подраздела —</option>
+              {allSubs.filter(s => s.category === category).map(s => (
+                <option key={s.id} value={s.name}>{s.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1.5">Цена</label>
+            <div className="flex gap-2">
+              <input type="number" value={price} onChange={e => setF({ price: Number(e.target.value) })}
+                className="flex-1 bg-transparent border border-amber-500/20 rounded-sm px-3 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500/60" />
+              <select value={unit} onChange={e => setF({ unit: e.target.value })}
+                className="bg-[#111] border border-amber-500/20 rounded-sm px-2 py-2.5 text-sm text-gray-300 focus:outline-none">
+                <option>день</option><option>час</option><option>шт</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1.5">Описание</label>
+          <textarea value={description} onChange={e => setF({ description: e.target.value })}
+            rows={3} placeholder="Технические характеристики, особенности, комплектация..."
+            className="w-full bg-transparent border border-amber-500/20 rounded-sm px-3 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500/60 resize-none" />
+        </div>
+
+        <div>
+          <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1.5">
+            Характеристики <span className="text-gray-700 normal-case">(каждая с новой строки: Ключ: Значение)</span>
+          </label>
+          <textarea value={specsStr} onChange={e => setSpecsStr(e.target.value)}
+            rows={5}
+            placeholder={"Мощность: 2000 Вт\nЧастотный диапазон: 40 Гц — 20 кГц\nИмпеданс: 8 Ом\nВес: 28 кг"}
+            className="w-full bg-transparent border border-amber-500/20 rounded-sm px-3 py-2.5 text-sm text-white font-mono focus:outline-none focus:border-amber-500/60 resize-none" />
+          {specsStr && (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {Object.entries(parseSpecs(specsStr)).map(([k, v]) => (
+                <span key={k} className="text-xs bg-amber-500/10 border border-amber-500/20 text-amber-400 px-2 py-0.5 rounded-sm">
+                  {k}: {v}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div>
+          <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1.5">Теги (через запятую)</label>
+          <input value={tagsVal} onChange={e => setF({ tags: e.target.value })}
+            placeholder="line array, jbl, звук"
+            className="w-full bg-transparent border border-amber-500/20 rounded-sm px-3 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500/60" />
+        </div>
+
+        <div>
+          <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1.5">Фото</label>
+          <div className="flex items-center gap-3">
+            {image && (
+              <div className="w-20 h-14 rounded-sm overflow-hidden border border-amber-500/20 shrink-0">
+                <img src={image} alt="" className="w-full h-full object-cover" />
+              </div>
+            )}
+            <input ref={fileRef} type="file" accept="image/*" className="hidden"
+              onChange={async e => {
+                const file = e.target.files?.[0];
+                if (file) { const url = await uploadImage(file); if (url) setF({ image: url }); }
+              }} />
+            <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading}
+              className="flex items-center gap-2 border border-amber-500/20 text-gray-400 hover:text-white px-3 py-2 rounded-sm text-xs transition-colors disabled:opacity-40">
+              {uploading ? <Icon name="Loader2" size={12} className="animate-spin" /> : <Icon name="Upload" size={12} />}
+              {uploading ? "Загружаю..." : image ? "Заменить" : "Загрузить"}
+            </button>
+            {image && (
+              <button type="button" onClick={() => setF({ image: "" })}
+                className="text-gray-600 hover:text-red-400 text-xs transition-colors">Удалить</button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
   };
 
-  const newOrders = orders.filter(o => o.status === "new").length;
-
+  // ══════════════════════════════════════════════════════════════════
   if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: "var(--surface)" }}>
@@ -198,147 +441,58 @@ export default function RenterDashboard() {
 
   return (
     <div className="min-h-screen py-8 px-4" style={{ background: "var(--surface)" }}>
-      <div className="max-w-5xl mx-auto">
+      <div className="max-w-6xl mx-auto">
 
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8 flex-wrap gap-4">
+        {/* ── Шапка ── */}
+        <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
           <div>
-            <span
-              className="font-oswald text-xl font-bold tracking-widest text-white uppercase cursor-pointer"
-              onClick={() => navigate("/")}
-            >
-              Global<span className="neon-text">Renta</span>
-            </span>
-            <div className="text-gray-500 text-sm mt-1 flex items-center gap-2">
-              <Icon name="Building2" size={13} className="text-amber-500" />
+            <p className="text-amber-500 text-xs uppercase tracking-widest mb-1">Партнёрский кабинет</p>
+            <h1 className="font-oswald text-4xl font-bold text-white uppercase">
               {renter?.company_name}
-              <span className={`text-xs border rounded-sm px-1.5 py-0.5 ml-1 ${
-                renter?.status === "active" ? "text-green-400 border-green-500/30" : "text-yellow-400 border-yellow-500/30"
+            </h1>
+            <div className="flex items-center gap-2 mt-1">
+              <span className={`text-xs border rounded-sm px-2 py-0.5 ${
+                renter?.status === "active"
+                  ? "text-green-400 border-green-500/30"
+                  : "text-yellow-400 border-yellow-500/30"
               }`}>
                 {renter?.status === "active" ? "Активен" : "Ожидает активации"}
               </span>
             </div>
           </div>
-          <button
-            onClick={logout}
-            className="flex items-center gap-2 border border-amber-500/20 text-gray-400 hover:text-white px-4 py-2 rounded-sm text-sm transition-colors"
-          >
-            <Icon name="LogOut" size={14} /> Выйти
-          </button>
+          <div className="flex items-center gap-2">
+            <span
+              className="font-oswald text-lg font-bold tracking-widest text-white uppercase cursor-pointer"
+              onClick={() => navigate("/")}
+            >
+              Global<span className="neon-text">Renta</span>
+            </span>
+            <button onClick={logout}
+              className="flex items-center gap-2 border border-amber-500/20 text-gray-400 hover:text-white px-4 py-2 rounded-sm text-sm transition-colors ml-4">
+              <Icon name="LogOut" size={14} /> Выйти
+            </button>
+          </div>
         </div>
 
-        {/* Форма добавления/редактирования */}
-        {showForm && (
-          <div className="glass-card neon-border rounded-sm p-6 mb-8">
-            <div className="flex items-center justify-between mb-5">
-              <h2 className="font-oswald text-xl font-bold text-white uppercase">
-                {editEq ? "Редактировать оборудование" : "Добавить оборудование"}
-              </h2>
-              <button onClick={() => { setShowForm(false); setEditEq(null); setForm(emptyEq); }}
-                className="text-gray-500 hover:text-white transition-colors">
-                <Icon name="X" size={20} />
-              </button>
-            </div>
-            <form onSubmit={saveEquipment} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="text-xs text-gray-500 uppercase tracking-wider block mb-1">Название *</label>
-                  <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                    placeholder="Напр.: Line Array JBL VTX A12"
-                    className="w-full bg-transparent border border-amber-500/20 rounded-sm px-3 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500/50" />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-500 uppercase tracking-wider block mb-1">Категория *</label>
-                  <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
-                    className="w-full bg-[#111] border border-amber-500/20 rounded-sm px-3 py-2.5 text-sm text-gray-300 focus:outline-none focus:border-amber-500/50">
-                    {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-xs text-gray-500 uppercase tracking-wider block mb-1">Подкатегория</label>
-                  <input value={form.subcategory} onChange={e => setForm(f => ({ ...f, subcategory: e.target.value }))}
-                    placeholder="Напр.: Комплекты звука"
-                    className="w-full bg-transparent border border-amber-500/20 rounded-sm px-3 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500/50" />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-500 uppercase tracking-wider block mb-1">Цена (₽ / {form.unit})</label>
-                  <div className="flex gap-2">
-                    <input type="number" value={form.price} onChange={e => setForm(f => ({ ...f, price: Number(e.target.value) }))}
-                      className="flex-1 bg-transparent border border-amber-500/20 rounded-sm px-3 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500/50" />
-                    <select value={form.unit} onChange={e => setForm(f => ({ ...f, unit: e.target.value }))}
-                      className="bg-[#111] border border-amber-500/20 rounded-sm px-2 py-2.5 text-sm text-gray-300 focus:outline-none">
-                      <option value="день">день</option>
-                      <option value="час">час</option>
-                      <option value="шт">шт</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-              <div>
-                <label className="text-xs text-gray-500 uppercase tracking-wider block mb-1">Описание</label>
-                <textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                  rows={3} placeholder="Технические характеристики, особенности, комплектация..."
-                  className="w-full bg-transparent border border-amber-500/20 rounded-sm px-3 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500/50 resize-none" />
-              </div>
-              <div>
-                <label className="text-xs text-gray-500 uppercase tracking-wider block mb-1">Теги (через запятую)</label>
-                <input value={form.tags} onChange={e => setForm(f => ({ ...f, tags: e.target.value }))}
-                  placeholder="line array, jbl, звук"
-                  className="w-full bg-transparent border border-amber-500/20 rounded-sm px-3 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500/50" />
-              </div>
-              <div>
-                <label className="text-xs text-gray-500 uppercase tracking-wider block mb-1">Фото</label>
-                <div className="flex items-center gap-3">
-                  {form.image && (
-                    <div className="w-20 h-14 rounded-sm overflow-hidden border border-amber-500/20 shrink-0">
-                      <img src={form.image} alt="" className="w-full h-full object-cover" />
-                    </div>
-                  )}
-                  <input ref={fileRef} type="file" accept="image/*" className="hidden"
-                    onChange={async e => {
-                      const file = e.target.files?.[0];
-                      if (file) { const url = await uploadImage(file); if (url) setForm(f => ({ ...f, image: url })); }
-                    }} />
-                  <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading}
-                    className="flex items-center gap-2 border border-amber-500/20 text-gray-400 hover:text-white px-3 py-2 rounded-sm text-xs transition-colors disabled:opacity-40">
-                    {uploading ? <Icon name="Loader2" size={12} className="animate-spin" /> : <Icon name="Upload" size={12} />}
-                    {uploading ? "Загружаю..." : form.image ? "Заменить" : "Загрузить фото"}
-                  </button>
-                  {form.image && (
-                    <button type="button" onClick={() => setForm(f => ({ ...f, image: "" }))}
-                      className="text-gray-600 hover:text-red-400 text-xs transition-colors">Удалить</button>
-                  )}
-                </div>
-              </div>
-
-              {formError && <div className="border border-red-500/30 text-red-400 text-sm px-4 py-2.5 rounded-sm">{formError}</div>}
-              {formSuccess && <div className="border border-green-500/30 text-green-400 text-sm px-4 py-2.5 rounded-sm">{formSuccess}</div>}
-
-              <div className="flex gap-3">
-                <button type="submit" disabled={formLoading}
-                  className="neon-btn px-6 py-2.5 rounded-sm text-sm flex items-center gap-2 disabled:opacity-40">
-                  {formLoading ? <Icon name="Loader2" size={14} className="animate-spin" /> : <Icon name="Send" size={14} />}
-                  {formLoading ? "Сохраняю..." : "Отправить на модерацию"}
-                </button>
-                <button type="button" onClick={() => { setShowForm(false); setEditEq(null); setForm(emptyEq); }}
-                  className="border border-amber-500/20 text-gray-400 hover:text-white px-6 py-2.5 rounded-sm text-sm transition-colors">
-                  Отмена
-                </button>
-              </div>
-            </form>
+        {renter?.status === "pending" && (
+          <div className="mb-6 flex items-start gap-3 bg-amber-500/10 border border-amber-500/30 rounded-sm px-4 py-3">
+            <Icon name="Clock" size={16} className="text-amber-500 shrink-0 mt-0.5" />
+            <p className="text-amber-400 text-sm">
+              Аккаунт ожидает активации администратором. Оборудование не будет опубликовано до активации.
+            </p>
           </div>
         )}
 
-        {/* Tabs */}
-        <div className="flex gap-1 mb-6 border-b border-amber-500/10">
+        {/* ── Табы ── */}
+        <div className="flex gap-1 mb-6 border-b border-amber-500/10 overflow-x-auto">
           {[
-            { key: "equipment", label: "Моё оборудование", icon: "Package", count: equipment.length },
-            { key: "orders", label: "Заказы", icon: "ShoppingBag", count: newOrders },
+            { key: "equipment",    label: "Оборудование",  icon: "Package",  count: equipment.filter(e => e.status === "pending").length },
+            { key: "categories",   label: "Разделы",       icon: "FolderOpen", count: pendingCatsCount },
+            { key: "subcategories",label: "Подразделы",    icon: "Folder",   count: pendingSubsCount },
+            { key: "orders",       label: "Заказы",        icon: "ShoppingBag", count: newOrdersCount },
           ].map(t => (
             <button key={t.key} onClick={() => setTab(t.key as typeof tab)}
-              className={`flex items-center gap-2 px-5 py-3 text-sm transition-all border-b-2 -mb-px ${
+              className={`flex items-center gap-2 px-5 py-3 text-sm transition-all border-b-2 -mb-px whitespace-nowrap ${
                 tab === t.key ? "border-amber-500 text-amber-500" : "border-transparent text-gray-500 hover:text-gray-300"
               }`}>
               <Icon name={t.icon} size={14} />
@@ -352,17 +506,82 @@ export default function RenterDashboard() {
           ))}
         </div>
 
-        {/* ── МОЁ ОБОРУДОВАНИЕ ── */}
+        {/* ══════════════════ ОБОРУДОВАНИЕ ══════════════════ */}
         {tab === "equipment" && (
           <div>
-            <div className="flex items-center justify-between mb-5">
-              <p className="text-gray-500 text-sm">{equipment.length} позиций</p>
-              <button
-                onClick={() => { setEditEq(null); setForm(emptyEq); setShowForm(true); setFormError(""); setFormSuccess(""); window.scrollTo({ top: 0, behavior: "smooth" }); }}
-                className="neon-btn flex items-center gap-2 px-4 py-2 rounded-sm text-sm"
-              >
-                <Icon name="Plus" size={14} /> Добавить оборудование
-              </button>
+            {/* Уведомление */}
+            {eqSuccess && (
+              <div className="mb-4 flex items-center gap-2 bg-green-500/10 border border-green-500/30 rounded-sm px-4 py-2.5">
+                <Icon name="CheckCircle" size={14} className="text-green-400" />
+                <span className="text-green-400 text-sm">{eqSuccess}</span>
+                <button onClick={() => setEqSuccess("")} className="ml-auto text-gray-500 hover:text-white"><Icon name="X" size={12} /></button>
+              </div>
+            )}
+            {eqError && (
+              <div className="mb-4 flex items-center gap-2 bg-red-500/10 border border-red-500/30 rounded-sm px-4 py-2.5">
+                <Icon name="AlertCircle" size={14} className="text-red-400" />
+                <span className="text-red-400 text-sm">{eqError}</span>
+                <button onClick={() => setEqError("")} className="ml-auto text-gray-500 hover:text-white"><Icon name="X" size={12} /></button>
+              </div>
+            )}
+
+            {/* Форма редактирования */}
+            {editEq && (
+              <div className="glass-card neon-border rounded-sm p-6 mb-6">
+                <div className="flex items-center justify-between mb-5">
+                  <h2 className="font-oswald text-xl font-bold text-white uppercase">Редактировать позицию</h2>
+                  <button onClick={() => { setEditEq(null); setEqError(""); }} className="text-gray-500 hover:text-white">
+                    <Icon name="X" size={20} />
+                  </button>
+                </div>
+                <EqForm isEdit={true} />
+                <div className="flex gap-3 mt-5">
+                  <button onClick={() => saveEq(true)} disabled={eqSaving}
+                    className="neon-btn px-6 py-2.5 rounded-sm text-sm flex items-center gap-2 disabled:opacity-40">
+                    {eqSaving ? <Icon name="Loader2" size={14} className="animate-spin" /> : <Icon name="Send" size={14} />}
+                    {eqSaving ? "Сохраняю..." : "Отправить на модерацию"}
+                  </button>
+                  <button onClick={() => setEditEq(null)}
+                    className="border border-amber-500/20 text-gray-400 hover:text-white px-6 py-2.5 rounded-sm text-sm transition-colors">
+                    Отмена
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Форма добавления */}
+            {showNewEq && (
+              <div className="glass-card neon-border rounded-sm p-6 mb-6">
+                <div className="flex items-center justify-between mb-5">
+                  <h2 className="font-oswald text-xl font-bold text-white uppercase">Новая позиция</h2>
+                  <button onClick={() => { setShowNewEq(false); setNewEq({ ...EMPTY_EQ }); setNewSpecsStr(""); setEqError(""); }}
+                    className="text-gray-500 hover:text-white">
+                    <Icon name="X" size={20} />
+                  </button>
+                </div>
+                <EqForm isEdit={false} />
+                <div className="flex gap-3 mt-5">
+                  <button onClick={() => saveEq(false)} disabled={eqSaving}
+                    className="neon-btn px-6 py-2.5 rounded-sm text-sm flex items-center gap-2 disabled:opacity-40">
+                    {eqSaving ? <Icon name="Loader2" size={14} className="animate-spin" /> : <Icon name="Plus" size={14} />}
+                    {eqSaving ? "Сохраняю..." : "Добавить и отправить на модерацию"}
+                  </button>
+                  <button onClick={() => { setShowNewEq(false); setNewEq({ ...EMPTY_EQ }); setNewSpecsStr(""); }}
+                    className="border border-amber-500/20 text-gray-400 hover:text-white px-6 py-2.5 rounded-sm text-sm transition-colors">
+                    Отмена
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-gray-600 text-sm">{equipment.length} позиций</p>
+              {!showNewEq && !editEq && (
+                <button onClick={() => { setShowNewEq(true); setEditEq(null); setEqError(""); setEqSuccess(""); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                  className="neon-btn flex items-center gap-2 px-4 py-2 rounded-sm text-sm">
+                  <Icon name="Plus" size={14} /> Добавить оборудование
+                </button>
+              )}
             </div>
 
             {eqLoading ? (
@@ -370,40 +589,41 @@ export default function RenterDashboard() {
             ) : equipment.length === 0 ? (
               <div className="glass-card rounded-sm p-16 text-center">
                 <Icon name="Package" size={48} className="text-gray-700 mx-auto mb-4" />
-                <p className="text-gray-500 mb-2">Оборудования пока нет</p>
-                <p className="text-gray-600 text-sm">Добавьте первую позицию и отправьте на модерацию</p>
+                <p className="text-gray-500 mb-1">Оборудования пока нет</p>
+                <p className="text-gray-700 text-sm">Добавьте первую позицию</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-3">
                 {equipment.map(eq => (
-                  <div key={eq.id} className="glass-card rounded-sm p-5">
-                    <div className="flex items-start gap-4">
-                      {eq.image && (
-                        <div className="w-16 h-12 rounded-sm overflow-hidden border border-amber-500/10 shrink-0">
-                          <img src={eq.image} alt="" className="w-full h-full object-cover" />
-                        </div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-2 mb-1">
-                          <h3 className="text-white text-sm font-semibold truncate">{eq.name}</h3>
-                          {statusEqBadge(eq.status)}
-                        </div>
-                        <div className="flex items-center gap-3 text-xs text-gray-600 mb-2">
-                          <span className="border border-amber-500/20 text-amber-500/60 px-1.5 py-0.5 rounded-sm">{eq.category}</span>
-                          <span className="font-oswald text-amber-500">{eq.price.toLocaleString()} ₽/{eq.unit}</span>
-                        </div>
-                        {eq.status === "rejected" && (
-                          <div className="text-xs text-red-400 mb-2 flex items-center gap-1">
-                            <Icon name="AlertCircle" size={11} /> Отклонено — отредактируйте и отправьте снова
-                          </div>
-                        )}
-                        <button
-                          onClick={() => openEdit(eq)}
-                          className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-amber-500 transition-colors"
-                        >
-                          <Icon name="Pencil" size={11} /> Редактировать
-                        </button>
+                  <div key={eq.id} className="glass-card rounded-sm p-4 flex items-start gap-4">
+                    {eq.image && (
+                      <div className="w-16 h-12 rounded-sm overflow-hidden border border-amber-500/10 shrink-0">
+                        <img src={eq.image} alt="" className="w-full h-full object-cover" />
                       </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-2 flex-wrap mb-1">
+                        <p className="text-white text-sm font-semibold">{eq.name}</p>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {statusBadge(eq.status, "eq")}
+                          <button onClick={() => openEditEq(eq)}
+                            className="flex items-center gap-1 text-xs text-gray-500 hover:text-amber-500 transition-colors border border-amber-500/10 hover:border-amber-500/30 px-2 py-1 rounded-sm">
+                            <Icon name="Pencil" size={11} /> Изменить
+                          </button>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-3 text-xs text-gray-600">
+                        <span className="border border-amber-500/20 text-amber-500/60 px-1.5 py-0.5 rounded-sm">{eq.category}{eq.subcategory ? ` / ${eq.subcategory}` : ""}</span>
+                        <span className="font-oswald text-amber-500">{eq.price.toLocaleString()} ₽/{eq.unit}</span>
+                        {Object.keys(eq.specs || {}).length > 0 && (
+                          <span className="text-gray-700">{Object.keys(eq.specs).length} характеристик</span>
+                        )}
+                      </div>
+                      {eq.status === "rejected" && (
+                        <p className="text-red-400 text-xs mt-1 flex items-center gap-1">
+                          <Icon name="AlertCircle" size={11} /> Отклонено — отредактируйте и отправьте снова
+                        </p>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -412,7 +632,174 @@ export default function RenterDashboard() {
           </div>
         )}
 
-        {/* ── ЗАКАЗЫ ── */}
+        {/* ══════════════════ РАЗДЕЛЫ ══════════════════ */}
+        {tab === "categories" && (
+          <div className="max-w-2xl">
+            <p className="text-gray-500 text-sm mb-6">
+              Предложите новый раздел каталога. После согласования с администратором он появится в списке при добавлении оборудования.
+            </p>
+
+            {catSuccess && (
+              <div className="mb-4 flex items-center gap-2 bg-green-500/10 border border-green-500/30 rounded-sm px-4 py-2.5">
+                <Icon name="CheckCircle" size={14} className="text-green-400" />
+                <span className="text-green-400 text-sm">{catSuccess}</span>
+              </div>
+            )}
+            {catError && (
+              <div className="mb-4 flex items-center gap-2 bg-red-500/10 border border-red-500/30 rounded-sm px-4 py-2.5">
+                <Icon name="AlertCircle" size={14} className="text-red-400" />
+                <span className="text-red-400 text-sm">{catError}</span>
+              </div>
+            )}
+
+            {/* Форма добавления */}
+            <div className="glass-card rounded-sm p-5 mb-6">
+              <h3 className="font-oswald text-base font-bold text-white uppercase mb-4">Предложить новый раздел</h3>
+              <div className="flex gap-3">
+                <input value={newCatName} onChange={e => setNewCatName(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && newCatName.trim() && createCat()}
+                  placeholder="Название раздела"
+                  className="flex-1 bg-transparent border border-amber-500/20 rounded-sm px-3 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500/60" />
+                <button onClick={createCat} disabled={catSaving || !newCatName.trim()}
+                  className="neon-btn px-4 py-2.5 rounded-sm text-sm flex items-center gap-2 disabled:opacity-40">
+                  {catSaving ? <Icon name="Loader2" size={14} className="animate-spin" /> : <Icon name="Plus" size={14} />}
+                  Предложить
+                </button>
+              </div>
+            </div>
+
+            {/* Мои предложения */}
+            {mineCats.length > 0 && (
+              <div className="mb-6">
+                <h4 className="text-xs text-gray-500 uppercase tracking-wider mb-3">Мои предложения</h4>
+                <div className="space-y-2">
+                  {mineCats.map(c => (
+                    <div key={c.id} className="glass-card rounded-sm px-4 py-3 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <Icon name="FolderOpen" size={14} className="text-amber-500/60" />
+                        <span className="text-white text-sm">{c.name}</span>
+                        {statusBadge(c.status, "cat")}
+                      </div>
+                      {c.status !== "approved" && (
+                        <button onClick={() => deleteCat(c.id)} className="text-gray-600 hover:text-red-400 transition-colors">
+                          <Icon name="Trash2" size={14} />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Существующие разделы */}
+            {catsLoading ? (
+              <div className="flex justify-center py-8"><Icon name="Loader2" size={24} className="text-amber-500 animate-spin" /></div>
+            ) : (
+              <div>
+                <h4 className="text-xs text-gray-500 uppercase tracking-wider mb-3">Разделы в каталоге</h4>
+                <div className="grid grid-cols-2 gap-2">
+                  {allCats.map(c => (
+                    <div key={c.id} className="flex items-center gap-2 px-3 py-2 border border-amber-500/10 rounded-sm text-sm text-gray-400">
+                      <Icon name="Folder" size={13} className="text-amber-500/40" />
+                      {c.name}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ══════════════════ ПОДРАЗДЕЛЫ ══════════════════ */}
+        {tab === "subcategories" && (
+          <div className="max-w-2xl">
+            <p className="text-gray-500 text-sm mb-6">
+              Предложите новый подраздел для существующего раздела.
+            </p>
+
+            {subSuccess && (
+              <div className="mb-4 flex items-center gap-2 bg-green-500/10 border border-green-500/30 rounded-sm px-4 py-2.5">
+                <Icon name="CheckCircle" size={14} className="text-green-400" />
+                <span className="text-green-400 text-sm">{subSuccess}</span>
+              </div>
+            )}
+            {subError && (
+              <div className="mb-4 flex items-center gap-2 bg-red-500/10 border border-red-500/30 rounded-sm px-4 py-2.5">
+                <Icon name="AlertCircle" size={14} className="text-red-400" />
+                <span className="text-red-400 text-sm">{subError}</span>
+              </div>
+            )}
+
+            <div className="glass-card rounded-sm p-5 mb-6">
+              <h3 className="font-oswald text-base font-bold text-white uppercase mb-4">Предложить новый подраздел</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                <select value={newSubCat} onChange={e => setNewSubCat(e.target.value)}
+                  className="bg-[#111] border border-amber-500/20 rounded-sm px-3 py-2.5 text-sm text-gray-300 focus:outline-none focus:border-amber-500/60">
+                  <option value="">— выберите раздел —</option>
+                  {availableCategories.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+                <input value={newSubName} onChange={e => setNewSubName(e.target.value)}
+                  placeholder="Название подраздела"
+                  className="bg-transparent border border-amber-500/20 rounded-sm px-3 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500/60" />
+              </div>
+              <button onClick={createSub} disabled={subSaving || !newSubName.trim() || !newSubCat}
+                className="neon-btn px-4 py-2.5 rounded-sm text-sm flex items-center gap-2 disabled:opacity-40">
+                {subSaving ? <Icon name="Loader2" size={14} className="animate-spin" /> : <Icon name="Plus" size={14} />}
+                Предложить подраздел
+              </button>
+            </div>
+
+            {mineSubs.length > 0 && (
+              <div className="mb-6">
+                <h4 className="text-xs text-gray-500 uppercase tracking-wider mb-3">Мои предложения</h4>
+                <div className="space-y-2">
+                  {mineSubs.map(s => (
+                    <div key={s.id} className="glass-card rounded-sm px-4 py-3 flex items-center justify-between">
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <Icon name="Folder" size={13} className="text-amber-500/60" />
+                        <span className="text-gray-500 text-xs">{s.category} /</span>
+                        <span className="text-white text-sm">{s.name}</span>
+                        {statusBadge(s.status, "cat")}
+                      </div>
+                      {s.status !== "approved" && (
+                        <button onClick={() => deleteSub(s.id)} className="text-gray-600 hover:text-red-400 transition-colors ml-2">
+                          <Icon name="Trash2" size={14} />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {subsLoading ? (
+              <div className="flex justify-center py-8"><Icon name="Loader2" size={24} className="text-amber-500 animate-spin" /></div>
+            ) : (
+              <div>
+                <h4 className="text-xs text-gray-500 uppercase tracking-wider mb-3">Подразделы в каталоге</h4>
+                {availableCategories.map(cat => {
+                  const subs = allSubs.filter(s => s.category === cat);
+                  if (!subs.length) return null;
+                  return (
+                    <div key={cat} className="mb-4">
+                      <p className="text-xs text-amber-500/60 uppercase tracking-wider mb-2">{cat}</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        {subs.map(s => (
+                          <div key={s.id} className="flex items-center gap-2 px-3 py-2 border border-amber-500/10 rounded-sm text-sm text-gray-400">
+                            <Icon name="ChevronRight" size={11} className="text-amber-500/30" />
+                            {s.name}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ══════════════════ ЗАКАЗЫ ══════════════════ */}
         {tab === "orders" && (
           <div>
             {ordersLoading ? (
@@ -428,8 +815,8 @@ export default function RenterDashboard() {
                   <div key={order.id} className={`glass-card rounded-sm p-5 ${order.status === "new" ? "border border-amber-500/30" : ""}`}>
                     <div className="flex items-start justify-between gap-4 flex-wrap">
                       <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
-                          {statusOrderBadge(order.status)}
+                        <div className="flex items-center gap-3 mb-2 flex-wrap">
+                          {statusBadge(order.status, "order")}
                           {order.status === "new" && (
                             <span className="text-xs text-amber-500 flex items-center gap-1 animate-pulse">
                               <Icon name="Bell" size={11} /> Требует ответа
@@ -468,6 +855,7 @@ export default function RenterDashboard() {
             )}
           </div>
         )}
+
       </div>
     </div>
   );

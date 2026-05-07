@@ -57,10 +57,14 @@ export default function Admin() {
   // Renters moderation
   type RenterMod = { id: number; email: string; company_name: string; contact_name: string; phone: string; city: string; telegram?: string; status: string; created_at: string; };
   type RenterEqMod = { id: number; renter_id: number; name: string; category: string; price: number; unit: string; description: string; status: string; is_active: boolean; created_at: string; renter_company?: string; renter_email?: string; image?: string; };
+  type RenterCatMod = { id: number; renter_id: number; name: string; status: string; created_at: string; renter_company?: string; };
+  type RenterSubMod = { id: number; renter_id: number; name: string; category: string; status: string; created_at: string; renter_company?: string; };
   const [renters, setRenters] = useState<RenterMod[]>([]);
   const [renterEq, setRenterEq] = useState<RenterEqMod[]>([]);
+  const [renterCats, setRenterCats] = useState<RenterCatMod[]>([]);
+  const [renterSubs, setRenterSubs] = useState<RenterSubMod[]>([]);
   const [rentersLoading, setRentersLoading] = useState(false);
-  const [renterSubTab, setRenterSubTab] = useState<"equipment" | "renters">("equipment");
+  const [renterSubTab, setRenterSubTab] = useState<"equipment" | "categories" | "subcategories" | "renters">("equipment");
 
   const loadRenters = async () => {
     setRentersLoading(true);
@@ -69,6 +73,8 @@ export default function Admin() {
       const data = await res.json();
       setRenterEq(data.equipment || []);
       setRenters(data.renters || []);
+      setRenterCats(data.categories || []);
+      setRenterSubs(data.subcategories || []);
     }
     setRentersLoading(false);
   };
@@ -79,6 +85,22 @@ export default function Admin() {
   };
   const rejectEq = async (id: number) => {
     await fetch(`${URLS["renter-equipment"]}?admin=1&pwd=${encodeURIComponent(password)}&action=reject&id=${id}`, { method: "POST" });
+    loadRenters();
+  };
+  const approveCat = async (id: number) => {
+    await fetch(`${URLS["renter-equipment"]}?admin=1&pwd=${encodeURIComponent(password)}&action=approve_cat&id=${id}`, { method: "POST" });
+    loadRenters();
+  };
+  const rejectCat = async (id: number) => {
+    await fetch(`${URLS["renter-equipment"]}?admin=1&pwd=${encodeURIComponent(password)}&action=reject_cat&id=${id}`, { method: "POST" });
+    loadRenters();
+  };
+  const approveSub = async (id: number) => {
+    await fetch(`${URLS["renter-equipment"]}?admin=1&pwd=${encodeURIComponent(password)}&action=approve_sub&id=${id}`, { method: "POST" });
+    loadRenters();
+  };
+  const rejectSub = async (id: number) => {
+    await fetch(`${URLS["renter-equipment"]}?admin=1&pwd=${encodeURIComponent(password)}&action=reject_sub&id=${id}`, { method: "POST" });
     loadRenters();
   };
   const toggleRenterStatus = async (id: number, action: "approve_renter" | "block_renter") => {
@@ -383,7 +405,7 @@ export default function Admin() {
             { key: "pages", label: "Разделы", icon: "EyeOff", count: hidden.length },
             { key: "portfolio", label: "Портфолио", icon: "Images", count: portfolioItems.length },
             { key: "ai", label: "AI Авито", icon: "Sparkles", count: 0 },
-            { key: "renters", label: "Прокатчики", icon: "Users", count: renterEq.filter(e => e.status === "pending").length },
+            { key: "renters", label: "Прокатчики", icon: "Users", count: renterEq.filter(e => e.status === "pending").length + renterCats.filter(c => c.status === "pending").length + renterSubs.filter(s => s.status === "pending").length },
           ].map((t) => (
             <button key={t.key} onClick={() => setTab(t.key as typeof tab)}
               className={`flex items-center gap-2 px-5 py-3 text-sm transition-all border-b-2 -mb-px ${tab === t.key ? "border-amber-500 text-amber-500" : "border-transparent text-gray-500 hover:text-gray-300"}`}>
@@ -1094,13 +1116,15 @@ export default function Admin() {
       {tab === "renters" && (
         <div>
           {/* Подвкладки */}
-          <div className="flex gap-4 mb-6 border-b border-amber-500/10">
+          <div className="flex gap-1 mb-6 border-b border-amber-500/10 overflow-x-auto">
             {[
-              { key: "equipment", label: "Оборудование на модерации", count: renterEq.filter(e => e.status === "pending").length },
-              { key: "renters",   label: "Список прокатчиков", count: renters.length },
+              { key: "equipment",    label: "Оборудование",  count: renterEq.filter(e => e.status === "pending").length },
+              { key: "categories",   label: "Разделы",       count: renterCats.filter(c => c.status === "pending").length },
+              { key: "subcategories",label: "Подразделы",    count: renterSubs.filter(s => s.status === "pending").length },
+              { key: "renters",      label: "Прокатчики",    count: renters.length },
             ].map(t => (
               <button key={t.key} onClick={() => setRenterSubTab(t.key as typeof renterSubTab)}
-                className={`flex items-center gap-2 px-4 py-2.5 text-sm border-b-2 -mb-px transition-all ${
+                className={`flex items-center gap-2 px-4 py-2.5 text-sm border-b-2 -mb-px transition-all whitespace-nowrap ${
                   renterSubTab === t.key ? "border-amber-500 text-amber-500" : "border-transparent text-gray-500 hover:text-gray-300"
                 }`}>
                 {t.label}
@@ -1116,9 +1140,9 @@ export default function Admin() {
           {rentersLoading ? (
             <div className="flex justify-center py-16"><Icon name="Loader2" size={32} className="text-amber-500 animate-spin" /></div>
           ) : renterSubTab === "equipment" ? (
-            /* Модерация оборудования */
+            /* ── Модерация оборудования ── */
             <div className="space-y-3">
-              {renterEq.length === 0 && <div className="glass-card rounded-sm p-12 text-center text-gray-500">Нет оборудования на модерации</div>}
+              {renterEq.length === 0 && <div className="glass-card rounded-sm p-12 text-center text-gray-500">Нет оборудования</div>}
               {renterEq.map(eq => (
                 <div key={eq.id} className={`glass-card rounded-sm p-5 flex items-start gap-4 ${eq.status === "pending" ? "border border-amber-500/20" : ""}`}>
                   {eq.image && (
@@ -1130,11 +1154,9 @@ export default function Admin() {
                     <div className="flex items-start justify-between gap-3 flex-wrap">
                       <div>
                         <div className="flex items-center gap-2 mb-1">
-                          <span className={`text-xs border rounded-sm px-2 py-0.5 ${
-                            eq.status === "pending" ? "text-yellow-400 border-yellow-500/30" :
-                            eq.status === "approved" ? "text-green-400 border-green-500/30" :
-                            "text-red-400 border-red-500/30"
-                          }`}>{eq.status === "pending" ? "На модерации" : eq.status === "approved" ? "Опубликовано" : "Отклонено"}</span>
+                          <span className={`text-xs border rounded-sm px-2 py-0.5 ${eq.status === "pending" ? "text-yellow-400 border-yellow-500/30" : eq.status === "approved" ? "text-green-400 border-green-500/30" : "text-red-400 border-red-500/30"}`}>
+                            {eq.status === "pending" ? "На модерации" : eq.status === "approved" ? "Опубликовано" : "Отклонено"}
+                          </span>
                           <span className="text-xs border border-amber-500/20 text-amber-500/60 px-1.5 py-0.5 rounded-sm">{eq.category}</span>
                         </div>
                         <p className="text-white text-sm font-semibold">{eq.name}</p>
@@ -1162,8 +1184,76 @@ export default function Admin() {
                 </div>
               ))}
             </div>
+
+          ) : renterSubTab === "categories" ? (
+            /* ── Модерация разделов ── */
+            <div className="space-y-3 max-w-2xl">
+              {renterCats.length === 0 && <div className="glass-card rounded-sm p-12 text-center text-gray-500">Предложений разделов нет</div>}
+              {renterCats.map(c => (
+                <div key={c.id} className={`glass-card rounded-sm p-4 flex items-center justify-between gap-4 ${c.status === "pending" ? "border border-amber-500/20" : ""}`}>
+                  <div className="flex items-center gap-3">
+                    <Icon name="FolderOpen" size={16} className="text-amber-500/60 shrink-0" />
+                    <div>
+                      <p className="text-white text-sm font-semibold">{c.name}</p>
+                      <p className="text-gray-600 text-xs">{c.renter_company} · {new Date(c.created_at).toLocaleDateString("ru-RU")}</p>
+                    </div>
+                    <span className={`text-xs border rounded-sm px-2 py-0.5 ${c.status === "pending" ? "text-yellow-400 border-yellow-500/30" : c.status === "approved" ? "text-green-400 border-green-500/30" : "text-red-400 border-red-500/30"}`}>
+                      {c.status === "pending" ? "На согласовании" : c.status === "approved" ? "Принят" : "Отклонён"}
+                    </span>
+                  </div>
+                  {c.status === "pending" && (
+                    <div className="flex gap-2 shrink-0">
+                      <button onClick={() => approveCat(c.id)}
+                        className="flex items-center gap-1.5 border border-green-500/30 text-green-400 hover:bg-green-500/10 px-3 py-1.5 rounded-sm text-xs transition-colors">
+                        <Icon name="CheckCircle" size={12} /> Одобрить и добавить в каталог
+                      </button>
+                      <button onClick={() => rejectCat(c.id)}
+                        className="flex items-center gap-1.5 border border-red-500/30 text-red-400 hover:bg-red-500/10 px-3 py-1.5 rounded-sm text-xs transition-colors">
+                        <Icon name="XCircle" size={12} /> Отклонить
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+          ) : renterSubTab === "subcategories" ? (
+            /* ── Модерация подразделов ── */
+            <div className="space-y-3 max-w-2xl">
+              {renterSubs.length === 0 && <div className="glass-card rounded-sm p-12 text-center text-gray-500">Предложений подразделов нет</div>}
+              {renterSubs.map(s => (
+                <div key={s.id} className={`glass-card rounded-sm p-4 flex items-center justify-between gap-4 ${s.status === "pending" ? "border border-amber-500/20" : ""}`}>
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <Icon name="Folder" size={16} className="text-amber-500/60 shrink-0" />
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-gray-500 text-xs">{s.category} /</span>
+                        <p className="text-white text-sm font-semibold">{s.name}</p>
+                      </div>
+                      <p className="text-gray-600 text-xs">{s.renter_company} · {new Date(s.created_at).toLocaleDateString("ru-RU")}</p>
+                    </div>
+                    <span className={`text-xs border rounded-sm px-2 py-0.5 ${s.status === "pending" ? "text-yellow-400 border-yellow-500/30" : s.status === "approved" ? "text-green-400 border-green-500/30" : "text-red-400 border-red-500/30"}`}>
+                      {s.status === "pending" ? "На согласовании" : s.status === "approved" ? "Принят" : "Отклонён"}
+                    </span>
+                  </div>
+                  {s.status === "pending" && (
+                    <div className="flex gap-2 shrink-0">
+                      <button onClick={() => approveSub(s.id)}
+                        className="flex items-center gap-1.5 border border-green-500/30 text-green-400 hover:bg-green-500/10 px-3 py-1.5 rounded-sm text-xs transition-colors">
+                        <Icon name="CheckCircle" size={12} /> Одобрить
+                      </button>
+                      <button onClick={() => rejectSub(s.id)}
+                        className="flex items-center gap-1.5 border border-red-500/30 text-red-400 hover:bg-red-500/10 px-3 py-1.5 rounded-sm text-xs transition-colors">
+                        <Icon name="XCircle" size={12} /> Отклонить
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
           ) : (
-            /* Список прокатчиков */
+            /* ── Список прокатчиков ── */
             <div className="space-y-3">
               {renters.length === 0 && <div className="glass-card rounded-sm p-12 text-center text-gray-500">Прокатчиков пока нет</div>}
               {renters.map(r => (
@@ -1171,11 +1261,9 @@ export default function Admin() {
                   <div className="flex items-start justify-between gap-4 flex-wrap">
                     <div>
                       <div className="flex items-center gap-2 mb-1">
-                        <span className={`text-xs border rounded-sm px-2 py-0.5 ${
-                          r.status === "active" ? "text-green-400 border-green-500/30" :
-                          r.status === "blocked" ? "text-red-400 border-red-500/30" :
-                          "text-yellow-400 border-yellow-500/30"
-                        }`}>{r.status === "active" ? "Активен" : r.status === "blocked" ? "Заблокирован" : "Ожидает"}</span>
+                        <span className={`text-xs border rounded-sm px-2 py-0.5 ${r.status === "active" ? "text-green-400 border-green-500/30" : r.status === "blocked" ? "text-red-400 border-red-500/30" : "text-yellow-400 border-yellow-500/30"}`}>
+                          {r.status === "active" ? "Активен" : r.status === "blocked" ? "Заблокирован" : "Ожидает"}
+                        </span>
                       </div>
                       <p className="text-white text-sm font-semibold">{r.company_name}</p>
                       <div className="flex flex-wrap gap-3 text-xs text-gray-500 mt-1">
@@ -1186,8 +1274,7 @@ export default function Admin() {
                         {r.telegram && <a href={r.telegram} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline flex items-center gap-1"><Icon name="Send" size={10} />TG</a>}
                       </div>
                       <div className="text-xs text-gray-700 mt-1">
-                        Зарег. {new Date(r.created_at).toLocaleDateString("ru-RU")} ·{" "}
-                        {renterEq.filter(e => e.renter_id === r.id).length} позиций
+                        Зарег. {new Date(r.created_at).toLocaleDateString("ru-RU")} · {renterEq.filter(e => e.renter_id === r.id).length} позиций
                       </div>
                     </div>
                     <div className="flex gap-2 shrink-0">
