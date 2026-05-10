@@ -33,6 +33,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 const iCls = "w-full bg-transparent border border-amber-500/20 rounded-sm px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/50";
+const iErr = "w-full bg-transparent border border-red-500/60 bg-red-500/5 rounded-sm px-3 py-2.5 text-sm text-white placeholder-red-900 focus:outline-none focus:border-red-500";
 
 // ── Главный компонент ────────────────────────────────────────────────────────
 export default function QuoteApproval() {
@@ -79,6 +80,7 @@ export default function QuoteApproval() {
   const [formError,       setFormError]     = useState("");
   const [formSending,     setFormSending]   = useState(false);
   const [emailWarning,    setEmailWarning]  = useState("");
+  const [errorFields,     setErrorFields]   = useState<Set<string>>(new Set());
 
   // Паспорт
   const fileRef   = useRef<HTMLInputElement>(null);
@@ -91,18 +93,39 @@ export default function QuoteApproval() {
     return () => clearTimeout(t);
   }, [otpCooldown]);
 
-  // Загрузка КП
+  // Загрузка КП + черновик контракта (предзаполнение формы)
   useEffect(() => {
     if (!token) { setNotFound(true); setLoading(false); return; }
-    fetch(`${QUOTES_URL}?token=${token}`)
-      .then(r => r.json())
-      .then(d => {
-        if (d.error) { setNotFound(true); return; }
-        setQuote(d);
-        if (d.status === "signed") setStep("done");
-      })
-      .catch(() => setNotFound(true))
-      .finally(() => setLoading(false));
+    Promise.all([
+      fetch(`${QUOTES_URL}?token=${token}`).then(r => r.json()),
+      fetch(`${SIGN_URL}?token=${token}`).then(r => r.ok ? r.json() : null).catch(() => null),
+    ]).then(([q, c]) => {
+      if (q.error) { setNotFound(true); return; }
+      setQuote(q);
+      if (q.status === "signed") setStep("done");
+      // Предзаполняем форму из черновика контракта
+      if (c && !c.error) {
+        setContractId(c.contract_id ?? null);
+        if (c.client_type) setClientType(c.client_type);
+        if (c.phone)            setPhone(c.phone);
+        if (c.email)            setEmail(c.email);
+        if (c.full_name)        setFullName(c.full_name);
+        if (c.birth_date)       setBirthDate(c.birth_date);
+        if (c.address)          setAddress(c.address);
+        if (c.passport_series)  setPassportSeries(c.passport_series);
+        if (c.passport_number)  setPassportNumber(c.passport_number);
+        if (c.passport_issued)  setPassportIssued(c.passport_issued);
+        if (c.passport_date)    setPassportDate(c.passport_date);
+        if (c.company_name)     setCompanyName(c.company_name);
+        if (c.inn)              setInn(c.inn);
+        if (c.kpp)              setKpp(c.kpp);
+        if (c.ogrn)             setOgrn(c.ogrn);
+        if (c.director)         setDirector(c.director);
+        if (c.legal_address)    setLegalAddress(c.legal_address);
+      }
+    })
+    .catch(() => setNotFound(true))
+    .finally(() => setLoading(false));
   }, [token]);
 
   // ── Загрузка паспорта ──────────────────────────────────────────────────
@@ -130,25 +153,33 @@ export default function QuoteApproval() {
 
   // ── Отправить данные и получить OTP ────────────────────────────────────
   const handleSubmitForm = async () => {
-    if (!phone.trim()) { setFormError("Укажите телефон"); return; }
-    if (!email.trim()) { setFormError("Укажите email — на него придёт код подтверждения"); return; }
+    const bad = new Set<string>();
+    if (!phone.trim()) bad.add("phone");
+    if (!email.trim()) bad.add("email");
 
     if (clientType === "individual") {
-      if (!fullName.trim())       { setFormError("Укажите ФИО полностью"); return; }
-      if (!birthDate.trim())      { setFormError("Укажите дату рождения"); return; }
-      if (!address.trim())        { setFormError("Укажите адрес регистрации"); return; }
-      if (!passportSeries.trim()) { setFormError("Укажите серию паспорта"); return; }
-      if (!passportNumber.trim()) { setFormError("Укажите номер паспорта"); return; }
-      if (!passportIssued.trim()) { setFormError("Укажите кем выдан паспорт"); return; }
-      if (!passportDate.trim())   { setFormError("Укажите дату выдачи паспорта"); return; }
+      if (!fullName.trim())       bad.add("fullName");
+      if (!birthDate.trim())      bad.add("birthDate");
+      if (!address.trim())        bad.add("address");
+      if (!passportSeries.trim()) bad.add("passportSeries");
+      if (!passportNumber.trim()) bad.add("passportNumber");
+      if (!passportIssued.trim()) bad.add("passportIssued");
+      if (!passportDate.trim())   bad.add("passportDate");
     } else {
-      if (!companyName.trim())    { setFormError("Укажите название организации"); return; }
-      if (!inn.trim())            { setFormError("Укажите ИНН"); return; }
-      if (!ogrn.trim())           { setFormError("Укажите ОГРН"); return; }
-      if (!director.trim())       { setFormError("Укажите директора / подписанта"); return; }
-      if (!legalAddress.trim())   { setFormError("Укажите юридический адрес"); return; }
+      if (!companyName.trim())    bad.add("companyName");
+      if (!inn.trim())            bad.add("inn");
+      if (!ogrn.trim())           bad.add("ogrn");
+      if (!director.trim())       bad.add("director");
+      if (!legalAddress.trim())   bad.add("legalAddress");
     }
 
+    if (bad.size > 0) {
+      setErrorFields(bad);
+      setFormError("Заполните все обязательные поля, отмеченные красным");
+      return;
+    }
+
+    setErrorFields(new Set());
     setFormError(""); setFormSending(true);
     try {
       // Шаг 1: сохраняем данные (без OTP — без отправки письма)
@@ -520,38 +551,38 @@ export default function QuoteApproval() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Контакты — всегда */}
             <Field label="Телефон *">
-              <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="+7 (999) 000-00-00" className={iCls} />
+              <input value={phone} onChange={e => { setPhone(e.target.value); setErrorFields(p => { const n=new Set(p); n.delete("phone"); return n; }); }} placeholder="+7 (999) 000-00-00" className={errorFields.has("phone") ? iErr : iCls} />
             </Field>
             <Field label="Email * (для кода подтверждения)">
-              <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="your@email.com" className={iCls} />
+              <input type="email" value={email} onChange={e => { setEmail(e.target.value); setErrorFields(p => { const n=new Set(p); n.delete("email"); return n; }); }} placeholder="your@email.com" className={errorFields.has("email") ? iErr : iCls} />
             </Field>
 
             {clientType === "individual" ? (
               <>
                 <div className="md:col-span-2">
                   <Field label="ФИО полностью *">
-                    <input value={fullName} onChange={e => setFullName(e.target.value)} placeholder="Иванов Иван Иванович" className={iCls} />
+                    <input value={fullName} onChange={e => { setFullName(e.target.value); setErrorFields(p => { const n=new Set(p); n.delete("fullName"); return n; }); }} placeholder="Иванов Иван Иванович" className={errorFields.has("fullName") ? iErr : iCls} />
                   </Field>
                 </div>
                 <Field label="Дата рождения *">
-                  <input type="date" value={birthDate} onChange={e => setBirthDate(e.target.value)} className={iCls} />
+                  <input type="date" value={birthDate} onChange={e => { setBirthDate(e.target.value); setErrorFields(p => { const n=new Set(p); n.delete("birthDate"); return n; }); }} className={errorFields.has("birthDate") ? iErr : iCls} />
                 </Field>
                 <Field label="Адрес регистрации *">
-                  <input value={address} onChange={e => setAddress(e.target.value)} placeholder="г. Москва, ул. Примерная, д. 1" className={iCls} />
+                  <input value={address} onChange={e => { setAddress(e.target.value); setErrorFields(p => { const n=new Set(p); n.delete("address"); return n; }); }} placeholder="г. Москва, ул. Примерная, д. 1" className={errorFields.has("address") ? iErr : iCls} />
                 </Field>
                 <Field label="Серия паспорта *">
-                  <input value={passportSeries} onChange={e => setPassportSeries(e.target.value)} placeholder="1234" className={iCls} />
+                  <input value={passportSeries} onChange={e => { setPassportSeries(e.target.value); setErrorFields(p => { const n=new Set(p); n.delete("passportSeries"); return n; }); }} placeholder="1234" className={errorFields.has("passportSeries") ? iErr : iCls} />
                 </Field>
                 <Field label="Номер паспорта *">
-                  <input value={passportNumber} onChange={e => setPassportNumber(e.target.value)} placeholder="567890" className={iCls} />
+                  <input value={passportNumber} onChange={e => { setPassportNumber(e.target.value); setErrorFields(p => { const n=new Set(p); n.delete("passportNumber"); return n; }); }} placeholder="567890" className={errorFields.has("passportNumber") ? iErr : iCls} />
                 </Field>
                 <div className="md:col-span-2">
                   <Field label="Кем выдан *">
-                    <input value={passportIssued} onChange={e => setPassportIssued(e.target.value)} placeholder="Отдел УФМС России..." className={iCls} />
+                    <input value={passportIssued} onChange={e => { setPassportIssued(e.target.value); setErrorFields(p => { const n=new Set(p); n.delete("passportIssued"); return n; }); }} placeholder="Отдел УФМС России..." className={errorFields.has("passportIssued") ? iErr : iCls} />
                   </Field>
                 </div>
                 <Field label="Дата выдачи *">
-                  <input type="date" value={passportDate} onChange={e => setPassportDate(e.target.value)} className={iCls} />
+                  <input type="date" value={passportDate} onChange={e => { setPassportDate(e.target.value); setErrorFields(p => { const n=new Set(p); n.delete("passportDate"); return n; }); }} className={errorFields.has("passportDate") ? iErr : iCls} />
                 </Field>
                 <div>
                   <label className="text-xs text-gray-500 uppercase tracking-wider block mb-1">Скан/фото паспорта</label>
@@ -574,24 +605,24 @@ export default function QuoteApproval() {
               <>
                 <div className="md:col-span-2">
                   <Field label="Название организации *">
-                    <input value={companyName} onChange={e => setCompanyName(e.target.value)} placeholder='ООО "Компания"' className={iCls} />
+                    <input value={companyName} onChange={e => { setCompanyName(e.target.value); setErrorFields(p => { const n=new Set(p); n.delete("companyName"); return n; }); }} placeholder='ООО "Компания"' className={errorFields.has("companyName") ? iErr : iCls} />
                   </Field>
                 </div>
                 <Field label="ИНН *">
-                  <input value={inn} onChange={e => setInn(e.target.value)} placeholder="7701234567" className={iCls} />
+                  <input value={inn} onChange={e => { setInn(e.target.value); setErrorFields(p => { const n=new Set(p); n.delete("inn"); return n; }); }} placeholder="7701234567" className={errorFields.has("inn") ? iErr : iCls} />
                 </Field>
                 <Field label="КПП">
                   <input value={kpp} onChange={e => setKpp(e.target.value)} placeholder="770101001" className={iCls} />
                 </Field>
                 <Field label="ОГРН *">
-                  <input value={ogrn} onChange={e => setOgrn(e.target.value)} placeholder="1234567890123" className={iCls} />
+                  <input value={ogrn} onChange={e => { setOgrn(e.target.value); setErrorFields(p => { const n=new Set(p); n.delete("ogrn"); return n; }); }} placeholder="1234567890123" className={errorFields.has("ogrn") ? iErr : iCls} />
                 </Field>
                 <Field label="Директор / Подписант *">
-                  <input value={director} onChange={e => setDirector(e.target.value)} placeholder="Иванов И.И." className={iCls} />
+                  <input value={director} onChange={e => { setDirector(e.target.value); setErrorFields(p => { const n=new Set(p); n.delete("director"); return n; }); }} placeholder="Иванов И.И." className={errorFields.has("director") ? iErr : iCls} />
                 </Field>
                 <div className="md:col-span-2">
                   <Field label="Юридический адрес *">
-                    <input value={legalAddress} onChange={e => setLegalAddress(e.target.value)} placeholder="г. Москва, ул. Примерная, д. 1" className={iCls} />
+                    <input value={legalAddress} onChange={e => { setLegalAddress(e.target.value); setErrorFields(p => { const n=new Set(p); n.delete("legalAddress"); return n; }); }} placeholder="г. Москва, ул. Примерная, д. 1" className={errorFields.has("legalAddress") ? iErr : iCls} />
                   </Field>
                 </div>
               </>

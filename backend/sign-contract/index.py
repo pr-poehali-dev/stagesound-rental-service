@@ -76,7 +76,9 @@ def handler(event: dict, context) -> dict:
         # ── Получить статус ──────────────────────────────────────────
         if method == "GET":
             cur.execute(
-                f"SELECT c.id, c.signed_at, c.contract_pdf_url, c.email, c.full_name, c.company_name, c.client_type "
+                f"SELECT c.id, c.signed_at, c.contract_pdf_url, c.email, c.full_name, c.company_name, c.client_type, "
+                f"c.phone, c.birth_date, c.address, c.passport_series, c.passport_number, c.passport_issued, c.passport_date, "
+                f"c.inn, c.kpp, c.ogrn, c.director, c.legal_address "
                 f"FROM {s()}.contracts c "
                 f"JOIN {s()}.quotes q ON q.id = c.quote_id "
                 f"WHERE q.token = %s ORDER BY c.id DESC LIMIT 1",
@@ -86,15 +88,31 @@ def handler(event: dict, context) -> dict:
             if not row:
                 return {"statusCode": 404, "headers": CORS,
                         "body": json.dumps({"error": "not_found"}, ensure_ascii=False)}
-            cid, signed_at, pdf_url, email, full_name, company_name, client_type = row
+            (cid, signed_at, pdf_url, email, full_name, company_name, client_type,
+             phone, birth_date, address, passport_series, passport_number, passport_issued, passport_date,
+             inn, kpp, ogrn, director, legal_address) = row
             return {"statusCode": 200, "headers": CORS,
                     "body": json.dumps({
                         "contract_id": cid,
                         "signed": signed_at is not None,
                         "signed_at": str(signed_at) if signed_at else None,
                         "pdf_url": pdf_url,
-                        "email": email,
-                        "name": full_name if client_type == "individual" else company_name,
+                        "client_type": client_type or "individual",
+                        "email": email or "",
+                        "phone": phone or "",
+                        "full_name": full_name or "",
+                        "birth_date": str(birth_date) if birth_date else "",
+                        "address": address or "",
+                        "passport_series": passport_series or "",
+                        "passport_number": passport_number or "",
+                        "passport_issued": passport_issued or "",
+                        "passport_date": str(passport_date) if passport_date else "",
+                        "company_name": company_name or "",
+                        "inn": inn or "",
+                        "kpp": kpp or "",
+                        "ogrn": ogrn or "",
+                        "director": director or "",
+                        "legal_address": legal_address or "",
                     }, ensure_ascii=False)}
 
         body = json.loads(event.get("body") or "{}")
