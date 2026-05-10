@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import Icon from "@/components/ui/icon";
 import { Equipment } from "@/data/equipment";
 import { useSeo } from "@/hooks/useSeo";
@@ -17,11 +17,14 @@ const extraServices = [
 type CartItem = {
   id: number;
   qty: number;
+  variantLabel?: string;
+  variantPrice?: number;
 };
 
 export default function Calculator() {
   useSeo({ page: "calculator" });
   const { city } = useCity();
+  const location = useLocation();
   const content = CITY_CONTENT[city.id] ?? CITY_CONTENT.moscow;
   const deliveryZones = [
     { name: "Без доставки", price: 0 },
@@ -40,11 +43,16 @@ export default function Calculator() {
       .then((data) => {
         setEquipment(data.equipment || []);
         setCatalogLoading(false);
+        const addItem = (location.state as { addItem?: CartItem })?.addItem;
+        if (addItem) {
+          setCart([{ id: addItem.id, qty: 1, variantLabel: addItem.variantLabel, variantPrice: addItem.variantPrice }]);
+        }
       })
       .catch(() => setCatalogLoading(false));
   }, []);
 
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [variantPicker, setVariantPicker] = useState<Equipment | null>(null);
   const [days, setDays] = useState(1);
   const [delivery, setDelivery] = useState("Без доставки");
   const [extras, setExtras] = useState<string[]>([]);
@@ -72,29 +80,42 @@ export default function Calculator() {
     });
   }, [catFilter, search, equipment]);
 
-  const addToCart = (id: number) => {
+  const addToCart = (id: number, variantLabel?: string, variantPrice?: number) => {
     setCart((prev) => {
-      const found = prev.find((c) => c.id === id);
-      if (found) return prev.map((c) => c.id === id ? { ...c, qty: c.qty + 1 } : c);
-      return [...prev, { id, qty: 1 }];
+      const key = variantLabel ? `${id}__${variantLabel}` : String(id);
+      const found = prev.find((c) => (variantLabel ? c.id === id && c.variantLabel === variantLabel : c.id === id && !c.variantLabel));
+      if (found) return prev.map((c) => (c.id === id && c.variantLabel === variantLabel) ? { ...c, qty: c.qty + 1 } : c);
+      return [...prev, { id, qty: 1, variantLabel, variantPrice }];
+      void key;
     });
   };
 
-  const removeFromCart = (id: number) => {
+  const removeFromCart = (id: number, variantLabel?: string) => {
     setCart((prev) => {
-      const found = prev.find((c) => c.id === id);
+      const found = prev.find((c) => c.id === id && c.variantLabel === variantLabel);
       if (!found) return prev;
-      if (found.qty <= 1) return prev.filter((c) => c.id !== id);
-      return prev.map((c) => c.id === id ? { ...c, qty: c.qty - 1 } : c);
+      if (found.qty <= 1) return prev.filter((c) => !(c.id === id && c.variantLabel === variantLabel));
+      return prev.map((c) => (c.id === id && c.variantLabel === variantLabel) ? { ...c, qty: c.qty - 1 } : c);
     });
   };
 
-  const getQty = (id: number) => cart.find((c) => c.id === id)?.qty || 0;
+  const handleAddClick = (item: Equipment) => {
+    if (item.variants && item.variants.length > 0) {
+      setVariantPicker(item);
+    } else {
+      addToCart(item.id);
+    }
+  };
+
+  const getQty = (id: number, variantLabel?: string) =>
+    cart.filter((c) => c.id === id && c.variantLabel === variantLabel).reduce((s, c) => s + c.qty, 0);
+  const getTotalQty = (id: number) => cart.filter((c) => c.id === id).reduce((s, c) => s + c.qty, 0);
 
   const equipmentTotal = useMemo(() => {
     return cart.reduce((sum, item) => {
       const eq = equipment.find((e) => e.id === item.id);
-      return sum + (eq ? eq.price * item.qty * days : 0);
+      const price = item.variantPrice ?? eq?.price ?? 0;
+      return sum + price * item.qty * days;
     }, 0);
   }, [cart, days, equipment]);
 
@@ -115,7 +136,9 @@ export default function Calculator() {
     setSending(true);
     const items = cart.map((c) => {
       const eq = equipment.find((e) => e.id === c.id)!;
-      return { name: eq.name, qty: c.qty, subtotal: eq.price * c.qty * days };
+      const price = c.variantPrice ?? eq.price;
+      const name = c.variantLabel ? `${eq.name} (${c.variantLabel})` : eq.name;
+      return { name, qty: c.qty, subtotal: price * c.qty * days };
     });
     const extrasLabels = extras.map((id) => extraServices.find((s) => s.id === id)?.label || id);
     const res = await fetch(func2url["send-order"], {
@@ -207,37 +230,64 @@ export default function Calculator() {
                     </div>
                   ))}
                   {!catalogLoading && filteredEq.map((item) => {
-                    const qty = getQty(item.id);
+                    const hasVariants = item.variants && item.variants.length > 0;
+                    const totalQty = getTotalQty(item.id);
                     return (
                       <div
                         key={item.id}
-                        className={`flex items-center justify-between p-3 rounded-sm border transition-all ${qty > 0 ? "border-amber-500/30 bg-amber-500/5" : "border-amber-500/10 hover:border-amber-500/20"}`}
+                        className={`p-3 rounded-sm border transition-all ${totalQty > 0 ? "border-amber-500/30 bg-amber-500/5" : "border-amber-500/10 hover:border-amber-500/20"}`}
                       >
-
-                        <div className="flex-1 min-w-0 mr-4">
-                          <div className="text-sm font-medium text-white truncate">{item.name}</div>
-                          <div className="text-xs text-gray-600">{item.category} · {item.price.toLocaleString()} ₽/{item.unit}</div>
-                          {item.category === "Сцена" && item.description && (
-                            <div className="text-xs text-gray-500 mt-1 leading-relaxed">{item.description}</div>
-                          )}
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1 min-w-0 mr-4">
+                            <div className="text-sm font-medium text-white truncate">{item.name}</div>
+                            {hasVariants ? (
+                              <div className="text-xs text-gray-600">{item.category} · от {Math.min(...item.variants!.map(v => v.price)).toLocaleString()} ₽/{item.unit}</div>
+                            ) : (
+                              <div className="text-xs text-gray-600">{item.category} · {item.price.toLocaleString()} ₽/{item.unit}</div>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            {!hasVariants && totalQty > 0 ? (
+                              <>
+                                <button onClick={() => removeFromCart(item.id)} className="w-7 h-7 flex items-center justify-center border border-amber-500/30 text-amber-500 hover:bg-amber-500/10 rounded-sm transition-colors">
+                                  <Icon name="Minus" size={12} />
+                                </button>
+                                <span className="text-white font-bold w-5 text-center text-sm">{totalQty}</span>
+                                <button onClick={() => addToCart(item.id)} className="w-7 h-7 flex items-center justify-center neon-btn rounded-sm">
+                                  <Icon name="Plus" size={12} />
+                                </button>
+                              </>
+                            ) : (
+                              <button onClick={() => handleAddClick(item)} className="neon-btn px-3 py-1 text-xs rounded-sm flex items-center gap-1">
+                                {hasVariants ? <><Icon name="ChevronDown" size={11} /> Выбрать</> : "+ Добавить"}
+                              </button>
+                            )}
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          {qty > 0 ? (
-                            <>
-                              <button onClick={() => removeFromCart(item.id)} className="w-7 h-7 flex items-center justify-center border border-amber-500/30 text-amber-500 hover:bg-amber-500/10 rounded-sm transition-colors">
-                                <Icon name="Minus" size={12} />
-                              </button>
-                              <span className="text-white font-bold w-5 text-center text-sm">{qty}</span>
-                              <button onClick={() => addToCart(item.id)} className="w-7 h-7 flex items-center justify-center neon-btn rounded-sm">
-                                <Icon name="Plus" size={12} />
-                              </button>
-                            </>
-                          ) : (
-                            <button onClick={() => addToCart(item.id)} className="neon-btn px-3 py-1 text-xs rounded-sm">
-                              + Добавить
+                        {hasVariants && totalQty > 0 && (
+                          <div className="mt-2 space-y-1">
+                            {cart.filter(c => c.id === item.id).map((c, i) => (
+                              <div key={i} className="flex items-center justify-between text-xs bg-amber-500/5 border border-amber-500/15 rounded-sm px-2 py-1">
+                                <span className="text-gray-400">{c.variantLabel} — {(c.variantPrice ?? item.price).toLocaleString()} ₽</span>
+                                <div className="flex items-center gap-1.5">
+                                  <button onClick={() => removeFromCart(item.id, c.variantLabel)} className="w-5 h-5 flex items-center justify-center border border-amber-500/30 text-amber-500 rounded-sm hover:bg-amber-500/10">
+                                    <Icon name="Minus" size={9} />
+                                  </button>
+                                  <span className="text-white w-4 text-center">{c.qty}</span>
+                                  <button onClick={() => addToCart(item.id, c.variantLabel, c.variantPrice)} className="w-5 h-5 flex items-center justify-center neon-btn rounded-sm">
+                                    <Icon name="Plus" size={9} />
+                                  </button>
+                                  <button onClick={() => setCart(prev => prev.filter((p) => !(p.id === item.id && p.variantLabel === c.variantLabel)))} className="text-gray-700 hover:text-red-400 ml-1 transition-colors">
+                                    <Icon name="X" size={10} />
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                            <button onClick={() => setVariantPicker(item)} className="text-xs text-amber-500/60 hover:text-amber-500 transition-colors flex items-center gap-1">
+                              <Icon name="Plus" size={10} /> Добавить ещё вариант
                             </button>
-                          )}
-                        </div>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -341,12 +391,14 @@ export default function Calculator() {
                   </div>
                 ) : (
                   <div className="space-y-2 mb-4">
-                    {cart.map((item) => {
+                    {cart.map((item, idx) => {
                       const eq = equipment.find((e) => e.id === item.id)!;
+                      const price = item.variantPrice ?? eq.price;
+                      const label = item.variantLabel ? `${eq.name} (${item.variantLabel})` : eq.name;
                       return (
-                        <div key={item.id} className="flex items-start justify-between text-sm gap-2">
-                          <span className="text-gray-400 flex-1 text-xs leading-tight">{eq.name} × {item.qty} × {days} д.</span>
-                          <span className="text-white font-medium shrink-0">{(eq.price * item.qty * days).toLocaleString()} ₽</span>
+                        <div key={idx} className="flex items-start justify-between text-sm gap-2">
+                          <span className="text-gray-400 flex-1 text-xs leading-tight">{label} × {item.qty} × {days} д.</span>
+                          <span className="text-white font-medium shrink-0">{(price * item.qty * days).toLocaleString()} ₽</span>
                         </div>
                       );
                     })}
@@ -420,6 +472,33 @@ export default function Calculator() {
           </div>
         )}
       </div>
+
+      {/* Выбор варианта */}
+      {variantPicker && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.85)", backdropFilter: "blur(8px)" }} onClick={() => setVariantPicker(null)}>
+          <div className="glass-card neon-border rounded-sm max-w-sm w-full p-6" onClick={e => e.stopPropagation()}>
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <h3 className="font-oswald text-xl font-bold text-white uppercase">Выберите вариант</h3>
+                <p className="text-gray-500 text-xs mt-0.5">{variantPicker.name}</p>
+              </div>
+              <button onClick={() => setVariantPicker(null)} className="text-gray-500 hover:text-white"><Icon name="X" size={18} /></button>
+            </div>
+            <div className="space-y-2">
+              {variantPicker.variants!.map((v, i) => (
+                <button
+                  key={i}
+                  onClick={() => { addToCart(variantPicker.id, v.label, v.price); setVariantPicker(null); }}
+                  className="w-full flex items-center justify-between border border-amber-500/20 hover:border-amber-500/50 hover:bg-amber-500/5 rounded-sm px-4 py-3 transition-all group"
+                >
+                  <span className="text-white text-sm">{v.label}</span>
+                  <span className="font-oswald text-amber-500 font-bold">{v.price.toLocaleString()} ₽<span className="text-gray-500 text-xs font-normal ml-1">/ {variantPicker.unit}</span></span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Форма контактов */}
       {showForm && (

@@ -121,6 +121,8 @@ export default function EquipmentItem() {
 
   if (!item) return null;
 
+  const hasVariants = item.variants && item.variants.length > 0;
+
   return (
     <div className="pb-16">
       {/* Breadcrumb */}
@@ -262,10 +264,35 @@ export default function EquipmentItem() {
                 )}
               </div>
 
-              <Link to="/calculator" className="neon-btn w-full py-3 rounded-sm text-sm flex items-center justify-center gap-2 mb-3">
-                <Icon name="Calculator" size={16} />
-                Рассчитать стоимость
-              </Link>
+              {hasVariants ? (
+                <div className="mb-3">
+                  <p className="text-gray-500 text-xs uppercase tracking-wider mb-2">Добавить в расчёт</p>
+                  <div className="grid grid-cols-1 gap-1.5">
+                    {item.variants!.map((v, i) => (
+                      <Link
+                        key={i}
+                        to={`/calculator`}
+                        state={{ addItem: { id: item.id, variantLabel: v.label, variantPrice: v.price } }}
+                        className="flex items-center justify-between border border-amber-500/20 hover:border-amber-500/50 hover:bg-amber-500/5 rounded-sm px-3 py-2.5 transition-all group"
+                      >
+                        <span className="text-white text-sm">{v.label}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-oswald text-amber-500">
+                            {discount > 0 ? Math.round(v.price * (1 - discount / 100)).toLocaleString() : v.price.toLocaleString()} ₽
+                            <span className="text-gray-500 text-xs font-normal ml-1">/ {item.unit}</span>
+                          </span>
+                          <Icon name="ArrowRight" size={13} className="text-gray-600 group-hover:text-amber-500 transition-colors" />
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <Link to="/calculator" className="neon-btn w-full py-3 rounded-sm text-sm flex items-center justify-center gap-2 mb-3">
+                  <Icon name="Calculator" size={16} />
+                  Рассчитать стоимость
+                </Link>
+              )}
               <Link to="/contacts" className="w-full py-3 rounded-sm text-sm flex items-center justify-center gap-2 border border-amber-500/30 text-white hover:border-amber-500/60 transition-colors">
                 <Icon name="Phone" size={16} />
                 Оставить заявку

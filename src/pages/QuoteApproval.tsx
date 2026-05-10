@@ -14,6 +14,8 @@ type Quote = {
   days: number; delivery: string; delivery_price: number; extras: QuoteExtra[];
   total: number; status: string;
   event_date?: string; delivery_address?: string;
+  installation_time?: string; installation_price?: number;
+  dismantling_time?: string; dismantling_price?: number;
 };
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -185,6 +187,7 @@ export default function QuoteApproval() {
   const q = quote!;
   const equipmentTotal = q.items.reduce((s, i) => s + i.price * i.qty * q.days, 0);
   const extrasTotal = q.extras.reduce((s, e) => s + e.price, 0);
+  const installDismantleTotal = (q.installation_price || 0) + (q.dismantling_price || 0);
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] py-10 px-4">
@@ -246,17 +249,43 @@ export default function QuoteApproval() {
               </div>
 
               {q.extras.length > 0 && (
-                <>
-                  <div className="border-t border-amber-500/10 pt-3 mb-3">
-                    <p className="text-xs text-gray-600 uppercase tracking-wider mb-2">Дополнительные услуги</p>
-                    {q.extras.map((ex) => (
-                      <div key={ex.id} className="flex justify-between text-sm mb-1">
-                        <span className="text-gray-400">{ex.name}</span>
-                        <span className="text-gray-300">{ex.price.toLocaleString()} ₽</span>
-                      </div>
-                    ))}
-                  </div>
-                </>
+                <div className="border-t border-amber-500/10 pt-3 mb-3">
+                  <p className="text-xs text-gray-600 uppercase tracking-wider mb-2">Дополнительные услуги</p>
+                  {q.extras.map((ex) => (
+                    <div key={ex.id} className="flex justify-between text-sm mb-1">
+                      <span className="text-gray-400">{ex.name}</span>
+                      <span className="text-gray-300">{ex.price.toLocaleString()} ₽</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {(q.installation_time || q.dismantling_time) && (
+                <div className="border-t border-amber-500/10 pt-3 mb-3">
+                  <p className="text-xs text-gray-600 uppercase tracking-wider mb-2">Монтаж и демонтаж</p>
+                  {q.installation_time && (
+                    <div className="flex justify-between text-sm mb-1">
+                      <span className="text-gray-400 flex items-center gap-1.5">
+                        <Icon name="Wrench" size={12} className="text-amber-500/60" />
+                        Монтаж: {q.installation_time}
+                      </span>
+                      {(q.installation_price || 0) > 0 && (
+                        <span className="text-gray-300">{q.installation_price!.toLocaleString()} ₽</span>
+                      )}
+                    </div>
+                  )}
+                  {q.dismantling_time && (
+                    <div className="flex justify-between text-sm mb-1">
+                      <span className="text-gray-400 flex items-center gap-1.5">
+                        <Icon name="PackageOpen" size={12} className="text-amber-500/60" />
+                        Демонтаж: {q.dismantling_time}
+                      </span>
+                      {(q.dismantling_price || 0) > 0 && (
+                        <span className="text-gray-300">{q.dismantling_price!.toLocaleString()} ₽</span>
+                      )}
+                    </div>
+                  )}
+                </div>
               )}
 
               <div className="border-t border-amber-500/20 pt-3 space-y-1">
@@ -273,6 +302,11 @@ export default function QuoteApproval() {
                 {q.delivery_price > 0 && (
                   <div className="flex justify-between text-sm text-gray-400">
                     <span>Доставка ({q.delivery})</span><span>{q.delivery_price.toLocaleString()} ₽</span>
+                  </div>
+                )}
+                {installDismantleTotal > 0 && (
+                  <div className="flex justify-between text-sm text-gray-400">
+                    <span>Монтаж и демонтаж</span><span>{installDismantleTotal.toLocaleString()} ₽</span>
                   </div>
                 )}
                 <div className="flex justify-between text-xl font-bold text-white pt-2">

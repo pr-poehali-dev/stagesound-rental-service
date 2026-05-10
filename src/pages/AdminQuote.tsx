@@ -84,6 +84,11 @@ export default function AdminQuote() {
   const [extraServices, setExtraServices] = useState<ExtraService[]>(DEFAULT_EXTRAS);
   const [selectedExtras, setSelectedExtras] = useState<string[]>([]);
 
+  const [installationTime, setInstallationTime] = useState("");
+  const [installationPrice, setInstallationPrice] = useState(0);
+  const [dismantlingTime, setDismantlingTime] = useState("");
+  const [dismantlingPrice, setDismantlingPrice] = useState(0);
+
   const [saving, setSaving] = useState(false);
   const [copiedLink, setCopiedLink] = useState("");
   const [shareLink, setShareLink] = useState("");
@@ -162,7 +167,8 @@ export default function AdminQuote() {
     const s = extraServices.find((s) => s.id === id);
     return sum + (s ? s.price : 0);
   }, 0);
-  const total = equipmentTotal + extrasTotal + deliveryTotal;
+  const installDismantleTotal = (installationTime ? installationPrice : 0) + (dismantlingTime ? dismantlingPrice : 0);
+  const total = equipmentTotal + extrasTotal + deliveryTotal + installDismantleTotal;
 
   const handleSaveAndShare = async () => {
     if (cart.length === 0) return;
@@ -187,6 +193,10 @@ export default function AdminQuote() {
         extras: extrasData, total,
         event_date: eventDate,
         delivery_address: deliveryAddress,
+        installation_time: installationTime || null,
+        installation_price: installationTime ? installationPrice : 0,
+        dismantling_time: dismantlingTime || null,
+        dismantling_price: dismantlingTime ? dismantlingPrice : 0,
       }),
     });
     const data = await res.json();
@@ -239,7 +249,7 @@ export default function AdminQuote() {
                 <Icon name={copiedLink ? "Check" : "Copy"} size={14} />
                 {copiedLink ? "Скопировано!" : "Скопировать ссылку"}
               </button>
-              <button onClick={() => { setShareLink(""); setCart([]); setTitle(""); setSelectedExtras([]); setEventDate(""); setDeliveryAddress(""); }}
+              <button onClick={() => { setShareLink(""); setCart([]); setTitle(""); setSelectedExtras([]); setEventDate(""); setDeliveryAddress(""); setInstallationTime(""); setInstallationPrice(0); setDismantlingTime(""); setDismantlingPrice(0); }}
                 className="border border-gray-700 text-gray-400 px-6 py-2 rounded-sm text-sm hover:border-gray-500 transition-colors">
                 Создать новое КП
               </button>
@@ -438,6 +448,57 @@ export default function AdminQuote() {
                 )}
               </div>
 
+              {/* Монтаж и демонтаж */}
+              <div className="glass-card rounded-sm p-4">
+                <h3 className="text-xs text-gray-500 uppercase tracking-wider mb-3">Монтаж и демонтаж</h3>
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-xs text-gray-600 block mb-1.5">Время монтажа</label>
+                    <div className="flex gap-2">
+                      <input
+                        value={installationTime}
+                        onChange={(e) => setInstallationTime(e.target.value)}
+                        placeholder="напр.: 10:00 — 14:00 или 3 часа"
+                        className={`${iCls} flex-1`}
+                      />
+                      <input
+                        type="number"
+                        value={installationPrice || ""}
+                        onChange={(e) => setInstallationPrice(Number(e.target.value))}
+                        placeholder="Цена"
+                        className="w-24 bg-transparent border border-amber-500/20 rounded-sm px-2 py-2 text-sm text-white text-right focus:outline-none focus:border-amber-500/50"
+                      />
+                      <span className="text-gray-600 text-xs self-center">₽</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-600 block mb-1.5">Время демонтажа</label>
+                    <div className="flex gap-2">
+                      <input
+                        value={dismantlingTime}
+                        onChange={(e) => setDismantlingTime(e.target.value)}
+                        placeholder="напр.: 23:00 — 02:00 или 2 часа"
+                        className={`${iCls} flex-1`}
+                      />
+                      <input
+                        type="number"
+                        value={dismantlingPrice || ""}
+                        onChange={(e) => setDismantlingPrice(Number(e.target.value))}
+                        placeholder="Цена"
+                        className="w-24 bg-transparent border border-amber-500/20 rounded-sm px-2 py-2 text-sm text-white text-right focus:outline-none focus:border-amber-500/50"
+                      />
+                      <span className="text-gray-600 text-xs self-center">₽</span>
+                    </div>
+                  </div>
+                </div>
+                {installDismantleTotal > 0 && (
+                  <div className="flex justify-between text-sm text-gray-400 mt-3 pt-3 border-t border-amber-500/10">
+                    <span>Монтаж + демонтаж</span>
+                    <span className="text-white">{installDismantleTotal.toLocaleString()} ₽</span>
+                  </div>
+                )}
+              </div>
+
               {/* Итого и кнопка */}
               <div className="glass-card rounded-sm p-4">
                 <div className="space-y-1 mb-4">
@@ -454,6 +515,11 @@ export default function AdminQuote() {
                   {deliveryTotal > 0 && (
                     <div className="flex justify-between text-sm text-gray-400">
                       <span>Доставка</span><span>{deliveryTotal.toLocaleString()} ₽</span>
+                    </div>
+                  )}
+                  {installDismantleTotal > 0 && (
+                    <div className="flex justify-between text-sm text-gray-400">
+                      <span>Монтаж и демонтаж</span><span>{installDismantleTotal.toLocaleString()} ₽</span>
                     </div>
                   )}
                   <div className="flex justify-between text-lg font-bold text-white pt-2 border-t border-amber-500/20">
