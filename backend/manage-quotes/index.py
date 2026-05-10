@@ -254,6 +254,7 @@ def handler(event: dict, context) -> dict:
 
     if method == "DELETE":
         qid = int(qp.get("id", 0))
+        cur.execute(f"DELETE FROM {schema}.contracts WHERE quote_id=%s", (qid,))
         cur.execute(f"DELETE FROM {schema}.quotes WHERE id=%s", (qid,))
         conn.commit(); cur.close(); conn.close()
         return {"statusCode": 200, "headers": CORS, "body": json.dumps({"ok": True})}
