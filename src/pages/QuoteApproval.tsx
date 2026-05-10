@@ -56,6 +56,9 @@ export default function QuoteApproval() {
   const [previewPdfUrl, setPreviewPdfUrl] = useState("");
   const [previewLoading, setPreviewLoading] = useState(false);
 
+  // Способ оплаты
+  const [paymentMethod, setPaymentMethod] = useState<"cash" | "invoice">("cash");
+
   // Форма клиентских данных
   const [clientType, setClientType] = useState<"individual" | "company">("individual");
   const [fullName,        setFullName]        = useState("");
@@ -233,6 +236,7 @@ export default function QuoteApproval() {
           passport_file_url: passportFileUrl || null,
           company_name: companyName, inn, kpp, ogrn, legal_address: legalAddress, director,
           phone, email,
+          payment_method: paymentMethod,
         }),
       });
       const data = await res.json();
@@ -710,7 +714,38 @@ export default function QuoteApproval() {
             </div>
           )}
 
-          <div className="mt-6 p-4 bg-amber-500/5 border border-amber-500/20 rounded-sm mb-6">
+          {/* Способ оплаты */}
+          <div className="mt-6 mb-4">
+            <p className="text-xs text-gray-500 uppercase tracking-wider mb-3">Способ оплаты</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setPaymentMethod("cash")}
+                className={`p-4 rounded-sm border text-left transition-all ${paymentMethod === "cash" ? "border-amber-500 bg-amber-500/10" : "border-amber-500/20 hover:border-amber-500/40"}`}
+              >
+                <div className="flex items-center gap-2 mb-1">
+                  <Icon name={paymentMethod === "cash" ? "CheckCircle" : "Circle"} size={16} className={paymentMethod === "cash" ? "text-amber-500" : "text-gray-600"} />
+                  <span className="text-white font-medium text-sm">Оплата по факту</span>
+                </div>
+                <p className="text-gray-500 text-xs pl-6">Наличными или переводом в день мероприятия. Сумма не меняется.</p>
+                <p className="text-amber-500 font-oswald font-bold mt-2 pl-6">{q.total.toLocaleString()} ₽</p>
+              </button>
+              <button
+                type="button"
+                onClick={() => setPaymentMethod("invoice")}
+                className={`p-4 rounded-sm border text-left transition-all ${paymentMethod === "invoice" ? "border-amber-500 bg-amber-500/10" : "border-amber-500/20 hover:border-amber-500/40"}`}
+              >
+                <div className="flex items-center gap-2 mb-1">
+                  <Icon name={paymentMethod === "invoice" ? "CheckCircle" : "Circle"} size={16} className={paymentMethod === "invoice" ? "text-amber-500" : "text-gray-600"} />
+                  <span className="text-white font-medium text-sm">Оплата по счёту</span>
+                </div>
+                <p className="text-gray-500 text-xs pl-6">Безналичный расчёт. Мы выставим счёт — к сумме добавляется 10%.</p>
+                <p className="text-amber-500 font-oswald font-bold mt-2 pl-6">{Math.round(q.total * 1.1).toLocaleString()} ₽</p>
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-4 p-4 bg-amber-500/5 border border-amber-500/20 rounded-sm mb-6">
             <div className="flex items-start gap-2">
               <Icon name="Info" size={14} className="text-amber-500 mt-0.5 shrink-0" />
               <p className="text-gray-400 text-xs leading-relaxed">

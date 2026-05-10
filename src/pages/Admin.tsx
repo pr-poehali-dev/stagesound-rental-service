@@ -24,6 +24,8 @@ type Contract = {
   passport_file_url: string | null;
   event_date?: string; delivery_address?: string;
   signed_at?: string | null; contract_pdf_url?: string | null;
+  payment_method?: "cash" | "invoice";
+  invoice_pdf_url?: string | null; invoice_total?: number | null;
 };
 
 const formatDate = (iso: string | null) => {
@@ -280,11 +282,18 @@ export default function Admin() {
     if (!managerName.trim()) return;
     setManagerSigningId(contractId);
     sessionStorage.setItem("manager_name", managerName);
-    await fetch(`${URLS["manage-contract-template"]}?action=manager_sign&pwd=${encodeURIComponent(password)}`, {
+    const res = await fetch(`${URLS["sign-contract"]}?action=manager_sign&pwd=${encodeURIComponent(password)}&token=_`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ contract_id: contractId, manager_name: managerName }),
     });
+    const data = await res.json();
+    if (data.invoice_pdf_url) {
+      setSelectedContract(prev => prev ? { ...prev, invoice_pdf_url: data.invoice_pdf_url } : prev);
+    }
+    if (data.contract_pdf_url) {
+      setSelectedContract(prev => prev ? { ...prev, contract_pdf_url: data.contract_pdf_url } : prev);
+    }
     setManagerSigningId(null); setManagerSignDone(contractId);
     setTimeout(() => setManagerSignDone(null), 4000);
     loadContracts();
@@ -919,6 +928,21 @@ export default function Admin() {
                   <Icon name="FileText" size={13} /> Договор PDF (подписан)
                 </a>
               )}
+              {selectedContract.invoice_pdf_url && (
+                <a href={selectedContract.invoice_pdf_url} target="_blank" rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 border border-blue-500/30 text-blue-400 hover:bg-blue-500/10 px-3 py-2 rounded-sm text-xs transition-colors">
+                  <Icon name="Receipt" size={13} /> Счёт PDF
+                </a>
+              )}
+            </div>
+
+            {/* Способ оплаты */}
+            <div className={`mb-3 px-3 py-2 rounded-sm border text-sm flex items-center gap-2 ${selectedContract.payment_method === "invoice" ? "border-blue-500/20 bg-blue-500/5 text-blue-300" : "border-amber-500/20 bg-amber-500/5 text-amber-300"}`}>
+              <Icon name={selectedContract.payment_method === "invoice" ? "Receipt" : "Wallet"} size={14} />
+              {selectedContract.payment_method === "invoice"
+                ? <>Оплата по счёту {selectedContract.invoice_total ? <span className="font-bold ml-1">{selectedContract.invoice_total.toLocaleString()} ₽</span> : "(+10%)"}</>
+                : "Оплата по факту"
+              }
             </div>
 
             {/* Кнопка генерации PDF */}

@@ -1,0 +1,4 @@
+ALTER TABLE t_p53739895_stagesound_rental_se.contracts
+  ADD COLUMN IF NOT EXISTS payment_method TEXT NOT NULL DEFAULT 'cash',
+  ADD COLUMN IF NOT EXISTS invoice_pdf_url TEXT DEFAULT NULL,
+  ADD COLUMN IF NOT EXISTS invoice_total INTEGER DEFAULT NULL;

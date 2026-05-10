@@ -649,6 +649,214 @@ def build_pdf(contract: dict, quote: dict, company_reqs: dict = None, tpl: dict 
     return buf.getvalue()
 
 
+def build_invoice_pdf(contract: dict, quote: dict, company_reqs: dict) -> bytes:
+    """Генерация PDF счёта на оплату (+10% от суммы договора)."""
+    ensure_fonts()
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4,
+                            leftMargin=25*mm, rightMargin=20*mm,
+                            topMargin=20*mm, bottomMargin=20*mm)
+
+    F, FB = "F", "FB"
+    BK = colors.HexColor("#111111")
+    GR = colors.HexColor("#666666")
+    AM = colors.HexColor("#92400e")
+
+    def S(name, **kw):
+        d = dict(fontName=F, fontSize=9, leading=14, textColor=BK, spaceAfter=0)
+        d.update(kw)
+        return ParagraphStyle(name, **d)
+
+    Ss = {
+        "title": S("title", fontName=FB, fontSize=14, alignment=TA_CENTER, leading=20),
+        "sub":   S("sub",   fontSize=9, alignment=TA_CENTER, textColor=GR),
+        "h2":    S("h2",    fontName=FB, fontSize=9, textColor=AM),
+        "body":  S("body",  fontSize=8.5, leading=13),
+        "bold":  S("bold",  fontName=FB, fontSize=8.5, leading=13),
+        "right": S("right", fontSize=8.5, alignment=TA_RIGHT, leading=13),
+        "boldR": S("boldR", fontName=FB, fontSize=8.5, alignment=TA_RIGHT, leading=13),
+        "small": S("small", fontSize=8, textColor=GR, leading=12),
+    }
+
+    cr = company_reqs or {}
+    W = A4[0] - 45*mm
+    total_base = int(quote.get("total") or 0)
+    invoice_total = round(total_base * 1.1)
+    today = datetime.now()
+    num = f"С-{contract['id']:04d}"
+    ctype = contract.get("client_type", "individual")
+    if ctype == "individual":
+        cname = contract.get("full_name") or "_______________"
+    else:
+        cname = contract.get("company_name") or "_______________"
+
+    story = []
+
+    # Заголовок
+    story.append(Paragraph("СЧЁТ НА ОПЛАТУ", Ss["title"]))
+    story.append(Spacer(1, 2*mm))
+    story.append(Paragraph(f"№ {num} от {today.strftime('%d.%m.%Y')}", Ss["sub"]))
+    story.append(Spacer(1, 6*mm))
+    story.append(HRFlowable(width="100%", thickness=1, color=AM))
+    story.append(Spacer(1, 4*mm))
+
+    # Реквизиты поставщика
+    story.append(Paragraph("ПОСТАВЩИК (Арендодатель)", Ss["h2"]))
+    story.append(Spacer(1, 2*mm))
+    supplier_data = [
+        ["Наименование:", cr.get("company_name", "")],
+        ["ИНН / КПП:", f"{cr.get('company_inn','')} / {cr.get('company_kpp','')}"],
+        ["ОГРН:", cr.get("company_ogrn", "")],
+        ["Юр. адрес:", cr.get("company_address", "")],
+        ["Банк:", cr.get("company_bank", "")],
+        ["БИК:", cr.get("company_bik", "")],
+        ["Р/счёт:", cr.get("company_rs", "")],
+        ["К/счёт:", cr.get("company_ks", "")],
+        ["Директор:", cr.get("company_director", "")],
+    ]
+    t_sup = Table([[Paragraph(k, Ss["small"]), Paragraph(v or "—", Ss["body"])]
+                   for k, v in supplier_data if v], colWidths=[40*mm, W-40*mm])
+    t_sup.setStyle(TableStyle([
+        ("LEFTPADDING", (0,0), (-1,-1), 0), ("RIGHTPADDING", (0,0), (-1,-1), 4),
+        ("TOPPADDING", (0,0), (-1,-1), 2), ("BOTTOMPADDING", (0,0), (-1,-1), 2),
+        ("VALIGN", (0,0), (-1,-1), "TOP"),
+    ]))
+    story.append(t_sup)
+    story.append(Spacer(1, 5*mm))
+
+    # Реквизиты покупателя
+    story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#cccccc")))
+    story.append(Spacer(1, 4*mm))
+    story.append(Paragraph("ПОКУПАТЕЛЬ (Арендатор)", Ss["h2"]))
+    story.append(Spacer(1, 2*mm))
+    if ctype == "individual":
+        buyer_data = [
+            ["ФИО:", cname],
+            ["Телефон:", contract.get("phone", "")],
+            ["Email:", contract.get("email", "")],
+        ]
+    else:
+        buyer_data = [
+            ["Наименование:", cname],
+            ["ИНН / КПП:", f"{contract.get('inn','')} / {contract.get('kpp','')}"],
+            ["Директор:", contract.get("director", "")],
+            ["Телефон:", contract.get("phone", "")],
+            ["Email:", contract.get("email", "")],
+        ]
+    t_buy = Table([[Paragraph(k, Ss["small"]), Paragraph(v or "—", Ss["body"])]
+                   for k, v in buyer_data if v], colWidths=[40*mm, W-40*mm])
+    t_buy.setStyle(TableStyle([
+        ("LEFTPADDING", (0,0), (-1,-1), 0), ("RIGHTPADDING", (0,0), (-1,-1), 4),
+        ("TOPPADDING", (0,0), (-1,-1), 2), ("BOTTOMPADDING", (0,0), (-1,-1), 2),
+        ("VALIGN", (0,0), (-1,-1), "TOP"),
+    ]))
+    story.append(t_buy)
+    story.append(Spacer(1, 5*mm))
+
+    # Таблица позиций
+    story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#cccccc")))
+    story.append(Spacer(1, 4*mm))
+    story.append(Paragraph("СОСТАВ АРЕНДЫ", Ss["h2"]))
+    story.append(Spacer(1, 3*mm))
+
+    items = quote.get("items") or []
+    days = int(quote.get("days") or 1)
+    col_w = [W*0.42, W*0.12, W*0.12, W*0.12, W*0.12, W*0.10]
+    header = [Paragraph(h, Ss["bold"]) for h in ["Наименование", "Ед.", "Кол-во", "Дней", "Цена", "Сумма"]]
+    rows = [header]
+    equip_total = 0
+    for it in items:
+        price = int(it.get("price") or 0)
+        qty = int(it.get("qty") or 1)
+        sub = price * qty * days
+        equip_total += sub
+        rows.append([
+            Paragraph(it.get("name",""), Ss["body"]),
+            Paragraph(it.get("unit","шт"), Ss["body"]),
+            Paragraph(str(qty), Ss["body"]),
+            Paragraph(str(days), Ss["body"]),
+            Paragraph(fn(price), Ss["right"]),
+            Paragraph(fn(sub), Ss["right"]),
+        ])
+
+    discount = int(quote.get("discount") or 0)
+    if discount > 0:
+        disc_amt = round(equip_total * discount / 100)
+        rows.append([Paragraph(f"Скидка {discount}%", Ss["small"]), Paragraph("",""), Paragraph("",""),
+                     Paragraph("",""), Paragraph("",""), Paragraph(f"−{fn(disc_amt)}", Ss["right"])])
+        equip_total -= disc_amt
+
+    extras = quote.get("extras") or []
+    for ex in extras:
+        rows.append([Paragraph(ex.get("name",""), Ss["body"]), Paragraph("усл",""), Paragraph("1",""),
+                     Paragraph("",""), Paragraph(fn(int(ex.get("price",0))), Ss["right"]),
+                     Paragraph(fn(int(ex.get("price",0))), Ss["right"])])
+
+    delivery_price = int(quote.get("delivery_price") or 0)
+    if delivery_price > 0:
+        rows.append([Paragraph("Доставка", Ss["body"]), Paragraph("усл",""), Paragraph("1",""),
+                     Paragraph("",""), Paragraph(fn(delivery_price), Ss["right"]), Paragraph(fn(delivery_price), Ss["right"])])
+
+    no_inst = quote.get("no_installation", False)
+    if not no_inst:
+        inst_p = int(quote.get("installation_price") or 0)
+        dism_p = int(quote.get("dismantling_price") or 0)
+        if inst_p > 0:
+            rows.append([Paragraph("Монтаж", Ss["body"]), Paragraph("усл",""), Paragraph("1",""),
+                         Paragraph("",""), Paragraph(fn(inst_p), Ss["right"]), Paragraph(fn(inst_p), Ss["right"])])
+        if dism_p > 0:
+            rows.append([Paragraph("Демонтаж", Ss["body"]), Paragraph("усл",""), Paragraph("1",""),
+                         Paragraph("",""), Paragraph(fn(dism_p), Ss["right"]), Paragraph(fn(dism_p), Ss["right"])])
+
+    # Строка "+10% безналичный расчёт"
+    surcharge = invoice_total - total_base
+    rows.append([Paragraph("Комиссия за безналичный расчёт (10%)", Ss["body"]),
+                 Paragraph("",""), Paragraph("",""), Paragraph("",""),
+                 Paragraph("10%", Ss["right"]), Paragraph(fn(surcharge), Ss["right"])])
+
+    tbl = Table(rows, colWidths=col_w)
+    tbl.setStyle(TableStyle([
+        ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#f5f5f5")),
+        ("FONTNAME", (0,0), (-1,0), FB),
+        ("FONTSIZE", (0,0), (-1,-1), 8),
+        ("GRID", (0,0), (-1,-1), 0.3, colors.HexColor("#dddddd")),
+        ("LEFTPADDING", (0,0), (-1,-1), 4), ("RIGHTPADDING", (0,0), (-1,-1), 4),
+        ("TOPPADDING", (0,0), (-1,-1), 3), ("BOTTOMPADDING", (0,0), (-1,-1), 3),
+        ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+        ("BACKGROUND", (-2,-1), (-1,-1), colors.HexColor("#fff8e7")),
+    ]))
+    story.append(tbl)
+    story.append(Spacer(1, 4*mm))
+
+    # Итого
+    story.append(Paragraph(f"<b>ИТОГО К ОПЛАТЕ: {fn(invoice_total)} руб.</b>", Ss["boldR"]))
+    story.append(Spacer(1, 2*mm))
+    story.append(Paragraph(f"<i>В том числе НДС: не облагается.</i>", Ss["small"]))
+    story.append(Paragraph(money_words(invoice_total) + ".", Ss["small"]))
+    story.append(Spacer(1, 6*mm))
+
+    # Подпись
+    story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#cccccc")))
+    story.append(Spacer(1, 4*mm))
+    sign_rows = [
+        [Paragraph(f"<b>{cr.get('company_name','')}</b>", Ss["body"]),
+         Paragraph(f"<b>{cname}</b>", Ss["body"])],
+        [Paragraph(f"Директор: {cr.get('company_director','')}", Ss["small"]),
+         Paragraph(f"Телефон: {contract.get('phone','')}", Ss["small"])],
+        [Paragraph("Подпись: ______________________ М.П.", Ss["small"]),
+         Paragraph(f"Email: {contract.get('email','')}", Ss["small"])],
+    ]
+    t_sign = Table(sign_rows, colWidths=[W/2, W/2])
+    t_sign.setStyle(TableStyle([
+        ("LEFTPADDING", (0,0), (-1,-1), 0), ("RIGHTPADDING", (0,0), (-1,-1), 0),
+        ("TOPPADDING", (0,0), (-1,-1), 3), ("BOTTOMPADDING", (0,0), (-1,-1), 3),
+        ("VALIGN", (0,0), (-1,-1), "TOP"),
+    ]))
+    story.append(t_sign)
+    doc.build(story)
+    return buf.getvalue()
+
+
 def handler(event: dict, context) -> dict:
     if event.get("httpMethod") == "OPTIONS":
         return {"statusCode": 200, "headers": CORS, "body": ""}
@@ -671,7 +879,7 @@ def handler(event: dict, context) -> dict:
             c.full_name, c.passport_series, c.passport_number, c.passport_issued,
             c.passport_date, c.birth_date, c.address,
             c.company_name, c.inn, c.kpp, c.ogrn, c.legal_address, c.director,
-            c.phone, c.email,
+            c.phone, c.email, c.payment_method,
             q.title, q.items, q.days, q.delivery, q.delivery_price, q.extras, q.total,
             q.event_date, q.delivery_address,
             q.installation_time, q.installation_price, q.dismantling_time, q.dismantling_price,
@@ -690,7 +898,8 @@ def handler(event: dict, context) -> dict:
 
     keys_c = ["id","quote_id","client_type","full_name","passport_series","passport_number",
               "passport_issued","passport_date","birth_date","address",
-              "company_name","inn","kpp","ogrn","legal_address","director","phone","email"]
+              "company_name","inn","kpp","ogrn","legal_address","director","phone","email",
+              "payment_method"]
     keys_q = ["title","items","days","delivery","delivery_price","extras","total",
               "event_date","delivery_address",
               "installation_time","installation_price","dismantling_time","dismantling_price",
@@ -724,6 +933,24 @@ def handler(event: dict, context) -> dict:
         cur.execute(f"UPDATE {schema}.contracts SET pep_uid=%s WHERE id=%s", (pep_uid, contract["id"]))
         conn.commit()
     contract["pep_uid"] = pep_uid
+
+    action_type = qp.get("action", "contract")
+
+    if action_type == "invoice":
+        # Генерация счёта (+10%)
+        invoice_total = round(int(quote.get("total") or 0) * 1.1)
+        pdf_bytes = build_invoice_pdf(contract, quote, company_reqs=company_reqs)
+        key = f"contracts/invoice_{contract['id']:04d}.pdf"
+        s3 = get_s3()
+        s3.put_object(Bucket="files", Key=key, Body=pdf_bytes, ContentType="application/pdf")
+        cdn = f"https://cdn.poehali.dev/projects/{os.environ['AWS_ACCESS_KEY_ID']}/bucket/{key}"
+        cur.execute(
+            f"UPDATE {schema}.contracts SET invoice_pdf_url=%s, invoice_total=%s WHERE id=%s",
+            (cdn, invoice_total, contract["id"])
+        )
+        conn.commit()
+        cur.close(); conn.close()
+        return {"statusCode": 200, "headers": CORS, "body": json.dumps({"ok": True, "pdf_url": cdn})}
 
     pdf_bytes = build_pdf(contract, quote, company_reqs=company_reqs, tpl=tpl, is_preview=is_preview)
 

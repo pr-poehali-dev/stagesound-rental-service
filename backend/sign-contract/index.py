@@ -1,21 +1,27 @@
 """
-ПЭП (простая электронная подпись) договора. v2
+ПЭП (простая электронная подпись) договора. v3
 
 POST /?action=send_otp&token=T      — отправить OTP-код на email клиента
 POST /?action=verify_otp&token=T    — проверить код и подписать договор
 GET  /?token=T                      — получить статус подписания (signed_at, pdf_url)
 POST /?action=submit&token=T        — создать контракт + сгенерировать PDF + отправить OTP
+POST /?action=manager_sign&pwd=X    — менеджер подписывает с обеих сторон + отправка email клиенту
 """
 import json
 import os
 import random
 import smtplib
 import string
+import urllib.request
+import urllib.parse
 from datetime import datetime, timedelta, timezone
+from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from email import encoders
 
 import psycopg2
+import boto3
 
 CORS = {
     "Access-Control-Allow-Origin": "*",
@@ -54,6 +60,50 @@ def send_email(to_email: str, subject: str, html_body: str):
         srv.sendmail(smtp_user, to_email, msg.as_string())
 
 
+def send_email_with_attachments(to_email: str, subject: str, html_body: str, attachments: list):
+    """Отправить письмо с PDF-вложениями. attachments = [{"name": "...", "url": "..."}]"""
+    smtp_user = os.environ.get("SMTP_USER", "")
+    smtp_pass = os.environ.get("SMTP_PASSWORD", "")
+    if not smtp_user or not smtp_pass:
+        return
+    msg = MIMEMultipart("mixed")
+    msg["Subject"] = subject
+    msg["From"] = f"Global Renta <{smtp_user}>"
+    msg["To"] = to_email
+    alt = MIMEMultipart("alternative")
+    alt.attach(MIMEText(html_body, "html", "utf-8"))
+    msg.attach(alt)
+    for att in attachments:
+        try:
+            req = urllib.request.Request(att["url"])
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                pdf_bytes = resp.read()
+            part = MIMEBase("application", "pdf")
+            part.set_payload(pdf_bytes)
+            encoders.encode_base64(part)
+            part.add_header("Content-Disposition", "attachment", filename=att["name"])
+            msg.attach(part)
+        except Exception as e:
+            print(f"[ATTACH ERROR] {att['name']}: {e}")
+    with smtplib.SMTP("mail.hosting.reg.ru", 587, timeout=20) as srv:
+        srv.ehlo()
+        srv.starttls()
+        srv.login(smtp_user, smtp_pass)
+        srv.sendmail(smtp_user, to_email, msg.as_string())
+
+
+def call_generate(contract_id: int, action: str = "contract") -> str:
+    """Вызвать generate-contract и вернуть PDF URL."""
+    gen_url = os.environ.get("GENERATE_CONTRACT_URL", "")
+    admin_pwd = os.environ.get("ADMIN_PASSWORD", "")
+    url = f"{gen_url}?pwd={urllib.parse.quote(admin_pwd)}&contract_id={contract_id}"
+    if action == "invoice":
+        url += "&action=invoice"
+    req = urllib.request.Request(url)
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        return json.loads(resp.read()).get("pdf_url", "")
+
+
 def handler(event: dict, context) -> dict:
     """ПЭП: отправка OTP, проверка, подпись договора."""
     if event.get("httpMethod") == "OPTIONS":
@@ -64,6 +114,68 @@ def handler(event: dict, context) -> dict:
     action = qp.get("action", "")
     token  = qp.get("token", "")
     ip     = (event.get("requestContext") or {}).get("identity", {}).get("sourceIp", "")
+
+    # manager_sign не требует token клиента
+    if action == "manager_sign":
+        conn = db()
+        cur  = conn.cursor()
+        try:
+            pwd = qp.get("pwd", "")
+            if pwd.lower() != os.environ.get("ADMIN_PASSWORD", "").lower():
+                return {"statusCode": 401, "headers": CORS,
+                        "body": json.dumps({"error": "Unauthorized"}, ensure_ascii=False)}
+            body2 = json.loads(event.get("body") or "{}")
+            contract_id = int(body2.get("contract_id") or 0)
+            manager_name_val = (body2.get("manager_name") or "Менеджер").strip()
+            if not contract_id:
+                return {"statusCode": 400, "headers": CORS,
+                        "body": json.dumps({"error": "contract_id required"}, ensure_ascii=False)}
+            now = datetime.now(timezone.utc)
+            cur.execute(
+                f"UPDATE {s()}.contracts SET manager_signed_at=%s, manager_name=%s, status='signed' WHERE id=%s RETURNING "
+                f"email, full_name, company_name, payment_method, invoice_total",
+                (now, manager_name_val, contract_id)
+            )
+            row = cur.fetchone()
+            if not row:
+                return {"statusCode": 404, "headers": CORS,
+                        "body": json.dumps({"error": "not_found"}, ensure_ascii=False)}
+            client_email, full_name, company_name, payment_method, invoice_total = row
+            conn.commit()
+            client_name = full_name or company_name or "Клиент"
+
+            contract_pdf_url = ""
+            invoice_pdf_url = ""
+            try:
+                contract_pdf_url = call_generate(contract_id, "contract")
+                cur.execute(f"UPDATE {s()}.contracts SET contract_pdf_url=%s WHERE id=%s", (contract_pdf_url, contract_id))
+                conn.commit()
+            except Exception as e:
+                print(f"[PDF ERROR contract] {e}")
+
+            if payment_method == "invoice":
+                try:
+                    invoice_pdf_url = call_generate(contract_id, "invoice")
+                    cur.execute(f"UPDATE {s()}.contracts SET invoice_pdf_url=%s WHERE id=%s", (invoice_pdf_url, contract_id))
+                    conn.commit()
+                except Exception as e:
+                    print(f"[PDF ERROR invoice] {e}")
+
+            attachments = []
+            if contract_pdf_url:
+                attachments.append({"name": f"Договор_{contract_id:04d}.pdf", "url": contract_pdf_url})
+            if invoice_pdf_url:
+                attachments.append({"name": f"Счет_{contract_id:04d}.pdf", "url": invoice_pdf_url})
+            try:
+                send_email_with_attachments(client_email, "Договор подписан — Global Renta",
+                                            _signed_email_html(client_name, payment_method, invoice_total), attachments)
+            except Exception as e:
+                print(f"[SMTP ERROR manager_sign] {e}")
+            return {"statusCode": 200, "headers": CORS,
+                    "body": json.dumps({"ok": True, "contract_pdf_url": contract_pdf_url,
+                                        "invoice_pdf_url": invoice_pdf_url}, ensure_ascii=False)}
+        finally:
+            cur.close(); conn.close()
 
     if not token:
         return {"statusCode": 400, "headers": CORS,
@@ -178,6 +290,10 @@ def handler(event: dict, context) -> dict:
             otp = gen_otp()
             now = datetime.now(timezone.utc)
 
+            payment_method = body.get("payment_method", "cash")
+            if payment_method not in ("cash", "invoice"):
+                payment_method = "cash"
+
             if existing:
                 # Обновляем существующий контракт
                 cur.execute(
@@ -185,7 +301,7 @@ def handler(event: dict, context) -> dict:
                     f"client_type=%s, full_name=%s, passport_series=%s, passport_number=%s, "
                     f"passport_issued=%s, passport_date=%s, birth_date=%s, address=%s, "
                     f"company_name=%s, inn=%s, kpp=%s, ogrn=%s, legal_address=%s, director=%s, "
-                    f"phone=%s, email=%s, passport_file_url=%s, "
+                    f"phone=%s, email=%s, passport_file_url=%s, payment_method=%s, "
                     f"otp_code=%s, otp_sent_at=%s, otp_attempts=0, signed_at=NULL "
                     f"WHERE id=%s RETURNING id",
                     (client_type,
@@ -193,7 +309,7 @@ def handler(event: dict, context) -> dict:
                      body.get("passport_issued",""), body.get("passport_date",""), body.get("birth_date",""), body.get("address",""),
                      body.get("company_name",""), body.get("inn",""), body.get("kpp",""), body.get("ogrn",""),
                      body.get("legal_address",""), body.get("director",""),
-                     body.get("phone",""), email, body.get("passport_file_url"),
+                     body.get("phone",""), email, body.get("passport_file_url"), payment_method,
                      otp, now, existing[0])
                 )
                 contract_id = cur.fetchone()[0]
@@ -203,14 +319,14 @@ def handler(event: dict, context) -> dict:
                     f"(quote_id, client_type, full_name, passport_series, passport_number, "
                     f"passport_issued, passport_date, birth_date, address, "
                     f"company_name, inn, kpp, ogrn, legal_address, director, "
-                    f"phone, email, passport_file_url, otp_code, otp_sent_at) "
-                    f"VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id",
+                    f"phone, email, passport_file_url, payment_method, otp_code, otp_sent_at) "
+                    f"VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id",
                     (q_id, client_type,
                      body.get("full_name",""), body.get("passport_series",""), body.get("passport_number",""),
                      body.get("passport_issued",""), body.get("passport_date",""), body.get("birth_date",""), body.get("address",""),
                      body.get("company_name",""), body.get("inn",""), body.get("kpp",""), body.get("ogrn",""),
                      body.get("legal_address",""), body.get("director",""),
-                     body.get("phone",""), email, body.get("passport_file_url"),
+                     body.get("phone",""), email, body.get("passport_file_url"), payment_method,
                      otp, now)
                 )
                 contract_id = cur.fetchone()[0]
@@ -370,6 +486,52 @@ def _otp_email_html(otp: str, name: str) -> str:
       <tr>
         <td style="padding:16px 36px;border-top:1px solid #222;background:#0d0d0d">
           <p style="margin:0;color:#555;font-size:11px">Если вы не запрашивали этот код — проигнорируйте письмо.</p>
+        </td>
+      </tr>
+    </table>
+  </td></tr>
+</table>
+</body></html>"""
+
+
+def _signed_email_html(name: str, payment_method: str, invoice_total) -> str:
+    payment_note = ""
+    if payment_method == "invoice":
+        total_str = f"{invoice_total:,}".replace(",", "\u00a0") if invoice_total else ""
+        payment_note = f"""
+        <div style="background:#0a0a0a;border:1px solid #f59e0b;border-radius:4px;padding:16px 20px;margin:20px 0">
+          <p style="margin:0 0 6px;color:#f59e0b;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px">Счёт на оплату</p>
+          <p style="margin:0;color:#ccc;font-size:14px">К письму приложен счёт на сумму <strong style="color:#fff">{total_str} ₽</strong> (включая 10% за безналичный расчёт).</p>
+          <p style="margin:8px 0 0;color:#888;font-size:12px">Пожалуйста, произведите оплату в соответствии со счётом.</p>
+        </div>"""
+    else:
+        payment_note = """
+        <div style="background:#0a0a0a;border:1px solid #333;border-radius:4px;padding:16px 20px;margin:20px 0">
+          <p style="margin:0;color:#aaa;font-size:14px">Способ оплаты: <strong style="color:#fff">по факту</strong>. Оплата производится в день мероприятия.</p>
+        </div>"""
+    return f"""
+<!DOCTYPE html><html lang="ru"><head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#0a0a0a;font-family:Arial,sans-serif">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0a;padding:40px 20px">
+  <tr><td align="center">
+    <table width="520" cellpadding="0" cellspacing="0" style="background:#111;border:1px solid #333;border-radius:4px;overflow:hidden">
+      <tr>
+        <td style="background:#111;padding:28px 36px;border-bottom:1px solid #222">
+          <p style="margin:0;color:#f59e0b;font-size:11px;text-transform:uppercase;letter-spacing:3px">Global Renta</p>
+          <h1 style="margin:6px 0 0;color:#fff;font-size:22px;font-weight:700">Договор подписан</h1>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:28px 36px">
+          <p style="color:#aaa;font-size:14px;margin:0 0 16px">Здравствуйте, <strong style="color:#fff">{name}</strong>!</p>
+          <p style="color:#aaa;font-size:14px;margin:0 0 8px">Договор аренды оборудования подписан с обеих сторон. Копия договора прикреплена к этому письму.</p>
+          {payment_note}
+          <p style="color:#666;font-size:12px;margin:24px 0 0">Если у вас возникнут вопросы — свяжитесь с вашим менеджером.</p>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:16px 36px;border-top:1px solid #222;background:#0d0d0d">
+          <p style="margin:0;color:#555;font-size:11px">© Global Renta — аренда оборудования для мероприятий</p>
         </td>
       </tr>
     </table>
