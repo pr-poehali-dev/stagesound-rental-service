@@ -84,12 +84,16 @@ export default function AdminQuote() {
   const [extraServices, setExtraServices] = useState<ExtraService[]>(DEFAULT_EXTRAS);
   const [selectedExtras, setSelectedExtras] = useState<string[]>([]);
 
+  const [installationDate, setInstallationDate] = useState("");
   const [installationTime, setInstallationTime] = useState("");
   const [installationPrice, setInstallationPrice] = useState(0);
+  const [dismantlingDate, setDismantlingDate] = useState("");
   const [dismantlingTime, setDismantlingTime] = useState("");
   const [dismantlingPrice, setDismantlingPrice] = useState(0);
   const [noInstallation, setNoInstallation] = useState(false);
+  const [deliveryDate, setDeliveryDate] = useState("");
   const [deliveryTime, setDeliveryTime] = useState("");
+  const [pickupDate, setPickupDate] = useState("");
   const [pickupTime, setPickupTime] = useState("");
   const [discount, setDiscount] = useState(0);
   const [discountInput, setDiscountInput] = useState("");
@@ -179,6 +183,11 @@ export default function AdminQuote() {
   const installDismantleTotal = (installationTime && !noInstallation ? installationPrice : 0) + (dismantlingTime && !noInstallation ? dismantlingPrice : 0);
   const total = equipmentTotal + extrasTotal + deliveryTotal + installDismantleTotal;
 
+  const fmtDateTime = (date: string, time: string) => {
+    const parts = [date ? new Date(date).toLocaleDateString("ru-RU", { day: "numeric", month: "long" }) : "", time].filter(Boolean);
+    return parts.join(", ") || null;
+  };
+
   const handleSaveAndShare = async () => {
     if (cart.length === 0) return;
     setSaving(true);
@@ -202,13 +211,13 @@ export default function AdminQuote() {
         extras: extrasData, total,
         event_date: eventDate,
         delivery_address: deliveryAddress,
-        installation_time: noInstallation ? null : (installationTime || null),
+        installation_time: noInstallation ? null : (fmtDateTime(installationDate, installationTime) || null),
         installation_price: noInstallation ? 0 : (installationTime ? installationPrice : 0),
-        dismantling_time: noInstallation ? null : (dismantlingTime || null),
+        dismantling_time: noInstallation ? null : (fmtDateTime(dismantlingDate, dismantlingTime) || null),
         dismantling_price: noInstallation ? 0 : (dismantlingTime ? dismantlingPrice : 0),
         no_installation: noInstallation,
-        delivery_time: deliveryTime || null,
-        pickup_time: pickupTime || null,
+        delivery_time: fmtDateTime(deliveryDate, deliveryTime) || null,
+        pickup_time: fmtDateTime(pickupDate, pickupTime) || null,
         discount,
         access_pin: accessPin.trim() || null,
       }),
@@ -513,16 +522,24 @@ export default function AdminQuote() {
                 <h3 className="text-xs text-gray-500 uppercase tracking-wider mb-3">Логистика</h3>
                 <div className="space-y-3">
                   <div>
-                    <label className="text-xs text-gray-600 block mb-1.5">Время привоза оборудования</label>
-                    <input value={deliveryTime} onChange={e => setDeliveryTime(e.target.value)}
-                      placeholder="напр.: 08:00 — 10:00"
-                      className={iCls} />
+                    <label className="text-xs text-gray-600 block mb-1.5">Привоз оборудования</label>
+                    <div className="flex gap-2">
+                      <input type="date" value={deliveryDate} onChange={e => setDeliveryDate(e.target.value)}
+                        className="w-36 bg-transparent border border-amber-500/20 rounded-sm px-2 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50" />
+                      <input value={deliveryTime} onChange={e => setDeliveryTime(e.target.value)}
+                        placeholder="напр.: 08:00 — 10:00"
+                        className={`${iCls} flex-1`} />
+                    </div>
                   </div>
                   <div>
-                    <label className="text-xs text-gray-600 block mb-1.5">Время увоза оборудования</label>
-                    <input value={pickupTime} onChange={e => setPickupTime(e.target.value)}
-                      placeholder="напр.: 23:00 — 01:00"
-                      className={iCls} />
+                    <label className="text-xs text-gray-600 block mb-1.5">Увоз оборудования</label>
+                    <div className="flex gap-2">
+                      <input type="date" value={pickupDate} onChange={e => setPickupDate(e.target.value)}
+                        className="w-36 bg-transparent border border-amber-500/20 rounded-sm px-2 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50" />
+                      <input value={pickupTime} onChange={e => setPickupTime(e.target.value)}
+                        placeholder="напр.: 23:00 — 01:00"
+                        className={`${iCls} flex-1`} />
+                    </div>
                   </div>
                 </div>
               </div>
@@ -548,20 +565,24 @@ export default function AdminQuote() {
                 ) : (
                   <div className="space-y-3">
                     <div>
-                      <label className="text-xs text-gray-600 block mb-1.5">Время монтажа</label>
+                      <label className="text-xs text-gray-600 block mb-1.5">Монтаж</label>
                       <div className="flex gap-2">
+                        <input type="date" value={installationDate} onChange={e => setInstallationDate(e.target.value)}
+                          className="w-36 bg-transparent border border-amber-500/20 rounded-sm px-2 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50" />
                         <input value={installationTime} onChange={e => setInstallationTime(e.target.value)}
-                          placeholder="напр.: 10:00 — 14:00 или 3 часа"
+                          placeholder="напр.: 10:00 — 14:00"
                           className={`${iCls} flex-1`} />
                         <input type="number" value={installationPrice || ""} onChange={e => setInstallationPrice(Number(e.target.value))}
                           placeholder="₽" className="w-20 bg-transparent border border-amber-500/20 rounded-sm px-2 py-2 text-sm text-white text-right focus:outline-none focus:border-amber-500/50" />
                       </div>
                     </div>
                     <div>
-                      <label className="text-xs text-gray-600 block mb-1.5">Время демонтажа</label>
+                      <label className="text-xs text-gray-600 block mb-1.5">Демонтаж</label>
                       <div className="flex gap-2">
+                        <input type="date" value={dismantlingDate} onChange={e => setDismantlingDate(e.target.value)}
+                          className="w-36 bg-transparent border border-amber-500/20 rounded-sm px-2 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50" />
                         <input value={dismantlingTime} onChange={e => setDismantlingTime(e.target.value)}
-                          placeholder="напр.: 23:00 — 02:00 или 2 часа"
+                          placeholder="напр.: 23:00 — 02:00"
                           className={`${iCls} flex-1`} />
                         <input type="number" value={dismantlingPrice || ""} onChange={e => setDismantlingPrice(Number(e.target.value))}
                           placeholder="₽" className="w-20 bg-transparent border border-amber-500/20 rounded-sm px-2 py-2 text-sm text-white text-right focus:outline-none focus:border-amber-500/50" />
