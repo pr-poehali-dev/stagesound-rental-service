@@ -225,7 +225,30 @@ export default function EquipmentItem() {
               </div>
 
               <div className="mb-4">
-                {discount > 0 ? (
+                {item.variants && item.variants.length > 0 ? (
+                  <div>
+                    <p className="text-gray-500 text-xs uppercase tracking-wider mb-2">Варианты аренды</p>
+                    <div className="space-y-1.5">
+                      {item.variants.map((v, i) => (
+                        <div key={i} className="flex items-center justify-between border border-amber-500/20 rounded-sm px-3 py-2">
+                          <span className="text-white text-sm">{v.label}</span>
+                          <span className="font-oswald text-amber-500 font-bold">
+                            {discount > 0 ? (
+                              <>
+                                <span className="text-gray-600 text-xs line-through mr-1">{v.price.toLocaleString()}</span>
+                                {Math.round(v.price * (1 - discount / 100)).toLocaleString()} ₽
+                              </>
+                            ) : (
+                              <>{v.price.toLocaleString()} ₽</>
+                            )}
+                            <span className="text-gray-500 text-xs font-normal ml-1">/ {item.unit}</span>
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                    {discount > 0 && <div className="text-green-500 text-xs mt-1.5">Скидка {discount}% применена</div>}
+                  </div>
+                ) : discount > 0 ? (
                   <>
                     <div className="text-gray-500 text-sm line-through leading-none mb-0.5">{item.price.toLocaleString()} ₽</div>
                     <div className="font-oswald text-4xl font-bold text-green-400 leading-none">{applyDiscount(item.price).toLocaleString()} ₽</div>

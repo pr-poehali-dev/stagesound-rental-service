@@ -97,7 +97,7 @@ def handler(event: dict, context) -> dict:
             cur.execute(
                 f"SELECT e.id, e.renter_id, e.name, e.category, e.subcategory, e.price, e.unit, "
                 f"e.description, e.specs, e.tags, e.image, e.status, e.is_active, e.created_at, "
-                f"r.company_name, r.email "
+                f"r.company_name, r.email, e.variants "
                 f"FROM {s()}.renter_equipment e JOIN {s()}.renters r ON r.id = e.renter_id "
                 f"WHERE e.status='approved' AND e.is_active=true AND r.status='active' "
                 f"ORDER BY e.created_at DESC"
@@ -176,7 +176,7 @@ def handler(event: dict, context) -> dict:
             cur.execute(
                 f"SELECT e.id, e.renter_id, e.name, e.category, e.subcategory, e.price, e.unit, "
                 f"e.description, e.specs, e.tags, e.image, e.status, e.is_active, e.created_at, "
-                f"r.company_name, r.email "
+                f"r.company_name, r.email, e.variants "
                 f"FROM {s()}.renter_equipment e JOIN {s()}.renters r ON r.id=e.renter_id ORDER BY e.created_at DESC"
             )
             equipment = [row_to_eq(r) for r in cur.fetchall()]
@@ -285,7 +285,7 @@ def handler(event: dict, context) -> dict:
         # ── ОБОРУДОВАНИЕ ───────────────────────────────────────────────
         if method == "GET":
             cur.execute(
-                f"SELECT id, renter_id, name, category, subcategory, price, unit, description, specs, tags, image, status, is_active, created_at "
+                f"SELECT id, renter_id, name, category, subcategory, price, unit, description, specs, tags, image, status, is_active, created_at, NULL, NULL, variants "
                 f"FROM {s()}.renter_equipment WHERE renter_id=%s ORDER BY created_at DESC",
                 (renter_id,)
             )
@@ -300,11 +300,12 @@ def handler(event: dict, context) -> dict:
                 return {"statusCode": 400, "headers": CORS,
                         "body": json.dumps({"error": "Название и категория обязательны"}, ensure_ascii=False)}
             cur.execute(
-                f"INSERT INTO {s()}.renter_equipment (renter_id,name,category,subcategory,price,unit,description,specs,tags,image) "
-                f"VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id",
+                f"INSERT INTO {s()}.renter_equipment (renter_id,name,category,subcategory,price,unit,description,specs,tags,image,variants) "
+                f"VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb) RETURNING id",
                 (renter_id, name, category, body.get("subcategory") or None, body.get("price", 0),
                  body.get("unit", "день"), body.get("description", ""),
-                 json.dumps(body.get("specs", {})), body.get("tags", []), body.get("image") or None)
+                 json.dumps(body.get("specs", {})), body.get("tags", []), body.get("image") or None,
+                 json.dumps(body.get("variants", [])))
             )
             new_id = cur.fetchone()[0]
             conn.commit()
@@ -323,12 +324,12 @@ def handler(event: dict, context) -> dict:
                         "body": json.dumps({"error": "Не найдено"}, ensure_ascii=False)}
             cur.execute(
                 f"UPDATE {s()}.renter_equipment SET name=%s,category=%s,subcategory=%s,price=%s,unit=%s,"
-                f"description=%s,specs=%s,tags=%s,image=%s,status='pending',is_active=false "
+                f"description=%s,specs=%s,tags=%s,image=%s,variants=%s::jsonb,status='pending',is_active=false "
                 f"WHERE id=%s AND renter_id=%s",
                 (body.get("name"), body.get("category"), body.get("subcategory") or None,
                  body.get("price", 0), body.get("unit", "день"), body.get("description", ""),
                  json.dumps(body.get("specs", {})), body.get("tags", []),
-                 body.get("image") or None, eq_id, renter_id)
+                 body.get("image") or None, json.dumps(body.get("variants", [])), eq_id, renter_id)
             )
             conn.commit()
             return {"statusCode": 200, "headers": CORS,

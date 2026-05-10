@@ -14,10 +14,12 @@ type Renter = {
   id: number; email: string; company_name: string; contact_name: string;
   phone: string; city: string; telegram?: string; description?: string; status: string;
 };
+type Variant = { label: string; price: number };
 type RenterEq = {
   id: number; name: string; category: string; subcategory?: string;
   price: number; unit: string; description: string; specs: Record<string, string>;
   tags: string[]; image?: string; status: string; is_active: boolean; created_at: string;
+  variants: Variant[];
 };
 type RenterCat = { id: number; name: string; status: string; created_at?: string; mine: boolean };
 type RenterSub = { id: number; name: string; category: string; status: string; created_at?: string; mine: boolean };
@@ -65,7 +67,7 @@ const statusBadge = (status: string, type: "eq" | "cat" | "order" = "eq") => {
 
 const EMPTY_EQ = {
   name: "", category: "", subcategory: "", price: 0, unit: "день",
-  description: "", tags: "", image: "", specsStr: "",
+  description: "", tags: "", image: "", specsStr: "", variants: [] as Variant[],
 };
 
 // ── Компонент ────────────────────────────────────────────────────────────────
@@ -203,6 +205,9 @@ export default function RenterDashboard() {
     try {
       const base = isEdit ? editEq! : newEq;
       const specsStr = isEdit ? editSpecsStr : newSpecsStr;
+      const variants = isEdit
+        ? (editEq as RenterEq).variants || []
+        : (newEq as typeof EMPTY_EQ).variants || [];
       const payload = {
         ...(isEdit ? { id: editEq!.id } : {}),
         name: (base as typeof newEq).name ?? (base as RenterEq).name,
@@ -216,6 +221,7 @@ export default function RenterDashboard() {
           ? (base as typeof newEq).tags.split(",").map((t: string) => t.trim()).filter(Boolean)
           : (base as RenterEq).tags,
         specs: parseSpecs(specsStr),
+        variants,
       };
       const res = await fetch(EQ_URL, {
         method: isEdit ? "PUT" : "POST",
@@ -426,6 +432,12 @@ export default function RenterDashboard() {
             )}
           </div>
         </div>
+
+        <RenterVariantsEditor
+          variants={isEdit ? ((editEq as RenterEq).variants || []) : (newEq.variants || [])}
+          unit={unit}
+          onChange={v => setF({ variants: v } as Partial<typeof newEq>)}
+        />
       </div>
     );
   };
@@ -614,7 +626,11 @@ export default function RenterDashboard() {
                       </div>
                       <div className="flex flex-wrap gap-3 text-xs text-gray-600">
                         <span className="border border-amber-500/20 text-amber-500/60 px-1.5 py-0.5 rounded-sm">{eq.category}{eq.subcategory ? ` / ${eq.subcategory}` : ""}</span>
-                        <span className="font-oswald text-amber-500">{eq.price.toLocaleString()} ₽/{eq.unit}</span>
+                        {eq.variants?.length > 0 ? (
+                          <span className="text-blue-400/70">{eq.variants.length} вар.: {eq.variants.map(v => `${v.label} — ${v.price.toLocaleString()} ₽`).join(", ")}</span>
+                        ) : (
+                          <span className="font-oswald text-amber-500">{eq.price.toLocaleString()} ₽/{eq.unit}</span>
+                        )}
                         {Object.keys(eq.specs || {}).length > 0 && (
                           <span className="text-gray-700">{Object.keys(eq.specs).length} характеристик</span>
                         )}
@@ -856,6 +872,85 @@ export default function RenterDashboard() {
           </div>
         )}
 
+      </div>
+    </div>
+  );
+}
+
+// ── Редактор вариантов для прокатчика ────────────────────────────────────────
+function RenterVariantsEditor({
+  variants, unit, onChange,
+}: {
+  variants: Variant[];
+  unit: string;
+  onChange: (v: Variant[]) => void;
+}) {
+  const [newLabel, setNewLabel] = useState("");
+  const [newPrice, setNewPrice] = useState(0);
+
+  const add = () => {
+    if (!newLabel.trim()) return;
+    onChange([...variants, { label: newLabel.trim(), price: newPrice }]);
+    setNewLabel(""); setNewPrice(0);
+  };
+  const remove = (i: number) => onChange(variants.filter((_, idx) => idx !== i));
+  const update = (i: number, field: keyof Variant, val: string | number) =>
+    onChange(variants.map((v, idx) => idx === i ? { ...v, [field]: field === "price" ? Number(val) : val } : v));
+
+  return (
+    <div className="border-t border-amber-500/10 pt-4 mt-2">
+      <div className="flex items-center gap-2 mb-3">
+        <label className="text-xs text-gray-500 uppercase tracking-wider">Варианты / модификации</label>
+        <span className="text-xs text-gray-700">(необязательно — напр.: 5 м, 10 м, 15 м)</span>
+      </div>
+
+      {variants.length > 0 && (
+        <div className="space-y-2 mb-3">
+          {variants.map((v, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <input
+                value={v.label}
+                onChange={e => update(i, "label", e.target.value)}
+                placeholder="Название варианта"
+                className="flex-1 bg-transparent border border-amber-500/20 rounded-sm px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50"
+              />
+              <input
+                type="number"
+                value={v.price}
+                onChange={e => update(i, "price", e.target.value)}
+                className="w-28 bg-transparent border border-amber-500/20 rounded-sm px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50"
+              />
+              <span className="text-xs text-gray-600 whitespace-nowrap">₽/{unit}</span>
+              <button type="button" onClick={() => remove(i)}
+                className="p-1.5 border border-gray-700 text-gray-600 hover:text-red-400 rounded-sm transition-colors">
+                <Icon name="X" size={12} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="flex items-center gap-2">
+        <input
+          value={newLabel}
+          onChange={e => setNewLabel(e.target.value)}
+          onKeyDown={e => e.key === "Enter" && add()}
+          placeholder="Новый вариант (напр.: 10 метров)"
+          className="flex-1 bg-transparent border border-amber-500/20 rounded-sm px-3 py-2 text-sm text-white placeholder-gray-700 focus:outline-none focus:border-amber-500/50"
+        />
+        <input
+          type="number"
+          value={newPrice}
+          onChange={e => setNewPrice(Number(e.target.value))}
+          onKeyDown={e => e.key === "Enter" && add()}
+          placeholder="Цена"
+          className="w-28 bg-transparent border border-amber-500/20 rounded-sm px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50"
+        />
+        <span className="text-xs text-gray-600 whitespace-nowrap">₽/{unit}</span>
+        <button type="button" onClick={add} disabled={!newLabel.trim()}
+          className="flex items-center gap-1.5 border border-amber-500/30 text-amber-500 hover:bg-amber-500/10 px-3 py-2 rounded-sm text-xs transition-colors disabled:opacity-30">
+          <Icon name="Plus" size={12} /> Добавить
+        </button>
       </div>
     </div>
   );

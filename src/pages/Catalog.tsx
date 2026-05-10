@@ -328,7 +328,17 @@ export default function Catalog() {
                       {/* Price + CTA */}
                       <div className="flex items-center justify-between pt-3 border-t border-amber-500/10">
                         <div>
-                          {discount > 0 ? (
+                          {item.variants && item.variants.length > 0 ? (
+                            <div>
+                              <div className="text-gray-500 text-xs mb-1">от {Math.min(...item.variants.map(v => v.price)).toLocaleString()} ₽ / {item.unit}</div>
+                              <div className="flex flex-wrap gap-1">
+                                {item.variants.slice(0, 3).map((v, i) => (
+                                  <span key={i} className="text-xs border border-amber-500/20 text-amber-500/70 px-1.5 py-0.5 rounded-sm">{v.label}</span>
+                                ))}
+                                {item.variants.length > 3 && <span className="text-xs text-gray-600">+{item.variants.length - 3}</span>}
+                              </div>
+                            </div>
+                          ) : discount > 0 ? (
                             <>
                               <div className="text-gray-500 text-xs line-through leading-none">{item.price.toLocaleString()} ₽</div>
                               <div className="font-oswald text-2xl font-bold text-green-400 leading-none">{applyDiscount(item.price).toLocaleString()} ₽</div>

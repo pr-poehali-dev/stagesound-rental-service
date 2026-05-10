@@ -1,3 +1,8 @@
+export interface EquipmentVariant {
+  label: string;
+  price: number;
+}
+
 export interface Equipment {
   id: number;
   name: string;
@@ -13,6 +18,7 @@ export interface Equipment {
   tags: string[];
   image?: string;
   usage?: "indoor" | "outdoor" | "indoor/outdoor";
+  variants?: EquipmentVariant[];
 }
 
 export const categories = ["Все", "Звук", "Свет", "Видео", "Сцена", "Конференц", "Генераторы"];

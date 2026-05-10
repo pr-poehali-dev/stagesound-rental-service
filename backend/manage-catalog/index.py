@@ -113,7 +113,7 @@ def handler(event: dict, context) -> dict:
             if method == "GET":
                 cur.execute(f"""
                     SELECT id, name, category, subcategory, price, unit, rating, reviews,
-                           popular, specs, description, tags, image, usage, sort_order, is_active
+                           popular, specs, description, tags, image, usage, sort_order, is_active, variants
                     FROM {schema}.equipment ORDER BY category, sort_order, name
                 """)
                 rows = cur.fetchall()
@@ -125,6 +125,7 @@ def handler(event: dict, context) -> dict:
                         "popular": r[8], "specs": r[9] or {}, "description": r[10],
                         "tags": list(r[11]) if r[11] else [], "image": r[12],
                         "usage": r[13], "sort_order": r[14], "is_active": r[15],
+                        "variants": r[16] if r[16] else [],
                     })
                 return ok({"equipment": data})
 
@@ -143,14 +144,15 @@ def handler(event: dict, context) -> dict:
                     b.get("usage") or None,
                     int(b.get("sort_order", 0)),
                     bool(b.get("is_active", True)),
+                    json.dumps(b.get("variants", []), ensure_ascii=False),
                 )
 
             if method == "POST":
                 f = fields(body)
                 cur.execute(f"""
                     INSERT INTO {schema}.equipment
-                    (name,category,subcategory,price,unit,rating,reviews,popular,specs,description,tags,image,usage,sort_order,is_active)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s,%s,%s,%s,%s) RETURNING id
+                    (name,category,subcategory,price,unit,rating,reviews,popular,specs,description,tags,image,usage,sort_order,is_active,variants)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s,%s,%s,%s,%s,%s::jsonb) RETURNING id
                 """, f)
                 new_id = cur.fetchone()[0]
                 conn.commit()
@@ -161,7 +163,7 @@ def handler(event: dict, context) -> dict:
                 cur.execute(f"""
                     UPDATE {schema}.equipment
                     SET name=%s,category=%s,subcategory=%s,price=%s,unit=%s,rating=%s,reviews=%s,
-                        popular=%s,specs=%s::jsonb,description=%s,tags=%s,image=%s,usage=%s,sort_order=%s,is_active=%s
+                        popular=%s,specs=%s::jsonb,description=%s,tags=%s,image=%s,usage=%s,sort_order=%s,is_active=%s,variants=%s::jsonb
                     WHERE id=%s
                 """, f + (resource_id,))
                 conn.commit()

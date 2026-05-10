@@ -33,7 +33,7 @@ def handler(event: dict, context) -> dict:
 
         cur.execute(f"""
             SELECT id, name, category, subcategory, price, unit, rating, reviews,
-                   popular, specs, description, tags, image, usage, sort_order
+                   popular, specs, description, tags, image, usage, sort_order, variants
             FROM {schema}.equipment
             WHERE is_active = true
             ORDER BY category, sort_order, name
@@ -47,13 +47,14 @@ def handler(event: dict, context) -> dict:
                 "popular": r[8], "specs": r[9] or {}, "description": r[10],
                 "tags": list(r[11]) if r[11] else [], "image": r[12],
                 "usage": r[13], "sort_order": r[14],
+                "variants": r[15] if r[15] else [],
                 "source": "own",
             })
 
         # Добавляем одобренное оборудование прокатчиков
         cur.execute(f"""
             SELECT e.id, e.name, e.category, e.subcategory, e.price, e.unit,
-                   e.description, e.specs, e.tags, e.image, r.company_name
+                   e.description, e.specs, e.tags, e.image, r.company_name, e.variants
             FROM {schema}.renter_equipment e
             JOIN {schema}.renters r ON r.id = e.renter_id
             WHERE e.status = 'approved' AND e.is_active = true AND r.status = 'active'
@@ -68,6 +69,7 @@ def handler(event: dict, context) -> dict:
                 "popular": False, "specs": r[7] or {}, "description": r[6],
                 "tags": list(r[8]) if r[8] else [], "image": r[9],
                 "usage": None, "sort_order": 999,
+                "variants": r[11] if r[11] else [],
                 "source": "renter", "renter_company": r[10],
                 "renter_equipment_id": r[0],
             })

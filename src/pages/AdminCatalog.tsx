@@ -5,17 +5,19 @@ import { useDiscount } from "@/hooks/useDiscount";
 
 type Category = { id: number; name: string; sort_order: number };
 type Subcategory = { id: number; name: string; category: string; sort_order: number };
+type Variant = { label: string; price: number };
 type EquipmentItem = {
   id: number; name: string; category: string; subcategory?: string;
   price: number; unit: string; rating: number; reviews: number;
   popular: boolean; specs: Record<string, string>; description: string;
   tags: string[]; image?: string; usage?: string; sort_order: number; is_active: boolean;
+  variants: Variant[];
 };
 
 const EMPTY_ITEM: Omit<EquipmentItem, "id"> = {
   name: "", category: "", subcategory: "", price: 0, unit: "день",
   rating: 5, reviews: 0, popular: false, specs: {}, description: "",
-  tags: [], image: "", usage: "", sort_order: 0, is_active: true,
+  tags: [], image: "", usage: "", sort_order: 0, is_active: true, variants: [],
 };
 
 const BASE_URL = (func2url as Record<string, string>)["manage-catalog"];
@@ -394,9 +396,20 @@ export default function AdminCatalog() {
                         {item.subcategory && <span className="text-xs text-gray-600">{item.subcategory}</span>}
                         {item.popular && <span className="text-xs text-green-400/70 bg-green-400/10 px-2 py-0.5 rounded-sm">Популярное</span>}
                         {!item.is_active && <span className="text-xs text-gray-600 bg-gray-800 px-2 py-0.5 rounded-sm">Скрыто</span>}
+                        {item.variants?.length > 0 && (
+                          <span className="text-xs text-blue-400/70 bg-blue-400/10 px-2 py-0.5 rounded-sm">{item.variants.length} вар.</span>
+                        )}
                       </div>
                       <p className="text-white font-medium truncate">{item.name}</p>
-                      <p className="text-amber-500 text-sm font-bold">{item.price.toLocaleString()} ₽ / {item.unit}</p>
+                      {item.variants?.length > 0 ? (
+                        <div className="flex flex-wrap gap-1 mt-0.5">
+                          {item.variants.map((v, i) => (
+                            <span key={i} className="text-xs text-gray-500">{v.label}: <span className="text-amber-500">{v.price.toLocaleString()} ₽</span>{i < item.variants.length - 1 ? " ·" : ""}</span>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-amber-500 text-sm font-bold">{item.price.toLocaleString()} ₽ / {item.unit}</p>
+                      )}
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <button
@@ -817,6 +830,103 @@ function ItemForm({
           />
           <span className="text-sm text-gray-400">Показывать на сайте</span>
         </label>
+      </div>
+      <div className="md:col-span-2">
+        <VariantsEditor
+          variants={item.variants || []}
+          onChange={(variants) => setItem({ ...item, variants })}
+          unit={item.unit}
+        />
+      </div>
+    </div>
+  );
+}
+
+// ── VariantsEditor Component ──────────────────────────────────────────────
+function VariantsEditor({
+  variants, onChange, unit,
+}: {
+  variants: Variant[];
+  onChange: (v: Variant[]) => void;
+  unit: string;
+}) {
+  const [newLabel, setNewLabel] = React.useState("");
+  const [newPrice, setNewPrice] = React.useState<number>(0);
+
+  const add = () => {
+    if (!newLabel.trim()) return;
+    onChange([...variants, { label: newLabel.trim(), price: newPrice }]);
+    setNewLabel("");
+    setNewPrice(0);
+  };
+
+  const remove = (idx: number) => onChange(variants.filter((_, i) => i !== idx));
+
+  const update = (idx: number, field: keyof Variant, val: string | number) =>
+    onChange(variants.map((v, i) => i === idx ? { ...v, [field]: field === "price" ? Number(val) : val } : v));
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-2">
+        <label className="text-xs text-gray-600 uppercase tracking-wider">Варианты / модификации</label>
+        <span className="text-xs text-gray-700">(необязательно — например: 5 м, 10 м, 15 м)</span>
+      </div>
+
+      {variants.length > 0 && (
+        <div className="space-y-1.5 mb-3">
+          {variants.map((v, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <input
+                value={v.label}
+                onChange={(e) => update(i, "label", e.target.value)}
+                placeholder="Название варианта"
+                className="flex-1 bg-transparent border border-amber-500/20 rounded-sm px-3 py-1.5 text-sm text-white focus:outline-none focus:border-amber-500/50"
+              />
+              <input
+                type="number"
+                value={v.price}
+                onChange={(e) => update(i, "price", e.target.value)}
+                placeholder="Цена"
+                className="w-28 bg-transparent border border-amber-500/20 rounded-sm px-3 py-1.5 text-sm text-white focus:outline-none focus:border-amber-500/50"
+              />
+              <span className="text-xs text-gray-600 whitespace-nowrap">₽ / {unit}</span>
+              <button
+                type="button"
+                onClick={() => remove(i)}
+                className="p-1.5 border border-gray-700 text-gray-600 hover:text-red-400 hover:border-red-400/30 rounded-sm transition-colors"
+              >
+                <Icon name="X" size={12} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="flex items-center gap-2">
+        <input
+          value={newLabel}
+          onChange={(e) => setNewLabel(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && add()}
+          placeholder="Новый вариант (напр.: 10 метров)"
+          className="flex-1 bg-transparent border border-amber-500/20 rounded-sm px-3 py-1.5 text-sm text-white placeholder-gray-700 focus:outline-none focus:border-amber-500/50"
+        />
+        <input
+          type="number"
+          value={newPrice}
+          onChange={(e) => setNewPrice(Number(e.target.value))}
+          onKeyDown={(e) => e.key === "Enter" && add()}
+          placeholder="Цена"
+          className="w-28 bg-transparent border border-amber-500/20 rounded-sm px-3 py-1.5 text-sm text-white focus:outline-none focus:border-amber-500/50"
+        />
+        <span className="text-xs text-gray-600 whitespace-nowrap">₽ / {unit}</span>
+        <button
+          type="button"
+          onClick={add}
+          disabled={!newLabel.trim()}
+          className="flex items-center gap-1.5 border border-amber-500/30 text-amber-500 hover:bg-amber-500/10 px-3 py-1.5 rounded-sm text-xs transition-colors disabled:opacity-30"
+        >
+          <Icon name="Plus" size={12} /> Добавить
+        </button>
       </div>
     </div>
   );
