@@ -130,9 +130,25 @@ export default function QuoteApproval() {
 
   // ── Отправить данные и получить OTP ────────────────────────────────────
   const handleSubmitForm = async () => {
+    if (!phone.trim()) { setFormError("Укажите телефон"); return; }
     if (!email.trim()) { setFormError("Укажите email — на него придёт код подтверждения"); return; }
-    if (clientType === "individual" && !fullName.trim()) { setFormError("Укажите ФИО"); return; }
-    if (clientType === "company" && !companyName.trim()) { setFormError("Укажите название организации"); return; }
+
+    if (clientType === "individual") {
+      if (!fullName.trim())       { setFormError("Укажите ФИО полностью"); return; }
+      if (!birthDate.trim())      { setFormError("Укажите дату рождения"); return; }
+      if (!address.trim())        { setFormError("Укажите адрес регистрации"); return; }
+      if (!passportSeries.trim()) { setFormError("Укажите серию паспорта"); return; }
+      if (!passportNumber.trim()) { setFormError("Укажите номер паспорта"); return; }
+      if (!passportIssued.trim()) { setFormError("Укажите кем выдан паспорт"); return; }
+      if (!passportDate.trim())   { setFormError("Укажите дату выдачи паспорта"); return; }
+    } else {
+      if (!companyName.trim())    { setFormError("Укажите название организации"); return; }
+      if (!inn.trim())            { setFormError("Укажите ИНН"); return; }
+      if (!ogrn.trim())           { setFormError("Укажите ОГРН"); return; }
+      if (!director.trim())       { setFormError("Укажите директора / подписанта"); return; }
+      if (!legalAddress.trim())   { setFormError("Укажите юридический адрес"); return; }
+    }
+
     setFormError(""); setFormSending(true);
     try {
       // Шаг 1: сохраняем данные (без OTP — без отправки письма)
@@ -517,24 +533,24 @@ export default function QuoteApproval() {
                     <input value={fullName} onChange={e => setFullName(e.target.value)} placeholder="Иванов Иван Иванович" className={iCls} />
                   </Field>
                 </div>
-                <Field label="Дата рождения">
+                <Field label="Дата рождения *">
                   <input type="date" value={birthDate} onChange={e => setBirthDate(e.target.value)} className={iCls} />
                 </Field>
-                <Field label="Адрес регистрации">
+                <Field label="Адрес регистрации *">
                   <input value={address} onChange={e => setAddress(e.target.value)} placeholder="г. Москва, ул. Примерная, д. 1" className={iCls} />
                 </Field>
-                <Field label="Серия паспорта">
+                <Field label="Серия паспорта *">
                   <input value={passportSeries} onChange={e => setPassportSeries(e.target.value)} placeholder="1234" className={iCls} />
                 </Field>
-                <Field label="Номер паспорта">
+                <Field label="Номер паспорта *">
                   <input value={passportNumber} onChange={e => setPassportNumber(e.target.value)} placeholder="567890" className={iCls} />
                 </Field>
                 <div className="md:col-span-2">
-                  <Field label="Кем выдан">
+                  <Field label="Кем выдан *">
                     <input value={passportIssued} onChange={e => setPassportIssued(e.target.value)} placeholder="Отдел УФМС России..." className={iCls} />
                   </Field>
                 </div>
-                <Field label="Дата выдачи">
+                <Field label="Дата выдачи *">
                   <input type="date" value={passportDate} onChange={e => setPassportDate(e.target.value)} className={iCls} />
                 </Field>
                 <div>
@@ -561,20 +577,20 @@ export default function QuoteApproval() {
                     <input value={companyName} onChange={e => setCompanyName(e.target.value)} placeholder='ООО "Компания"' className={iCls} />
                   </Field>
                 </div>
-                <Field label="ИНН">
+                <Field label="ИНН *">
                   <input value={inn} onChange={e => setInn(e.target.value)} placeholder="7701234567" className={iCls} />
                 </Field>
                 <Field label="КПП">
                   <input value={kpp} onChange={e => setKpp(e.target.value)} placeholder="770101001" className={iCls} />
                 </Field>
-                <Field label="ОГРН">
+                <Field label="ОГРН *">
                   <input value={ogrn} onChange={e => setOgrn(e.target.value)} placeholder="1234567890123" className={iCls} />
                 </Field>
-                <Field label="Директор / Подписант">
+                <Field label="Директор / Подписант *">
                   <input value={director} onChange={e => setDirector(e.target.value)} placeholder="Иванов И.И." className={iCls} />
                 </Field>
                 <div className="md:col-span-2">
-                  <Field label="Юридический адрес">
+                  <Field label="Юридический адрес *">
                     <input value={legalAddress} onChange={e => setLegalAddress(e.target.value)} placeholder="г. Москва, ул. Примерная, д. 1" className={iCls} />
                   </Field>
                 </div>
