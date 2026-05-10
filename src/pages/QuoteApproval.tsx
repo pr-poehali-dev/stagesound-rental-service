@@ -7,7 +7,6 @@ const URLS = func2url as Record<string, string>;
 const QUOTES_URL  = URLS["manage-quotes"];
 const SIGN_URL    = URLS["sign-contract"];
 const GEN_URL     = URLS["generate-contract"];
-const UPLOAD_URL  = URLS["upload-image"];
 
 // ── Типы ────────────────────────────────────────────────────────────────────
 type QuoteItem  = { id: number; name: string; price: number; unit: string; qty: number };
@@ -77,6 +76,7 @@ export default function QuoteApproval() {
   const [signedAt,        setSignedAt]      = useState("");
   const [formError,       setFormError]     = useState("");
   const [formSending,     setFormSending]   = useState(false);
+  const [emailWarning,    setEmailWarning]  = useState("");
 
   // Паспорт
   const fileRef   = useRef<HTMLInputElement>(null);
@@ -111,13 +111,16 @@ export default function QuoteApproval() {
     const reader = new FileReader();
     reader.onload = async () => {
       try {
-        const res  = await fetch(UPLOAD_URL, {
+        const res  = await fetch(`${QUOTES_URL}?action=upload_passport&token=${token}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ file: reader.result, name: file.name }),
         });
         const data = await res.json();
         if (data.url) setPassportFileUrl(data.url);
+        else setFormError("Не удалось загрузить файл");
+      } catch {
+        setFormError("Ошибка загрузки файла");
       } finally { setUploading(false); }
     };
     reader.readAsDataURL(file);
@@ -150,6 +153,9 @@ export default function QuoteApproval() {
       }
       setContractId(data.contract_id);
       setOtpCooldown(60);
+      if (data.email_error) {
+        setEmailWarning(`Не удалось отправить письмо на ${email}. Проверьте адрес и запросите код повторно.`);
+      }
       setStep("otp");
     } catch (e: unknown) {
       setFormError(e instanceof Error ? e.message : "Ошибка");
@@ -299,6 +305,13 @@ export default function QuoteApproval() {
             <span className="text-amber-500 font-medium">{email}</span>
           </p>
         </div>
+
+        {emailWarning && (
+          <div className="mb-4 flex items-start gap-2 text-yellow-400 text-sm bg-yellow-500/10 border border-yellow-500/20 rounded-sm px-4 py-3">
+            <Icon name="AlertTriangle" size={15} className="shrink-0 mt-0.5" />
+            <span>{emailWarning}</span>
+          </div>
+        )}
 
         {/* OTP инпут */}
         <div className="mb-6">

@@ -11,7 +11,6 @@ import os
 import random
 import smtplib
 import string
-import ssl
 from datetime import datetime, timedelta, timezone
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -48,8 +47,9 @@ def send_email(to_email: str, subject: str, html_body: str):
     msg["From"] = f"Global Renta <{smtp_user}>"
     msg["To"] = to_email
     msg.attach(MIMEText(html_body, "html", "utf-8"))
-    ctx = ssl.create_default_context()
-    with smtplib.SMTP_SSL("smtp.beget.com", 465, context=ctx) as srv:
+    with smtplib.SMTP("mail.hosting.reg.ru", 587, timeout=15) as srv:
+        srv.ehlo()
+        srv.starttls()
         srv.login(smtp_user, smtp_pass)
         srv.sendmail(smtp_user, to_email, msg.as_string())
 
@@ -174,15 +174,21 @@ def handler(event: dict, context) -> dict:
 
             # 3. Отправляем OTP
             name_for_email = body.get("full_name") or body.get("company_name") or "Клиент"
-            send_email(
-                email,
-                "Код подтверждения подписи договора — Global Renta",
-                _otp_email_html(otp, name_for_email)
-            )
+            email_error = None
+            try:
+                send_email(
+                    email,
+                    "Код подтверждения подписи договора — Global Renta",
+                    _otp_email_html(otp, name_for_email)
+                )
+            except Exception as e:
+                email_error = str(e)
+                print(f"[SMTP ERROR] {e}")
 
             return {"statusCode": 200, "headers": CORS,
                     "body": json.dumps({"ok": True, "contract_id": contract_id,
-                                        "email_sent_to": email}, ensure_ascii=False)}
+                                        "email_sent_to": email,
+                                        "email_error": email_error}, ensure_ascii=False)}
 
         # ── Повторно отправить OTP ───────────────────────────────────
         if action == "send_otp":
@@ -215,7 +221,10 @@ def handler(event: dict, context) -> dict:
             )
             conn.commit()
             name = full_name or company_name or "Клиент"
-            send_email(email, "Код подтверждения — Global Renta", _otp_email_html(otp, name))
+            try:
+                send_email(email, "Код подтверждения — Global Renta", _otp_email_html(otp, name))
+            except Exception as e:
+                print(f"[SMTP ERROR resend] {e}")
             return {"statusCode": 200, "headers": CORS,
                     "body": json.dumps({"ok": True, "email_sent_to": email}, ensure_ascii=False)}
 
