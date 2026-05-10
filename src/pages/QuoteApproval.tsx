@@ -59,24 +59,32 @@ export default function QuoteApproval() {
   // Способ оплаты
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "invoice">("cash");
 
-  // Форма клиентских данных
-  const [clientType, setClientType] = useState<"individual" | "company">("individual");
-  const [fullName,        setFullName]        = useState("");
-  const [birthDate,       setBirthDate]       = useState("");
-  const [address,         setAddress]         = useState("");
-  const [passportSeries,  setPassportSeries]  = useState("");
-  const [passportNumber,  setPassportNumber]  = useState("");
-  const [passportIssued,  setPassportIssued]  = useState("");
-  const [passportDate,    setPassportDate]    = useState("");
-  const [passportFileUrl, setPassportFileUrl] = useState("");
-  const [companyName,     setCompanyName]     = useState("");
-  const [inn,             setInn]             = useState("");
-  const [kpp,             setKpp]             = useState("");
-  const [ogrn,            setOgrn]            = useState("");
-  const [legalAddress,    setLegalAddress]    = useState("");
-  const [director,        setDirector]        = useState("");
-  const [phone,           setPhone]           = useState("");
-  const [email,           setEmail]           = useState("");
+  // Ключ для sessionStorage (привязан к токену КП)
+  const ssKey = `quote_form_${token}`;
+
+  const loadSaved = () => {
+    try { return JSON.parse(sessionStorage.getItem(ssKey) || "{}"); } catch { return {}; }
+  };
+  const saved = loadSaved();
+
+  // Форма клиентских данных (с сохранением в sessionStorage)
+  const [clientType, setClientType] = useState<"individual" | "company">(saved.clientType || "individual");
+  const [fullName,        setFullName]        = useState(saved.fullName || "");
+  const [birthDate,       setBirthDate]       = useState(saved.birthDate || "");
+  const [address,         setAddress]         = useState(saved.address || "");
+  const [passportSeries,  setPassportSeries]  = useState(saved.passportSeries || "");
+  const [passportNumber,  setPassportNumber]  = useState(saved.passportNumber || "");
+  const [passportIssued,  setPassportIssued]  = useState(saved.passportIssued || "");
+  const [passportDate,    setPassportDate]    = useState(saved.passportDate || "");
+  const [passportFileUrl, setPassportFileUrl] = useState(saved.passportFileUrl || "");
+  const [companyName,     setCompanyName]     = useState(saved.companyName || "");
+  const [inn,             setInn]             = useState(saved.inn || "");
+  const [kpp,             setKpp]             = useState(saved.kpp || "");
+  const [ogrn,            setOgrn]            = useState(saved.ogrn || "");
+  const [legalAddress,    setLegalAddress]    = useState(saved.legalAddress || "");
+  const [director,        setDirector]        = useState(saved.director || "");
+  const [phone,           setPhone]           = useState(saved.phone || "");
+  const [email,           setEmail]           = useState(saved.email || "");
 
   // OTP
   const [otpCode,         setOtpCode]       = useState("");
@@ -123,7 +131,9 @@ export default function QuoteApproval() {
 
     setQuote(q);
     if (q.status === "signed") setStep("done");
-    if (c && !c.error) {
+    // Предзаполняем из контракта только если в sessionStorage нет данных
+    const hasSaved = Object.values(loadSaved()).some(v => v);
+    if (c && !c.error && !hasSaved) {
       setContractId(c.contract_id ?? null);
       if (c.client_type) setClientType(c.client_type);
       if (c.phone)            setPhone(c.phone);
@@ -141,11 +151,26 @@ export default function QuoteApproval() {
       if (c.ogrn)             setOgrn(c.ogrn);
       if (c.director)         setDirector(c.director);
       if (c.legal_address)    setLegalAddress(c.legal_address);
+    } else if (c && !c.error) {
+      // contract_id всегда берём из БД
+      setContractId(c.contract_id ?? null);
     }
     setLoading(false);
   };
 
   useEffect(() => { loadQuote(); }, [token]);
+
+  // Сохраняем данные формы в sessionStorage при каждом изменении
+  useEffect(() => {
+    sessionStorage.setItem(ssKey, JSON.stringify({
+      clientType, fullName, birthDate, address,
+      passportSeries, passportNumber, passportIssued, passportDate,
+      passportFileUrl, companyName, inn, kpp, ogrn, legalAddress,
+      director, phone, email,
+    }));
+  }, [clientType, fullName, birthDate, address, passportSeries, passportNumber,
+      passportIssued, passportDate, passportFileUrl, companyName, inn, kpp,
+      ogrn, legalAddress, director, phone, email]);
 
   const handlePinSubmit = async () => {
     if (!pinInput.trim()) { setPinError("Введите пароль"); return; }
@@ -270,6 +295,12 @@ export default function QuoteApproval() {
     try {
       const res = await fetch(`${SIGN_URL}?action=send_otp&token=${token}`, { method: "POST" });
       const data = await res.json();
+      // Если cooldown — просто переходим на экран ввода кода
+      if (!res.ok && data.error === "wait") {
+        setOtpCooldown(data.retry_in ?? 60);
+        setStep("otp");
+        return;
+      }
       if (!res.ok) throw new Error(data.error || "Ошибка");
       setOtpCooldown(60);
       if (data.email_error) {
@@ -319,6 +350,7 @@ export default function QuoteApproval() {
         return;
       }
       setSignedAt(data.signed_at || "");
+      sessionStorage.removeItem(ssKey); // очищаем сохранённые данные после подписания
       setStep("generating");
       // Генерируем PDF
       await generatePdf(data.contract_id ?? contractId);
