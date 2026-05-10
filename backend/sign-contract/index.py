@@ -94,7 +94,7 @@ def send_email_with_attachments(to_email: str, subject: str, html_body: str, att
 
 def call_generate(contract_id: int, action: str = "contract") -> str:
     """Вызвать generate-contract и вернуть PDF URL."""
-    gen_url = os.environ.get("GENERATE_CONTRACT_URL", "")
+    gen_url = os.environ.get("GENERATE_CONTRACT_URL", "https://functions.poehali.dev/d7575d3a-cdb5-4eb8-b938-b28c783f2dfe")
     admin_pwd = os.environ.get("ADMIN_PASSWORD", "")
     url = f"{gen_url}?pwd={urllib.parse.quote(admin_pwd)}&contract_id={contract_id}"
     if action == "invoice":
