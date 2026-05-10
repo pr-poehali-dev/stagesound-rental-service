@@ -252,15 +252,20 @@ def build_pdf(contract: dict, quote: dict) -> bytes:
 
     phone    = contract.get("phone") or "_______________"
     email    = contract.get("email") or "_______________"
-    items    = quote.get("items") or []
-    extras   = quote.get("extras") or []
-    days     = int(quote.get("days") or 1)
-    delivery = quote.get("delivery") or "Без доставки"
-    deliv_p  = int(quote.get("delivery_price") or 0)
-    total    = int(quote.get("total") or 0)
-    qtitle   = quote.get("title") or "Аренда оборудования"
-    ev_date  = quote.get("event_date") or ""
-    ev_addr  = quote.get("delivery_address") or ""
+    items       = quote.get("items") or []
+    extras      = quote.get("extras") or []
+    days        = int(quote.get("days") or 1)
+    delivery    = quote.get("delivery") or "Без доставки"
+    deliv_p     = int(quote.get("delivery_price") or 0)
+    total       = int(quote.get("total") or 0)
+    qtitle      = quote.get("title") or "Аренда оборудования"
+    ev_date     = quote.get("event_date") or ""
+    ev_addr     = quote.get("delivery_address") or ""
+    inst_time   = quote.get("installation_time") or ""
+    inst_price  = int(quote.get("installation_price") or 0)
+    dis_time    = quote.get("dismantling_time") or ""
+    dis_price   = int(quote.get("dismantling_price") or 0)
+    signed_at   = contract.get("signed_at")
 
     days_str   = "1 (один) календарный день" if days == 1 else f"{days} календарных {'дня' if days in (2,3,4) else 'дней'}"
     event_str  = fmt_date(ev_date) if ev_date else "по согласованию Сторон"
@@ -421,6 +426,28 @@ def build_pdf(contract: dict, quote: dict) -> bytes:
             Paragraph(fn(deliv_p),                  Ss["right"]),
         ])
 
+    if inst_time or inst_price > 0:
+        label = f"Монтаж оборудования" + (f": {inst_time}" if inst_time else "")
+        rows.append([
+            Paragraph("—",              Ss["center"]),
+            Paragraph(label,            Ss["bodyL"]),
+            Paragraph("1",              Ss["center"]),
+            Paragraph(fn(inst_price),   Ss["right"]),
+            Paragraph("—",              Ss["center"]),
+            Paragraph(fn(inst_price),   Ss["right"]),
+        ])
+
+    if dis_time or dis_price > 0:
+        label = f"Демонтаж оборудования" + (f": {dis_time}" if dis_time else "")
+        rows.append([
+            Paragraph("—",             Ss["center"]),
+            Paragraph(label,           Ss["bodyL"]),
+            Paragraph("1",             Ss["center"]),
+            Paragraph(fn(dis_price),   Ss["right"]),
+            Paragraph("—",             Ss["center"]),
+            Paragraph(fn(dis_price),   Ss["right"]),
+        ])
+
     rows.append([
         Paragraph("", Ss["body"]),
         Paragraph("ИТОГО:", Ss["bold"]),
@@ -449,14 +476,44 @@ def build_pdf(contract: dict, quote: dict) -> bytes:
     story.append(Paragraph(f"<b>Итого по Договору:</b> {money_words(total)}.", Ss["body"]))
     story.append(Spacer(1, 8*mm))
 
+    # Подписи
+    sign_right_text = "Арендатор: _____________________________"
+    if signed_at:
+        from datetime import datetime as _dt
+        try:
+            if hasattr(signed_at, "strftime"):
+                sign_date = signed_at.strftime("%d.%m.%Y %H:%M UTC")
+            else:
+                sign_date = str(signed_at)[:16]
+        except Exception:
+            sign_date = str(signed_at)[:16]
+        sign_right_text = (
+            f"Арендатор: {cname}\n"
+            f"Email: {email}\n"
+            f"ПЭП подписан: {sign_date}\n"
+            f"Подпись подтверждена кодом на email"
+        )
+
     sign = Table(
         [[Paragraph("Арендодатель: _____________________________ М.П.", Ss["sign"]),
-          Paragraph("Арендатор: _____________________________", Ss["sign"])]],
+          Paragraph(sign_right_text.replace("\n", "<br/>"), Ss["sign"])]],
         colWidths=[W/2, W/2]
     )
     sign.setStyle(TableStyle([("LEFTPADDING",(0,0),(-1,-1),0),("RIGHTPADDING",(0,0),(-1,-1),0),
                                ("TOPPADDING",(0,0),(-1,-1),0),("BOTTOMPADDING",(0,0),(-1,-1),0)]))
     story.append(sign)
+
+    # Блок ПЭП если договор подписан
+    if signed_at:
+        story.append(Spacer(1, 6*mm))
+        pep_text = (
+            f"<b>Документ подписан простой электронной подписью (ПЭП)</b> в соответствии с "
+            f"Федеральным законом № 63-ФЗ «Об электронной подписи». "
+            f"Подписант: {cname} ({email}). "
+            f"Дата и время подписания: {sign_date}. "
+            f"Подписание осуществлено путём подтверждения одноразового кода, направленного на email подписанта."
+        )
+        story.append(Paragraph(pep_text, Ss["small"] if "small" in Ss else Ss["body"]))
 
     doc.build(story)
     return buf.getvalue()
@@ -485,26 +542,31 @@ def handler(event: dict, context) -> dict:
             c.company_name, c.inn, c.kpp, c.ogrn, c.legal_address, c.director,
             c.phone, c.email,
             q.title, q.items, q.days, q.delivery, q.delivery_price, q.extras, q.total,
-            q.event_date, q.delivery_address
+            q.event_date, q.delivery_address,
+            q.installation_time, q.installation_price, q.dismantling_time, q.dismantling_price,
+            c.signed_at
         FROM {schema}.contracts c
         JOIN {schema}.quotes q ON q.id = c.quote_id
         WHERE c.id = %s""",
         (int(contract_id),)
     )
     row = cur.fetchone()
-    cur.close(); conn.close()
 
     if not row:
+        cur.close(); conn.close()
         return {"statusCode": 404, "headers": CORS, "body": json.dumps({"error": "Not found"})}
 
     keys_c = ["id","quote_id","client_type","full_name","passport_series","passport_number",
               "passport_issued","passport_date","birth_date","address",
               "company_name","inn","kpp","ogrn","legal_address","director","phone","email"]
     keys_q = ["title","items","days","delivery","delivery_price","extras","total",
-              "event_date","delivery_address"]
-    data     = dict(zip(keys_c + keys_q, row))
+              "event_date","delivery_address",
+              "installation_time","installation_price","dismantling_time","dismantling_price"]
+    keys_extra = ["signed_at"]
+    data     = dict(zip(keys_c + keys_q + keys_extra, row))
     contract = {k: data[k] for k in keys_c}
     quote    = {k: data[k] for k in keys_q}
+    contract["signed_at"] = data.get("signed_at")
     for f in ("items", "extras"):
         if isinstance(quote[f], str):
             quote[f] = json.loads(quote[f])
@@ -515,5 +577,10 @@ def handler(event: dict, context) -> dict:
     s3  = get_s3()
     s3.put_object(Bucket="files", Key=key, Body=pdf_bytes, ContentType="application/pdf")
     cdn = f"https://cdn.poehali.dev/projects/{os.environ['AWS_ACCESS_KEY_ID']}/bucket/{key}"
+
+    # Сохраняем URL PDF в контракте
+    cur.execute(f"UPDATE {schema}.contracts SET contract_pdf_url=%s WHERE id=%s", (cdn, contract["id"]))
+    conn.commit()
+    cur.close(); conn.close()
 
     return {"statusCode": 200, "headers": CORS, "body": json.dumps({"ok": True, "pdf_url": cdn})}

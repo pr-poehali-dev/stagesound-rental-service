@@ -1,0 +1,26 @@
+{
+  "tests": [
+    {
+      "name": "CORS preflight",
+      "method": "OPTIONS",
+      "path": "/",
+      "expectedStatus": 200
+    },
+    {
+      "name": "GET без token — ошибка",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 400,
+      "expectedBody": {"error": "token required"},
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "GET с несуществующим token",
+      "method": "GET",
+      "path": "/?token=nonexistent_token_xyz",
+      "expectedStatus": 404,
+      "expectedBody": {"error": "not_found"},
+      "bodyMatcher": "partial"
+    }
+  ]
+}
