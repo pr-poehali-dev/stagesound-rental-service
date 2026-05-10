@@ -147,17 +147,24 @@ export default function QuoteApproval() {
   const handlePinSubmit = async () => {
     if (!pinInput.trim()) { setPinError("Введите пароль"); return; }
     setPinChecking(true); setPinError("");
-    const headers: Record<string, string> = { "X-Quote-Pin": pinInput.trim() };
-    const res = await fetch(`${QUOTES_URL}?token=${token}`, { headers });
-    if (res.status === 401) {
-      setPinError("Неверный пароль");
+    try {
+      const headers: Record<string, string> = { "X-Quote-Pin": pinInput.trim() };
+      const res = await fetch(`${QUOTES_URL}?token=${token}`, { headers });
+      if (res.status === 401) {
+        setPinError("Неверный пароль");
+        return;
+      }
+      const q = await res.json();
+      if (q.error) { setNotFound(true); return; }
+      setConfirmedPin(pinInput.trim());
+      setPinRequired(false);
+      setQuote(q);
+      if (q.status === "signed") setStep("done");
+    } catch {
+      setPinError("Ошибка соединения");
+    } finally {
       setPinChecking(false);
-      return;
     }
-    setConfirmedPin(pinInput.trim());
-    setPinRequired(false);
-    await loadQuote(pinInput.trim());
-    setPinChecking(false);
   };
 
   // ── Загрузка паспорта ──────────────────────────────────────────────────
