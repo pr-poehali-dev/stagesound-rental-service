@@ -19,6 +19,9 @@ type Quote = {
   event_date?: string; delivery_address?: string;
   installation_time?: string; installation_price?: number;
   dismantling_time?: string;  dismantling_price?: number;
+  no_installation?: boolean;
+  delivery_time?: string; pickup_time?: string;
+  discount?: number;
 };
 
 // ── Вспомогательные компоненты ───────────────────────────────────────────────
@@ -213,10 +216,13 @@ export default function QuoteApproval() {
 
   // ────────────────────────────────────────────────────────────────────────
   // Вспомогательные значения
-  const q                  = quote!;
-  const equipmentTotal     = quote ? quote.items.reduce((s, i) => s + i.price * i.qty * quote.days, 0) : 0;
-  const extrasTotal        = quote ? quote.extras.reduce((s, e) => s + e.price, 0) : 0;
-  const installDismTotal   = ((quote?.installation_price || 0) + (quote?.dismantling_price || 0));
+  const q                   = quote!;
+  const equipmentTotalRaw   = quote ? quote.items.reduce((s, i) => s + i.price * i.qty * quote.days, 0) : 0;
+  const discountPct         = quote?.discount || 0;
+  const discountAmt         = discountPct > 0 ? Math.round(equipmentTotalRaw * discountPct / 100) : 0;
+  const equipmentTotal      = equipmentTotalRaw - discountAmt;
+  const extrasTotal         = quote ? quote.extras.reduce((s, e) => s + e.price, 0) : 0;
+  const installDismTotal    = quote?.no_installation ? 0 : ((quote?.installation_price || 0) + (quote?.dismantling_price || 0));
 
   // ── Экраны ──────────────────────────────────────────────────────────────
   if (loading) return (
@@ -511,8 +517,8 @@ export default function QuoteApproval() {
         <div className="glass-card rounded-sm p-6 mb-4">
           <h2 className="font-oswald text-xl font-bold text-white uppercase mb-4">Состав аренды</h2>
 
-          {/* Дата, адрес, монтаж */}
-          {(q.event_date || q.delivery_address || q.installation_time || q.dismantling_time) && (
+          {/* Дата, адрес, логистика, монтаж */}
+          {(q.event_date || q.delivery_address || q.delivery_time || q.pickup_time || q.installation_time || q.dismantling_time || q.no_installation) && (
             <div className="bg-amber-500/5 border border-amber-500/20 rounded-sm p-3 mb-4 space-y-2">
               {q.event_date && (
                 <div className="flex items-center gap-2 text-sm">
@@ -537,19 +543,42 @@ export default function QuoteApproval() {
                   <span className="text-white font-medium">{q.delivery}</span>
                 </div>
               )}
-              {q.installation_time && (
+              {q.delivery_time && (
                 <div className="flex items-center gap-2 text-sm">
-                  <Icon name="Wrench" size={14} className="text-amber-500 shrink-0" />
-                  <span className="text-gray-400">Монтаж:</span>
-                  <span className="text-white font-medium">{q.installation_time}</span>
+                  <Icon name="PackageCheck" size={14} className="text-amber-500 shrink-0" />
+                  <span className="text-gray-400">Время привоза:</span>
+                  <span className="text-white font-medium">{q.delivery_time}</span>
                 </div>
               )}
-              {q.dismantling_time && (
+              {q.pickup_time && (
                 <div className="flex items-center gap-2 text-sm">
-                  <Icon name="PackageOpen" size={14} className="text-amber-500 shrink-0" />
-                  <span className="text-gray-400">Демонтаж:</span>
-                  <span className="text-white font-medium">{q.dismantling_time}</span>
+                  <Icon name="PackageX" size={14} className="text-amber-500 shrink-0" />
+                  <span className="text-gray-400">Время увоза:</span>
+                  <span className="text-white font-medium">{q.pickup_time}</span>
                 </div>
+              )}
+              {q.no_installation ? (
+                <div className="flex items-center gap-2 text-sm">
+                  <Icon name="CheckCircle" size={14} className="text-green-400 shrink-0" />
+                  <span className="text-green-400 font-medium">Монтаж и демонтаж не требуются</span>
+                </div>
+              ) : (
+                <>
+                  {q.installation_time && (
+                    <div className="flex items-center gap-2 text-sm">
+                      <Icon name="Wrench" size={14} className="text-amber-500 shrink-0" />
+                      <span className="text-gray-400">Монтаж:</span>
+                      <span className="text-white font-medium">{q.installation_time}</span>
+                    </div>
+                  )}
+                  {q.dismantling_time && (
+                    <div className="flex items-center gap-2 text-sm">
+                      <Icon name="PackageOpen" size={14} className="text-amber-500 shrink-0" />
+                      <span className="text-gray-400">Демонтаж:</span>
+                      <span className="text-white font-medium">{q.dismantling_time}</span>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}
@@ -583,33 +612,46 @@ export default function QuoteApproval() {
           )}
 
           {/* Монтаж/демонтаж */}
-          {(q.installation_time || q.dismantling_time) && (
+          {q.no_installation ? (
+            <div className="border-t border-amber-500/10 pt-3 mb-3">
+              <div className="flex items-center gap-2 text-sm">
+                <Icon name="CheckCircle" size={13} className="text-green-400" />
+                <span className="text-green-400">Монтаж и демонтаж не требуются</span>
+              </div>
+            </div>
+          ) : (q.installation_time || q.dismantling_time) ? (
             <div className="border-t border-amber-500/10 pt-3 mb-3">
               <p className="text-xs text-gray-600 uppercase tracking-wider mb-2">Монтаж и демонтаж</p>
               {q.installation_time && (
                 <div className="flex justify-between text-sm mb-1">
-                  <span className="text-gray-400">Монтаж: {q.installation_time}</span>
-                  {(q.installation_price || 0) > 0 && (
-                    <span className="text-gray-300">{q.installation_price!.toLocaleString()} ₽</span>
-                  )}
+                  <span className="text-gray-400 flex items-center gap-1.5"><Icon name="Wrench" size={12} className="text-amber-500/60" />Монтаж: {q.installation_time}</span>
+                  {(q.installation_price || 0) > 0 && <span className="text-gray-300">{q.installation_price!.toLocaleString()} ₽</span>}
                 </div>
               )}
               {q.dismantling_time && (
                 <div className="flex justify-between text-sm mb-1">
-                  <span className="text-gray-400">Демонтаж: {q.dismantling_time}</span>
-                  {(q.dismantling_price || 0) > 0 && (
-                    <span className="text-gray-300">{q.dismantling_price!.toLocaleString()} ₽</span>
-                  )}
+                  <span className="text-gray-400 flex items-center gap-1.5"><Icon name="PackageOpen" size={12} className="text-amber-500/60" />Демонтаж: {q.dismantling_time}</span>
+                  {(q.dismantling_price || 0) > 0 && <span className="text-gray-300">{q.dismantling_price!.toLocaleString()} ₽</span>}
                 </div>
               )}
             </div>
-          )}
+          ) : null}
 
           {/* Итог */}
           <div className="border-t border-amber-500/20 pt-3 space-y-1">
+            {discountPct > 0 && equipmentTotalRaw > 0 && (
+              <div className="flex justify-between text-sm text-gray-500 line-through">
+                <span>Оборудование ({q.days} дн.)</span><span>{equipmentTotalRaw.toLocaleString()} ₽</span>
+              </div>
+            )}
+            {discountPct > 0 && (
+              <div className="flex justify-between text-sm text-green-400">
+                <span>Скидка {discountPct}%</span><span>−{discountAmt.toLocaleString()} ₽</span>
+              </div>
+            )}
             {equipmentTotal > 0 && (
               <div className="flex justify-between text-sm text-gray-400">
-                <span>Оборудование ({q.days} дн.)</span><span>{equipmentTotal.toLocaleString()} ₽</span>
+                <span>Оборудование{discountPct > 0 ? " (со скидкой)" : ` (${q.days} дн.)`}</span><span>{equipmentTotal.toLocaleString()} ₽</span>
               </div>
             )}
             {extrasTotal > 0 && (
@@ -622,7 +664,7 @@ export default function QuoteApproval() {
                 <span>Доставка</span><span>{q.delivery_price.toLocaleString()} ₽</span>
               </div>
             )}
-            {installDismTotal > 0 && (
+            {!q.no_installation && installDismTotal > 0 && (
               <div className="flex justify-between text-sm text-gray-400">
                 <span>Монтаж и демонтаж</span><span>{installDismTotal.toLocaleString()} ₽</span>
               </div>

@@ -69,17 +69,19 @@ def handler(event: dict, context) -> dict:
                 f"""SELECT c.id, c.quote_id, c.client_type, c.full_name, c.company_name,
                     c.phone, c.email, c.status, c.created_at,
                     q.title, q.total, c.passport_file_url,
-                    q.event_date, q.delivery_address
+                    q.event_date, q.delivery_address,
+                    c.signed_at, c.contract_pdf_url
                 FROM {schema}.contracts c
                 JOIN {schema}.quotes q ON q.id = c.quote_id
                 ORDER BY c.created_at DESC"""
             )
             keys = ["id","quote_id","client_type","full_name","company_name",
                     "phone","email","status","created_at","quote_title","total","passport_file_url",
-                    "event_date","delivery_address"]
+                    "event_date","delivery_address","signed_at","contract_pdf_url"]
             rows = [dict(zip(keys, r)) for r in cur.fetchall()]
             for r in rows:
                 r["created_at"] = str(r["created_at"])
+                r["signed_at"] = str(r["signed_at"]) if r["signed_at"] else None
             cur.close(); conn.close()
             return {"statusCode": 200, "headers": CORS, "body": json.dumps(rows)}
 

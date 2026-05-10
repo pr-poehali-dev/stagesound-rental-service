@@ -65,7 +65,8 @@ def handler(event: dict, context) -> dict:
         cur = conn.cursor()
         cur.execute(
             f"SELECT id, token, title, items, days, delivery, delivery_price, extras, total, status, created_at, event_date, delivery_address, "
-            f"installation_time, installation_price, dismantling_time, dismantling_price "
+            f"installation_time, installation_price, dismantling_time, dismantling_price, "
+            f"no_installation, delivery_time, pickup_time, discount "
             f"FROM {schema}.quotes WHERE token = %s", (token,)
         )
         row = cur.fetchone()
@@ -73,7 +74,8 @@ def handler(event: dict, context) -> dict:
         if not row:
             return {"statusCode": 404, "headers": CORS, "body": json.dumps({"error": "Not found"})}
         keys = ["id", "token", "title", "items", "days", "delivery", "delivery_price", "extras", "total", "status", "created_at", "event_date", "delivery_address",
-                "installation_time", "installation_price", "dismantling_time", "dismantling_price"]
+                "installation_time", "installation_price", "dismantling_time", "dismantling_price",
+                "no_installation", "delivery_time", "pickup_time", "discount"]
         q = dict(zip(keys, row))
         q["created_at"] = str(q["created_at"])
         return {"statusCode": 200, "headers": CORS, "body": json.dumps(q)}
@@ -195,8 +197,8 @@ def handler(event: dict, context) -> dict:
         body = json.loads(event.get("body") or "{}")
         tok = secrets.token_urlsafe(16)
         cur.execute(
-            f"INSERT INTO {schema}.quotes (token, title, items, days, delivery, delivery_price, extras, total, status, event_date, delivery_address, installation_time, installation_price, dismantling_time, dismantling_price) "
-            f"VALUES (%s,%s,%s,%s,%s,%s,%s,%s,'draft',%s,%s,%s,%s,%s,%s) RETURNING id",
+            f"INSERT INTO {schema}.quotes (token, title, items, days, delivery, delivery_price, extras, total, status, event_date, delivery_address, installation_time, installation_price, dismantling_time, dismantling_price, no_installation, delivery_time, pickup_time, discount) "
+            f"VALUES (%s,%s,%s,%s,%s,%s,%s,%s,'draft',%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id",
             (
                 tok,
                 body.get("title", "КП"),
@@ -212,6 +214,10 @@ def handler(event: dict, context) -> dict:
                 body.get("installation_price", 0),
                 body.get("dismantling_time") or None,
                 body.get("dismantling_price", 0),
+                bool(body.get("no_installation", False)),
+                body.get("delivery_time") or None,
+                body.get("pickup_time") or None,
+                int(body.get("discount", 0)),
             )
         )
         new_id = cur.fetchone()[0]

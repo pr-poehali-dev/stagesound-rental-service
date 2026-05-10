@@ -261,11 +261,15 @@ def build_pdf(contract: dict, quote: dict) -> bytes:
     qtitle      = quote.get("title") or "Аренда оборудования"
     ev_date     = quote.get("event_date") or ""
     ev_addr     = quote.get("delivery_address") or ""
-    inst_time   = quote.get("installation_time") or ""
-    inst_price  = int(quote.get("installation_price") or 0)
-    dis_time    = quote.get("dismantling_time") or ""
-    dis_price   = int(quote.get("dismantling_price") or 0)
-    signed_at   = contract.get("signed_at")
+    inst_time       = quote.get("installation_time") or ""
+    inst_price      = int(quote.get("installation_price") or 0)
+    dis_time        = quote.get("dismantling_time") or ""
+    dis_price       = int(quote.get("dismantling_price") or 0)
+    no_install      = bool(quote.get("no_installation", False))
+    delivery_time   = quote.get("delivery_time") or ""
+    pickup_time     = quote.get("pickup_time") or ""
+    discount_pct    = int(quote.get("discount") or 0)
+    signed_at       = contract.get("signed_at")
 
     days_str   = "1 (один) календарный день" if days == 1 else f"{days} календарных {'дня' if days in (2,3,4) else 'дней'}"
     event_str  = fmt_date(ev_date) if ev_date else "по согласованию Сторон"
@@ -303,20 +307,42 @@ def build_pdf(contract: dict, quote: dict) -> bytes:
         block.append(Spacer(1, 2*mm))
         story.append(KeepTogether(block))
 
-    section("1", "ПРЕДМЕТ ДОГОВОРА",
-        f"1.1. Арендодатель предоставляет Арендатору во временное пользование оборудование согласно Приложению &numero;1.",
+    # Строим параграфы раздела 1 динамически
+    s1_paras = [
+        "1.1. Арендодатель предоставляет Арендатору во временное пользование оборудование согласно Приложению &numero;1.",
         f"1.2. Назначение: <b>{qtitle}</b>.",
         f"1.3. Дата мероприятия: <b>{event_str}</b>.",
         f"1.4. Адрес: <b>{addr_str}</b>.",
         f"1.5. Доставка: <b>{deliv_str}</b>.",
-        f"1.6. Срок аренды: <b>{days_str}</b>.",
-    )
+    ]
+    pnum = 6
+    if delivery_time:
+        s1_paras.append(f"1.{pnum}. Время привоза оборудования: <b>{delivery_time}</b>.")
+        pnum += 1
+    if pickup_time:
+        s1_paras.append(f"1.{pnum}. Время увоза оборудования: <b>{pickup_time}</b>.")
+        pnum += 1
+    if no_install:
+        s1_paras.append(f"1.{pnum}. Монтаж и демонтаж оборудования: <b>не требуются</b>.")
+        pnum += 1
+    elif inst_time or dis_time:
+        if inst_time:
+            s1_paras.append(f"1.{pnum}. Время монтажа: <b>{inst_time}</b>.")
+            pnum += 1
+        if dis_time:
+            s1_paras.append(f"1.{pnum}. Время демонтажа: <b>{dis_time}</b>.")
+            pnum += 1
+    s1_paras.append(f"1.{pnum}. Срок аренды: <b>{days_str}</b>.")
+
+    section("1", "ПРЕДМЕТ ДОГОВОРА", *s1_paras)
+
+    disc_note = f" (с учётом скидки {discount_pct}%)" if discount_pct > 0 else ""
     section("2", "СТОИМОСТЬ И ПОРЯДОК РАСЧЁТОВ",
-        f"2.1. Общая стоимость аренды: <b>{money_words(total)}</b>.",
+        f"2.1. Общая стоимость аренды{disc_note}: <b>{money_words(total)}</b>.",
         "2.2. Оплата производится до начала срока аренды путём безналичного перечисления.",
     )
     section("3", "ПРАВА И ОБЯЗАННОСТИ СТОРОН",
-        "3.1. Арендодатель передаёт Оборудование в исправном состоянии и обеспечивает доставку/монтаж при наличии в Приложении &numero;1.",
+        "3.1. Арендодатель передаёт Оборудование в исправном состоянии и обеспечивает доставку при наличии в Приложении &numero;1.",
         "3.2. Арендатор использует Оборудование по назначению, обеспечивает сохранность и возвращает в срок.",
         "3.3. Арендатор не вправе передавать Оборудование третьим лицам без согласия Арендодателя.",
     )
@@ -390,10 +416,12 @@ def build_pdf(contract: dict, quote: dict) -> bytes:
              Paragraph("Дней", Ss["boldC"]),
              Paragraph("Сумма, руб.", Ss["boldR"])]]
 
+    equip_raw_total = 0
     for i, item in enumerate(items, 1):
         pr = int(item.get("price") or 0)
         qt = int(item.get("qty") or 1)
         st = pr * qt * days
+        equip_raw_total += st
         rows.append([
             Paragraph(str(i),                   Ss["center"]),
             Paragraph(item.get("name") or "—",  Ss["bodyL"]),
@@ -401,6 +429,28 @@ def build_pdf(contract: dict, quote: dict) -> bytes:
             Paragraph(fn(pr),                   Ss["right"]),
             Paragraph(str(days),                Ss["center"]),
             Paragraph(fn(st),                   Ss["right"]),
+        ])
+
+    # Строка скидки
+    if discount_pct > 0:
+        discount_sum = round(equip_raw_total * discount_pct / 100)
+        rows.append([
+            Paragraph("—",                                       Ss["center"]),
+            Paragraph(f"Скидка {discount_pct}% на оборудование", Ss["bodyL"]),
+            Paragraph("",                                        Ss["center"]),
+            Paragraph("",                                        Ss["right"]),
+            Paragraph("",                                        Ss["center"]),
+            Paragraph(f"−{fn(discount_sum)}",                    Ss["right"]),
+        ])
+
+    if no_install:
+        rows.append([
+            Paragraph("—",                               Ss["center"]),
+            Paragraph("Монтаж и демонтаж",               Ss["bodyL"]),
+            Paragraph("",                                Ss["center"]),
+            Paragraph("",                                Ss["right"]),
+            Paragraph("",                                Ss["center"]),
+            Paragraph("не требуется",                    Ss["right"]),
         ])
 
     if extras:
@@ -544,6 +594,7 @@ def handler(event: dict, context) -> dict:
             q.title, q.items, q.days, q.delivery, q.delivery_price, q.extras, q.total,
             q.event_date, q.delivery_address,
             q.installation_time, q.installation_price, q.dismantling_time, q.dismantling_price,
+            q.no_installation, q.delivery_time, q.pickup_time, q.discount,
             c.signed_at
         FROM {schema}.contracts c
         JOIN {schema}.quotes q ON q.id = c.quote_id
@@ -561,7 +612,8 @@ def handler(event: dict, context) -> dict:
               "company_name","inn","kpp","ogrn","legal_address","director","phone","email"]
     keys_q = ["title","items","days","delivery","delivery_price","extras","total",
               "event_date","delivery_address",
-              "installation_time","installation_price","dismantling_time","dismantling_price"]
+              "installation_time","installation_price","dismantling_time","dismantling_price",
+              "no_installation","delivery_time","pickup_time","discount"]
     keys_extra = ["signed_at"]
     data     = dict(zip(keys_c + keys_q + keys_extra, row))
     contract = {k: data[k] for k in keys_c}

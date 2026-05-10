@@ -23,6 +23,7 @@ type Contract = {
   status: string; created_at: string; quote_title: string; total: number;
   passport_file_url: string | null;
   event_date?: string; delivery_address?: string;
+  signed_at?: string | null; contract_pdf_url?: string | null;
 };
 
 const formatDate = (iso: string | null) => {
@@ -33,12 +34,13 @@ const formatDate = (iso: string | null) => {
 
 const statusBadge = (status: string) => {
   const map: Record<string, { label: string; color: string }> = {
-    draft: { label: "Черновик", color: "text-gray-500 border-gray-700" },
-    sent: { label: "Отправлено", color: "text-blue-400 border-blue-500/40" },
-    approved: { label: "Согласовано", color: "text-green-400 border-green-500/40" },
-    contracted: { label: "Договор", color: "text-amber-500 border-amber-500/40" },
-    pending: { label: "Ожидает", color: "text-yellow-400 border-yellow-500/40" },
-    reviewed: { label: "Просмотрено", color: "text-green-400 border-green-500/40" },
+    draft:      { label: "Черновик",    color: "text-gray-500 border-gray-700" },
+    sent:       { label: "Отправлено",  color: "text-blue-400 border-blue-500/40" },
+    approved:   { label: "Согласовано", color: "text-green-400 border-green-500/40" },
+    contracted: { label: "Договор",     color: "text-amber-500 border-amber-500/40" },
+    pending:    { label: "Ожидает",     color: "text-yellow-400 border-yellow-500/40" },
+    reviewed:   { label: "Просмотрено", color: "text-green-400 border-green-500/40" },
+    signed:     { label: "✓ ПЭП подписан", color: "text-emerald-400 border-emerald-500/40 bg-emerald-500/5" },
   };
   const s = map[status] || { label: status, color: "text-gray-400 border-gray-600" };
   return (
@@ -579,7 +581,12 @@ export default function Admin() {
                           <td className="px-4 py-3 text-gray-300">{c.phone || "—"}</td>
                           <td className="px-4 py-3 text-gray-400">{formatDate(c.created_at)}</td>
                           <td className="px-4 py-3 text-right font-oswald font-bold neon-text">{(c.total || 0).toLocaleString()} ₽</td>
-                          <td className="px-4 py-3">{statusBadge(c.status)}</td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {statusBadge(c.status)}
+                              {c.signed_at && <Icon name="ShieldCheck" size={13} className="text-emerald-400" title="ПЭП подписан" />}
+                            </div>
+                          </td>
                           <td className="px-4 py-3"><Icon name="ChevronRight" size={16} className="text-gray-600" /></td>
                         </tr>
                       ))}
@@ -722,11 +729,16 @@ export default function Admin() {
               </button>
             </div>
 
-            <div className="flex items-center gap-2 mb-4">
+            <div className="flex items-center gap-2 mb-4 flex-wrap">
               {statusBadge(selectedContract.status)}
               <span className="text-gray-500 text-xs">
                 {selectedContract.client_type === "individual" ? "Физическое лицо" : "Юридическое лицо"}
               </span>
+              {selectedContract.signed_at && (
+                <span className="text-xs text-emerald-400 flex items-center gap-1">
+                  <Icon name="ShieldCheck" size={12} /> ПЭП: {formatDate(selectedContract.signed_at)}
+                </span>
+              )}
             </div>
 
             {/* Дата и адрес мероприятия */}
@@ -751,7 +763,7 @@ export default function Admin() {
               </div>
             )}
 
-            <div className="space-y-2 text-sm mb-6">
+            <div className="space-y-2 text-sm mb-5">
               {selectedContract.client_type === "individual" ? (
                 <div className="flex gap-3"><span className="text-gray-500 w-32 shrink-0">ФИО</span><span className="text-white">{selectedContract.full_name || "—"}</span></div>
               ) : (
@@ -762,12 +774,20 @@ export default function Admin() {
               <div className="flex gap-3"><span className="text-gray-500 w-32 shrink-0">Сумма</span><span className="text-amber-500 font-bold font-oswald text-lg">{selectedContract.total.toLocaleString()} ₽</span></div>
             </div>
 
-            {selectedContract.passport_file_url && (
-              <a href={selectedContract.passport_file_url} target="_blank" rel="noopener noreferrer"
-                className="flex items-center gap-2 border border-amber-500/30 text-amber-500 hover:bg-amber-500/10 px-4 py-2 rounded-sm text-sm transition-colors mb-4 w-fit">
-                <Icon name="FileImage" size={14} /> Скан паспорта
-              </a>
-            )}
+            <div className="flex flex-wrap gap-2 mb-4">
+              {selectedContract.passport_file_url && (
+                <a href={selectedContract.passport_file_url} target="_blank" rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 border border-amber-500/30 text-amber-500 hover:bg-amber-500/10 px-3 py-2 rounded-sm text-xs transition-colors">
+                  <Icon name="FileImage" size={13} /> Скан паспорта
+                </a>
+              )}
+              {selectedContract.contract_pdf_url && (
+                <a href={selectedContract.contract_pdf_url} target="_blank" rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 px-3 py-2 rounded-sm text-xs transition-colors">
+                  <Icon name="FileText" size={13} /> Договор PDF (подписан)
+                </a>
+              )}
+            </div>
 
             {/* Кнопка генерации PDF */}
             <button
@@ -776,16 +796,16 @@ export default function Admin() {
               className="neon-btn w-full py-3 rounded-sm text-sm flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed mb-3"
             >
               <Icon name={generatingPdf ? "Loader2" : "FileDown"} size={16} className={generatingPdf ? "animate-spin" : ""} />
-              {generatingPdf ? "Генерирую договор..." : "Скачать договор PDF"}
+              {generatingPdf ? "Генерирую..." : selectedContract.contract_pdf_url ? "Перегенерировать PDF" : "Сгенерировать PDF"}
             </button>
             {pdfUrl && (
               <a href={pdfUrl} target="_blank" rel="noopener noreferrer"
                 className="flex items-center gap-2 border border-green-500/30 text-green-400 hover:bg-green-500/10 px-4 py-2 rounded-sm text-sm transition-colors mb-3 justify-center">
-                <Icon name="ExternalLink" size={14} /> Открыть PDF снова
+                <Icon name="ExternalLink" size={14} /> Открыть PDF
               </a>
             )}
             <div className="flex gap-3">
-              {selectedContract.status === "pending" && (
+              {(selectedContract.status === "pending" || selectedContract.status === "contracted") && (
                 <button onClick={() => markContractReviewed(selectedContract.id)}
                   className="flex-1 border border-amber-500/30 text-amber-500 hover:bg-amber-500/10 py-2 rounded-sm text-sm flex items-center justify-center gap-2 transition-colors">
                   <Icon name="Check" size={14} /> Просмотрено
