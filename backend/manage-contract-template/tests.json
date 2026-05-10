@@ -1,0 +1,7 @@
+{
+  "tests": [
+    {"name": "OPTIONS preflight", "method": "OPTIONS", "path": "/", "expectedStatus": 200},
+    {"name": "GET template public", "method": "GET", "path": "/", "expectedStatus": 200, "bodyMatcher": "partial"},
+    {"name": "PUT without pwd returns 401", "method": "PUT", "path": "/", "expectedStatus": 401}
+  ]
+}

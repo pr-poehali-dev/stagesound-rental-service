@@ -99,6 +99,35 @@ def handler(event: dict, context) -> dict:
 
         body = json.loads(event.get("body") or "{}")
 
+        # ── Превью PDF для клиента (до подписи) ─────────────────────
+        if action == "preview_pdf":
+            # Получаем contract_id из body или из БД по token
+            cid = int(body.get("contract_id") or 0)
+            if not cid:
+                cur.execute(
+                    f"SELECT c.id FROM {s()}.contracts c "
+                    f"JOIN {s()}.quotes q ON q.id = c.quote_id "
+                    f"WHERE q.token = %s ORDER BY c.id DESC LIMIT 1", (token,)
+                )
+                row = cur.fetchone()
+                if not row:
+                    return {"statusCode": 404, "headers": CORS,
+                            "body": json.dumps({"error": "contract_not_found"}, ensure_ascii=False)}
+                cid = row[0]
+
+            # Вызываем generate-contract через HTTP
+            import urllib.request
+            gen_url = os.environ.get("GENERATE_CONTRACT_URL",
+                      "https://functions.poehali.dev/d7575d3a-cdb5-4eb8-b938-b28c783f2dfe")
+            admin_pwd = os.environ.get("ADMIN_PASSWORD", "")
+            import urllib.parse
+            req_url = f"{gen_url}?pwd={urllib.parse.quote(admin_pwd)}&contract_id={cid}&preview=1"
+            req = urllib.request.Request(req_url)
+            resp = urllib.request.urlopen(req, timeout=25)
+            result = json.loads(resp.read())
+            return {"statusCode": 200, "headers": CORS,
+                    "body": json.dumps({"ok": True, "pdf_url": result.get("pdf_url")}, ensure_ascii=False)}
+
         # ── Создать контракт + сгенерировать PDF + отправить OTP ────
         if action == "submit":
             # 1. Получаем quote по токену

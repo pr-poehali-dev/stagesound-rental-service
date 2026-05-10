@@ -43,8 +43,10 @@ export default function QuoteApproval() {
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
-  // Флоу: "view" → "form" → "otp" → "generating" → "done"
-  const [step, setStep] = useState<"view" | "form" | "otp" | "generating" | "done">("view");
+  // Флоу: "view" → "form" → "preview" → "otp" → "generating" → "done"
+  const [step, setStep] = useState<"view" | "form" | "preview" | "otp" | "generating" | "done">("view");
+  const [previewPdfUrl, setPreviewPdfUrl] = useState("");
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   // Форма клиентских данных
   const [clientType, setClientType] = useState<"individual" | "company">("individual");
@@ -133,7 +135,8 @@ export default function QuoteApproval() {
     if (clientType === "company" && !companyName.trim()) { setFormError("Укажите название организации"); return; }
     setFormError(""); setFormSending(true);
     try {
-      const res  = await fetch(`${SIGN_URL}?action=submit&token=${token}`, {
+      // Шаг 1: сохраняем данные (без OTP — без отправки письма)
+      const res = await fetch(`${SIGN_URL}?action=submit&token=${token}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -152,6 +155,32 @@ export default function QuoteApproval() {
         throw new Error(data.error || "Ошибка сервера");
       }
       setContractId(data.contract_id);
+
+      // Шаг 2: загружаем превью PDF договора
+      setPreviewLoading(true);
+      setStep("preview");
+      try {
+        const previewRes = await fetch(`${SIGN_URL}?action=preview_pdf&token=${token}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ contract_id: data.contract_id }),
+        });
+        const previewData = await previewRes.json();
+        if (previewData.pdf_url) setPreviewPdfUrl(previewData.pdf_url);
+      } catch { /* превью не критично */ }
+      finally { setPreviewLoading(false); }
+    } catch (e: unknown) {
+      setFormError(e instanceof Error ? e.message : "Ошибка");
+    } finally { setFormSending(false); }
+  };
+
+  // ── Подтвердить согласие с договором и отправить OTP ───────────────────
+  const handleConfirmAndSendOtp = async () => {
+    setFormError(""); setFormSending(true);
+    try {
+      const res = await fetch(`${SIGN_URL}?action=send_otp&token=${token}`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Ошибка");
       setOtpCooldown(60);
       if (data.email_error) {
         setEmailWarning(`Не удалось отправить письмо на ${email}. Проверьте адрес и запросите код повторно.`);
@@ -291,7 +320,81 @@ export default function QuoteApproval() {
     </div>
   );
 
-  // ── ОТП экран ────────────────────────────────────────────────────────────
+  // ── Шаг ознакомления с договором ────────────────────────────────────────
+  if (step === "preview") return (
+    <div className="min-h-screen bg-[#0a0a0a] py-10 px-4">
+      <div className="max-w-2xl mx-auto">
+        <div className="text-center mb-6">
+          <p className="text-amber-500 text-xs uppercase tracking-widest mb-1">Global Renta</p>
+          <h1 className="font-oswald text-3xl font-bold text-white uppercase">Ознакомьтесь с договором</h1>
+          <p className="text-gray-500 text-sm mt-2">Перед подписанием внимательно прочитайте договор</p>
+        </div>
+
+        <div className="glass-card rounded-sm p-6 mb-4">
+          {previewLoading ? (
+            <div className="flex items-center justify-center gap-3 py-12">
+              <Icon name="Loader2" size={24} className="text-amber-500 animate-spin" />
+              <span className="text-gray-400">Формируем договор для ознакомления...</span>
+            </div>
+          ) : previewPdfUrl ? (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-green-400 text-sm mb-4">
+                <Icon name="FileText" size={16} />
+                Договор сформирован и готов к просмотру
+              </div>
+              <a href={previewPdfUrl} target="_blank" rel="noopener noreferrer"
+                className="flex items-center justify-center gap-2 border border-amber-500/40 text-amber-500 hover:bg-amber-500/10 px-5 py-3 rounded-sm text-sm transition-colors w-full">
+                <Icon name="ExternalLink" size={16} />
+                Открыть договор (PDF) для прочтения
+              </a>
+              <div className="mt-2 p-3 bg-amber-500/5 border border-amber-500/20 rounded-sm">
+                <p className="text-gray-500 text-xs leading-relaxed">
+                  Данный файл — черновик договора с вашими данными. После нажатия «Согласен, подписать» вы получите код на email и подпишете договор ПЭП.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="py-8 text-center">
+              <Icon name="FileWarning" size={32} className="text-gray-600 mx-auto mb-3" />
+              <p className="text-gray-500 text-sm">Не удалось загрузить превью договора.</p>
+              <p className="text-gray-600 text-xs mt-1">Вы можете продолжить подписание.</p>
+            </div>
+          )}
+        </div>
+
+        <div className="glass-card neon-border rounded-sm p-5">
+          <div className="flex items-start gap-3 mb-5">
+            <Icon name="ShieldCheck" size={20} className="text-amber-500 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-white text-sm font-medium mb-1">Подписание договора</p>
+              <p className="text-gray-500 text-xs leading-relaxed">
+                Нажимая «Согласен», вы подтверждаете что ознакомились с условиями договора и готовы его подписать. На email <span className="text-amber-500">{email}</span> придёт код подтверждения.
+              </p>
+            </div>
+          </div>
+          {formError && (
+            <div className="mb-4 flex items-center gap-2 text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-sm px-4 py-2.5">
+              <Icon name="AlertCircle" size={14} /> {formError}
+            </div>
+          )}
+          <div className="flex gap-3">
+            <button onClick={() => setStep("form")}
+              className="border border-gray-700 text-gray-400 hover:text-white px-5 py-3 rounded-sm text-sm transition-colors">
+              Назад
+            </button>
+            <button onClick={handleConfirmAndSendOtp} disabled={previewLoading || formSending}
+              className="flex-1 neon-btn py-3 rounded-sm text-sm flex items-center justify-center gap-2 disabled:opacity-40">
+              {formSending
+                ? <><Icon name="Loader2" size={16} className="animate-spin" /> Отправляю код...</>
+                : <><Icon name="Mail" size={16} /> Согласен — получить код на email</>
+              }
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
   if (step === "otp") return (
     <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center p-4">
       <div className="glass-card neon-border rounded-sm p-8 max-w-md w-full">

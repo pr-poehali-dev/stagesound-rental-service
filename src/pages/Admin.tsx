@@ -159,6 +159,18 @@ export default function Admin() {
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [settingsSaved, setSettingsSaved] = useState(false);
+  const [settingsSubTab, setSettingsSubTab] = useState<"contacts" | "requisites" | "contract_template">("contacts");
+
+  // Contract template
+  const [contractTpl, setContractTpl] = useState<Record<string, string>>({});
+  const [tplLoading, setTplLoading]   = useState(false);
+  const [tplSaving, setTplSaving]     = useState(false);
+  const [tplSaved, setTplSaved]       = useState(false);
+
+  // Manager sign
+  const [managerSigningId, setManagerSigningId] = useState<number | null>(null);
+  const [managerName, setManagerName]           = useState(() => sessionStorage.getItem("manager_name") || "");
+  const [managerSignDone, setManagerSignDone]   = useState<number | null>(null);
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -246,12 +258,44 @@ export default function Admin() {
     setTimeout(() => setSettingsSaved(false), 3000);
   };
 
+  const loadContractTemplate = async () => {
+    setTplLoading(true);
+    const res = await fetch(URLS["manage-contract-template"]);
+    if (res.ok) setContractTpl(await res.json());
+    setTplLoading(false);
+  };
+
+  const saveContractTemplate = async () => {
+    setTplSaving(true);
+    await fetch(`${URLS["manage-contract-template"]}?pwd=${encodeURIComponent(password)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(contractTpl),
+    });
+    setTplSaving(false); setTplSaved(true);
+    setTimeout(() => setTplSaved(false), 3000);
+  };
+
+  const managerSign = async (contractId: number) => {
+    if (!managerName.trim()) return;
+    setManagerSigningId(contractId);
+    sessionStorage.setItem("manager_name", managerName);
+    await fetch(`${URLS["manage-contract-template"]}?action=manager_sign&pwd=${encodeURIComponent(password)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ contract_id: contractId, manager_name: managerName }),
+    });
+    setManagerSigningId(null); setManagerSignDone(contractId);
+    setTimeout(() => setManagerSignDone(null), 4000);
+    loadContracts();
+  };
+
   useEffect(() => {
     if (!authed) return;
     if (tab === "orders") loadOrders();
     if (tab === "quotes") loadQuotes();
     if (tab === "contracts") loadContracts();
-    if (tab === "settings") loadSettings();
+    if (tab === "settings") { loadSettings(); loadContractTemplate(); }
     if (tab === "renters") loadRenters();
   }, [tab, authed]);
 
@@ -602,56 +646,139 @@ export default function Admin() {
       {/* ── НАСТРОЙКИ ── */}
       {tab === "settings" && (
         <div className="max-w-2xl">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h2 className="font-oswald text-2xl font-bold text-white uppercase">Контактная информация</h2>
-              <p className="text-gray-500 text-sm mt-1">Изменения применяются на сайте сразу после сохранения</p>
-            </div>
-            {settingsSaved && (
-              <div className="flex items-center gap-2 text-green-400 text-sm">
-                <Icon name="CheckCircle" size={16} /> Сохранено
-              </div>
-            )}
+          <h2 className="font-oswald text-2xl font-bold text-white uppercase mb-4">Настройки</h2>
+
+          {/* Подвкладки */}
+          <div className="flex gap-2 mb-6 border-b border-amber-500/10 pb-2">
+            {([
+              { id: "contacts", label: "Контакты сайта", icon: "Phone" },
+              { id: "requisites", label: "Реквизиты компании", icon: "Building2" },
+              { id: "contract_template", label: "Шаблон договора", icon: "FileText" },
+            ] as const).map(sub => (
+              <button key={sub.id} onClick={() => setSettingsSubTab(sub.id)}
+                className={`flex items-center gap-1.5 px-4 py-2 rounded-sm text-sm transition-colors ${settingsSubTab === sub.id ? "neon-btn" : "border border-gray-700 text-gray-400 hover:text-white"}`}>
+                <Icon name={sub.icon} size={13} /> {sub.label}
+              </button>
+            ))}
           </div>
 
-          {settingsLoading ? (
-            <div className="flex items-center gap-3 text-gray-500 py-8">
-              <Icon name="Loader2" size={18} className="animate-spin" /> Загрузка...
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {[
-                { key: "phone", label: "Телефон (для отображения)", placeholder: "+7 (812) 123-45-67" },
-                { key: "phone_raw", label: "Телефон (для ссылки tel:, только цифры)", placeholder: "+78121234567" },
-                { key: "email", label: "Email", placeholder: "info@stagesound.ru" },
-                { key: "address", label: "Адрес", placeholder: "Санкт-Петербург, ул. Примерная, 1" },
-                { key: "workdays", label: "Режим работы (будни)", placeholder: "Пн–Пт: 9:00 — 20:00" },
-                { key: "weekend", label: "Режим работы (выходные)", placeholder: "Сб–Вс: 10:00 — 17:00" },
-                { key: "telegram", label: "Ссылка Telegram", placeholder: "https://t.me/username" },
-                { key: "whatsapp", label: "WhatsApp (номер со знаком +)", placeholder: "+79001234567" },
-                { key: "vk", label: "ВКонтакте (ссылка)", placeholder: "https://vk.com/stagesound" },
-              ].map((field) => (
-                <div key={field.key} className="glass-card rounded-sm p-4">
-                  <label className="block text-xs text-gray-500 uppercase tracking-wider mb-2">{field.label}</label>
-                  <input
-                    type="text"
-                    value={settings[field.key] ?? ""}
-                    onChange={(e) => setSettings((prev) => ({ ...prev, [field.key]: e.target.value }))}
-                    placeholder={field.placeholder}
-                    className="w-full bg-transparent border border-amber-500/20 rounded-sm px-3 py-2.5 text-white text-sm placeholder-gray-600 focus:outline-none focus:border-amber-500/60 transition-colors"
-                  />
+          {/* ── Контакты сайта ── */}
+          {settingsSubTab === "contacts" && (
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <p className="text-gray-500 text-sm">Отображаются на сайте в хедере и футере</p>
+                {settingsSaved && <span className="text-green-400 text-sm flex items-center gap-1"><Icon name="CheckCircle" size={14}/>Сохранено</span>}
+              </div>
+              {settingsLoading ? <div className="flex items-center gap-3 text-gray-500 py-8"><Icon name="Loader2" size={18} className="animate-spin"/>Загрузка...</div> : (
+                <div className="space-y-3">
+                  {[
+                    { key: "phone", label: "Телефон (для отображения)", placeholder: "+7 (812) 123-45-67" },
+                    { key: "phone_raw", label: "Телефон (для ссылки tel:, только цифры)", placeholder: "+78121234567" },
+                    { key: "email", label: "Email", placeholder: "info@stagesound.ru" },
+                    { key: "address", label: "Адрес", placeholder: "Санкт-Петербург, ул. Примерная, 1" },
+                    { key: "workdays", label: "Режим работы (будни)", placeholder: "Пн–Пт: 9:00 — 20:00" },
+                    { key: "weekend", label: "Режим работы (выходные)", placeholder: "Сб–Вс: 10:00 — 17:00" },
+                    { key: "telegram", label: "Ссылка Telegram", placeholder: "https://t.me/username" },
+                    { key: "whatsapp", label: "WhatsApp (номер со знаком +)", placeholder: "+79001234567" },
+                    { key: "vk", label: "ВКонтакте (ссылка)", placeholder: "https://vk.com/stagesound" },
+                  ].map(f => (
+                    <div key={f.key} className="glass-card rounded-sm p-3">
+                      <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1.5">{f.label}</label>
+                      <input type="text" value={settings[f.key] ?? ""} onChange={e => setSettings(p => ({...p, [f.key]: e.target.value}))}
+                        placeholder={f.placeholder} className="w-full bg-transparent border border-amber-500/20 rounded-sm px-3 py-2 text-white text-sm placeholder-gray-600 focus:outline-none focus:border-amber-500/60 transition-colors" />
+                    </div>
+                  ))}
+                  <button onClick={saveSettings} disabled={settingsSaving} className="neon-btn w-full py-3 rounded-sm text-sm flex items-center justify-center gap-2 disabled:opacity-50 mt-2">
+                    {settingsSaving ? <><Icon name="Loader2" size={16} className="animate-spin"/>Сохраняю...</> : <><Icon name="Save" size={16}/>Сохранить</>}
+                  </button>
                 </div>
-              ))}
+              )}
+            </div>
+          )}
 
-              <button
-                onClick={saveSettings}
-                disabled={settingsSaving}
-                className="neon-btn w-full py-3 rounded-sm text-sm flex items-center justify-center gap-2 disabled:opacity-50 mt-4"
-              >
-                {settingsSaving
-                  ? <><Icon name="Loader2" size={16} className="animate-spin" /> Сохраняю...</>
-                  : <><Icon name="Save" size={16} /> Сохранить изменения</>}
-              </button>
+          {/* ── Реквизиты компании ── */}
+          {settingsSubTab === "requisites" && (
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <p className="text-gray-500 text-sm">Реквизиты подставляются в PDF договора</p>
+                {settingsSaved && <span className="text-green-400 text-sm flex items-center gap-1"><Icon name="CheckCircle" size={14}/>Сохранено</span>}
+              </div>
+              {settingsLoading ? <div className="flex items-center gap-3 text-gray-500 py-8"><Icon name="Loader2" size={18} className="animate-spin"/>Загрузка...</div> : (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-1 gap-3">
+                    {[
+                      { key: "company_name",    label: "Название компании",    placeholder: "ООО «Global Renta»" },
+                      { key: "company_inn",     label: "ИНН",                  placeholder: "7712345678" },
+                      { key: "company_kpp",     label: "КПП",                  placeholder: "771201001" },
+                      { key: "company_ogrn",    label: "ОГРН",                 placeholder: "1027700000000" },
+                      { key: "company_address", label: "Юридический адрес",    placeholder: "г. Санкт-Петербург, ..." },
+                      { key: "company_director",label: "Директор (ФИО)",       placeholder: "Иванов Иван Иванович" },
+                      { key: "company_email",   label: "Email компании",       placeholder: "info@global.promo" },
+                      { key: "company_phone",   label: "Телефон компании",     placeholder: "+7 (800) 000-00-00" },
+                    ].map(f => (
+                      <div key={f.key} className="glass-card rounded-sm p-3">
+                        <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1.5">{f.label}</label>
+                        <input type="text" value={settings[f.key] ?? ""} onChange={e => setSettings(p => ({...p, [f.key]: e.target.value}))}
+                          placeholder={f.placeholder} className="w-full bg-transparent border border-amber-500/20 rounded-sm px-3 py-2 text-white text-sm placeholder-gray-600 focus:outline-none focus:border-amber-500/60 transition-colors" />
+                      </div>
+                    ))}
+                  </div>
+                  <div className="glass-card rounded-sm p-4 border border-amber-500/10">
+                    <p className="text-xs text-gray-500 uppercase tracking-wider mb-3">Банковские реквизиты</p>
+                    <div className="grid grid-cols-1 gap-3">
+                      {[
+                        { key: "company_bank", label: "Банк",            placeholder: "ПАО Сбербанк" },
+                        { key: "company_bik",  label: "БИК",             placeholder: "044525225" },
+                        { key: "company_rs",   label: "Расчётный счёт",  placeholder: "40702810000000000000" },
+                        { key: "company_ks",   label: "Корр. счёт",      placeholder: "30101810400000000225" },
+                      ].map(f => (
+                        <div key={f.key}>
+                          <label className="block text-xs text-gray-500 mb-1">{f.label}</label>
+                          <input type="text" value={settings[f.key] ?? ""} onChange={e => setSettings(p => ({...p, [f.key]: e.target.value}))}
+                            placeholder={f.placeholder} className="w-full bg-transparent border border-amber-500/20 rounded-sm px-3 py-2 text-white text-sm placeholder-gray-600 focus:outline-none focus:border-amber-500/60 transition-colors" />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <button onClick={saveSettings} disabled={settingsSaving} className="neon-btn w-full py-3 rounded-sm text-sm flex items-center justify-center gap-2 disabled:opacity-50 mt-2">
+                    {settingsSaving ? <><Icon name="Loader2" size={16} className="animate-spin"/>Сохраняю...</> : <><Icon name="Save" size={16}/>Сохранить реквизиты</>}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Шаблон договора ── */}
+          {settingsSubTab === "contract_template" && (
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <p className="text-gray-500 text-sm">Дополнительные пункты добавляются в каждый раздел договора</p>
+                {tplSaved && <span className="text-green-400 text-sm flex items-center gap-1"><Icon name="CheckCircle" size={14}/>Сохранено</span>}
+              </div>
+              {tplLoading ? <div className="flex items-center gap-3 text-gray-500 py-8"><Icon name="Loader2" size={18} className="animate-spin"/>Загрузка...</div> : (
+                <div className="space-y-3">
+                  {[
+                    { key: "section_2_extra", label: "Раздел 2 — Стоимость и расчёты (доп. пункт)", placeholder: "2.3. Например: ..." },
+                    { key: "section_3_extra", label: "Раздел 3 — Права и обязанности (доп. пункт)", placeholder: "3.4. Например: ..." },
+                    { key: "section_4_extra", label: "Раздел 4 — Ответственность (доп. пункт)",     placeholder: "4.4. Например: ..." },
+                    { key: "section_5_extra", label: "Раздел 5 — Прочие условия (доп. пункт)",      placeholder: "5.4. Например: ..." },
+                  ].map(f => (
+                    <div key={f.key} className="glass-card rounded-sm p-3">
+                      <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1.5">{f.label}</label>
+                      <textarea value={contractTpl[f.key] ?? ""} onChange={e => setContractTpl(p => ({...p, [f.key]: e.target.value}))}
+                        placeholder={f.placeholder} rows={3}
+                        className="w-full bg-transparent border border-amber-500/20 rounded-sm px-3 py-2 text-white text-sm placeholder-gray-600 focus:outline-none focus:border-amber-500/60 transition-colors resize-none" />
+                    </div>
+                  ))}
+                  <div className="glass-card rounded-sm p-4 border border-amber-500/10">
+                    <p className="text-xs text-gray-500 mb-2">Если поле пустое — доп. пункт не добавляется в договор.</p>
+                    <p className="text-xs text-gray-600">HTML-теги {'<b>'}, {'<i>'} поддерживаются для форматирования.</p>
+                  </div>
+                  <button onClick={saveContractTemplate} disabled={tplSaving} className="neon-btn w-full py-3 rounded-sm text-sm flex items-center justify-center gap-2 disabled:opacity-50">
+                    {tplSaving ? <><Icon name="Loader2" size={16} className="animate-spin"/>Сохраняю...</> : <><Icon name="Save" size={16}/>Сохранить шаблон</>}
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -804,6 +931,30 @@ export default function Admin() {
                 <Icon name="ExternalLink" size={14} /> Открыть PDF
               </a>
             )}
+            {/* Подпись менеджера */}
+            {selectedContract.signed_at && (
+              <div className="mb-3 p-3 bg-emerald-500/5 border border-emerald-500/20 rounded-sm">
+                <p className="text-xs text-gray-500 uppercase tracking-wider mb-2">Подпись со стороны компании</p>
+                {selectedContract.signed_at && !managerSignDone && (
+                  <div className="flex gap-2">
+                    <input value={managerName} onChange={e => setManagerName(e.target.value)}
+                      placeholder="Ваше имя (менеджер)"
+                      className="flex-1 bg-transparent border border-emerald-500/30 rounded-sm px-2 py-1.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-emerald-500/60" />
+                    <button onClick={() => managerSign(selectedContract.id)} disabled={!managerName.trim() || managerSigningId === selectedContract.id}
+                      className="flex items-center gap-1.5 bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/30 px-3 py-1.5 rounded-sm text-sm transition-colors disabled:opacity-40">
+                      {managerSigningId === selectedContract.id ? <Icon name="Loader2" size={13} className="animate-spin"/> : <Icon name="PenLine" size={13}/>}
+                      Подписать
+                    </button>
+                  </div>
+                )}
+                {managerSignDone === selectedContract.id && (
+                  <div className="flex items-center gap-2 text-emerald-400 text-sm">
+                    <Icon name="CheckCircle" size={14}/> Договор подписан с обеих сторон!
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="flex gap-3">
               {(selectedContract.status === "pending" || selectedContract.status === "contracted") && (
                 <button onClick={() => markContractReviewed(selectedContract.id)}

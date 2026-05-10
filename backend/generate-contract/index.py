@@ -186,7 +186,7 @@ def money_words(amount: int) -> str:
     return f"{amount:,} ({words}) рублей 00 копеек".replace(",", "\u00a0")
 
 
-def build_pdf(contract: dict, quote: dict) -> bytes:
+def build_pdf(contract: dict, quote: dict, company_reqs: dict = None, tpl: dict = None, is_preview: bool = False) -> bytes:
     ensure_fonts()
 
     buf = io.BytesIO()
@@ -269,7 +269,6 @@ def build_pdf(contract: dict, quote: dict) -> bytes:
     delivery_time   = quote.get("delivery_time") or ""
     pickup_time     = quote.get("pickup_time") or ""
     discount_pct    = int(quote.get("discount") or 0)
-    signed_at       = contract.get("signed_at")
 
     days_str   = "1 (один) календарный день" if days == 1 else f"{days} календарных {'дня' if days in (2,3,4) else 'дней'}"
     event_str  = fmt_date(ev_date) if ev_date else "по согласованию Сторон"
@@ -336,25 +335,34 @@ def build_pdf(contract: dict, quote: dict) -> bytes:
 
     section("1", "ПРЕДМЕТ ДОГОВОРА", *s1_paras)
 
+    t = tpl or {}
+    def tpl_extra(key):
+        v = t.get(key, "").strip()
+        return [v] if v else []
+
     disc_note = f" (с учётом скидки {discount_pct}%)" if discount_pct > 0 else ""
     section("2", "СТОИМОСТЬ И ПОРЯДОК РАСЧЁТОВ",
         f"2.1. Общая стоимость аренды{disc_note}: <b>{money_words(total)}</b>.",
         "2.2. Оплата производится до начала срока аренды путём безналичного перечисления.",
+        *tpl_extra("section_2_extra"),
     )
     section("3", "ПРАВА И ОБЯЗАННОСТИ СТОРОН",
         "3.1. Арендодатель передаёт Оборудование в исправном состоянии и обеспечивает доставку при наличии в Приложении &numero;1.",
         "3.2. Арендатор использует Оборудование по назначению, обеспечивает сохранность и возвращает в срок.",
         "3.3. Арендатор не вправе передавать Оборудование третьим лицам без согласия Арендодателя.",
+        *tpl_extra("section_3_extra"),
     )
     section("4", "ОТВЕТСТВЕННОСТЬ",
         "4.1. При просрочке возврата — неустойка 0,5% от суммы Договора за каждый день.",
         "4.2. При повреждении или утрате — полная рыночная стоимость Оборудования.",
         "4.3. Форс-мажор освобождает Стороны от ответственности.",
+        *tpl_extra("section_4_extra"),
     )
     section("5", "ПРОЧИЕ УСЛОВИЯ",
         "5.1. Договор вступает в силу с момента подписания.",
         "5.2. Споры — переговоры, затем суд по месту Арендодателя.",
         "5.3. Два равных экземпляра.",
+        *tpl_extra("section_5_extra"),
     )
 
     story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#cccccc")))
@@ -373,13 +381,29 @@ def build_pdf(contract: dict, quote: dict) -> bytes:
             col.append(Paragraph("М.П.", Ss["small"]))
         return col
 
-    arend_col = make_col("АРЕНДОДАТЕЛЬ", [
-        ("Организация", "ООО &laquo;Global Renta&raquo;"),
-        ("ИНН", "_______________"),
-        ("ОГРН", "_______________"),
-        ("Адрес", "Санкт-Петербург, Невский пр., 88"),
-        ("Email", "info@globalrenta.ru"),
-    ], with_stamp=True)
+    cr = company_reqs or {}
+    arend_rows = [
+        ("Организация", cr.get("company_name") or "ООО &laquo;Global Renta&raquo;"),
+    ]
+    if cr.get("company_inn"):
+        arend_rows.append(("ИНН", cr["company_inn"] + (f" / КПП: {cr['company_kpp']}" if cr.get("company_kpp") else "")))
+    if cr.get("company_ogrn"):
+        arend_rows.append(("ОГРН", cr["company_ogrn"]))
+    if cr.get("company_address"):
+        arend_rows.append(("Адрес", cr["company_address"]))
+    if cr.get("company_bank"):
+        arend_rows.append(("Банк", cr["company_bank"]))
+    if cr.get("company_bik"):
+        arend_rows.append(("БИК", cr["company_bik"]))
+    if cr.get("company_rs"):
+        arend_rows.append(("Р/с", cr["company_rs"]))
+    if cr.get("company_ks"):
+        arend_rows.append(("К/с", cr["company_ks"]))
+    if cr.get("company_email"):
+        arend_rows.append(("Email", cr["company_email"]))
+    if cr.get("company_phone"):
+        arend_rows.append(("Тел.", cr["company_phone"]))
+    arend_col = make_col("АРЕНДОДАТЕЛЬ", arend_rows, with_stamp=True)
 
     client_col = make_col("АРЕНДАТОР",
         [("Наименование", f"<b>{cname}</b>"), ("Тип", clabel)] + creq +
@@ -527,43 +551,99 @@ def build_pdf(contract: dict, quote: dict) -> bytes:
     story.append(Spacer(1, 8*mm))
 
     # Подписи
-    sign_right_text = "Арендатор: _____________________________"
+    pep_uid          = contract.get("pep_uid") or ""
+    signed_at        = contract.get("signed_at")
+    manager_signed_at = contract.get("manager_signed_at")
+    manager_name_val  = contract.get("manager_name") or ""
+
+    sign_date = ""
     if signed_at:
-        from datetime import datetime as _dt
         try:
-            if hasattr(signed_at, "strftime"):
-                sign_date = signed_at.strftime("%d.%m.%Y %H:%M UTC")
-            else:
-                sign_date = str(signed_at)[:16]
+            sign_date = signed_at.strftime("%d.%m.%Y %H:%M UTC") if hasattr(signed_at, "strftime") else str(signed_at)[:16]
         except Exception:
             sign_date = str(signed_at)[:16]
-        sign_right_text = (
-            f"Арендатор: {cname}\n"
-            f"Email: {email}\n"
-            f"ПЭП подписан: {sign_date}\n"
-            f"Подпись подтверждена кодом на email"
-        )
+
+    mgr_date = ""
+    if manager_signed_at:
+        try:
+            mgr_date = manager_signed_at.strftime("%d.%m.%Y %H:%M UTC") if hasattr(manager_signed_at, "strftime") else str(manager_signed_at)[:16]
+        except Exception:
+            mgr_date = str(manager_signed_at)[:16]
+
+    if is_preview:
+        # Левая — арендодатель с пустыми полями
+        left_parts = ["Арендодатель: _____________________________",
+                      "<font color='#888'>М.П.</font>"]
+        # Правая — арендатор с пустыми полями
+        right_parts = [f"Арендатор: {cname}",
+                       "Подпись: _____________________________",
+                       "<font color='#888'>(будет заполнено после подписания)</font>"]
+    else:
+        # Арендодатель
+        if manager_signed_at and manager_name_val:
+            left_parts = [
+                f"Арендодатель: <b>{cr.get('company_name','ООО Global Renta')}</b>",
+                f"От имени: <b>{manager_name_val}</b>",
+                f"Подписано: {mgr_date}",
+                "<font color='#888'>М.П.</font>",
+            ]
+        else:
+            left_parts = [
+                f"Арендодатель: <b>{cr.get('company_name','ООО Global Renta')}</b>",
+                "Подпись: _____________________________",
+                "<font color='#888'>М.П.</font>",
+            ]
+        # Арендатор
+        if signed_at:
+            right_parts = [
+                f"Арендатор: <b>{cname}</b>",
+                f"Email: {email}",
+                f"<b>ПЭП подписан: {sign_date}</b>",
+                "Подпись подтверждена кодом на email",
+            ]
+            if pep_uid:
+                right_parts.append(f"<font color='#888'>ID подписи: {pep_uid}</font>")
+        else:
+            right_parts = [f"Арендатор: {cname}", "Подпись: _____________________________"]
 
     sign = Table(
-        [[Paragraph("Арендодатель: _____________________________ М.П.", Ss["sign"]),
-          Paragraph(sign_right_text.replace("\n", "<br/>"), Ss["sign"])]],
+        [[Paragraph("<br/>".join(left_parts), Ss["sign"]),
+          Paragraph("<br/>".join(right_parts), Ss["sign"])]],
         colWidths=[W/2, W/2]
     )
     sign.setStyle(TableStyle([("LEFTPADDING",(0,0),(-1,-1),0),("RIGHTPADDING",(0,0),(-1,-1),0),
-                               ("TOPPADDING",(0,0),(-1,-1),0),("BOTTOMPADDING",(0,0),(-1,-1),0)]))
+                               ("TOPPADDING",(0,0),(-1,-1),0),("BOTTOMPADDING",(0,0),(-1,-1),0),
+                               ("VALIGN",(0,0),(-1,-1),"TOP")]))
     story.append(sign)
 
+    # Водяной знак ЧЕРНОВИК для preview
+    if is_preview:
+        story.append(Spacer(1, 4*mm))
+        story.append(Paragraph(
+            "<font color='#cc0000'><b>ЧЕРНОВИК — только для ознакомления. Документ не является подписанным.</b></font>",
+            Ss["small"]
+        ))
+
     # Блок ПЭП если договор подписан
-    if signed_at:
+    if signed_at and not is_preview:
         story.append(Spacer(1, 6*mm))
-        pep_text = (
-            f"<b>Документ подписан простой электронной подписью (ПЭП)</b> в соответствии с "
-            f"Федеральным законом № 63-ФЗ «Об электронной подписи». "
-            f"Подписант: {cname} ({email}). "
-            f"Дата и время подписания: {sign_date}. "
-            f"Подписание осуществлено путём подтверждения одноразового кода, направленного на email подписанта."
-        )
-        story.append(Paragraph(pep_text, Ss["small"] if "small" in Ss else Ss["body"]))
+        story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#cccccc")))
+        story.append(Spacer(1, 3*mm))
+        pep_lines = [
+            f"<b>Документ подписан простой электронной подписью (ПЭП)</b> в соответствии с ФЗ № 63-ФЗ «Об электронной подписи».",
+            f"Подписант (Арендатор): {cname} &lt;{email}&gt;.",
+            f"Дата и время подписания: {sign_date}.",
+            f"Метод: подтверждение одноразового кода, направленного на email подписанта.",
+        ]
+        if pep_uid:
+            pep_lines.append(f"<b>Уникальный идентификатор ПЭП: {pep_uid}</b>")
+        if manager_signed_at and manager_name_val:
+            pep_lines.append(f"Арендодатель ({manager_name_val}) подписал: {mgr_date}.")
+        elif not manager_signed_at:
+            pep_lines.append("Подпись Арендодателя: ожидается.")
+        for line in pep_lines:
+            story.append(Paragraph(line, Ss["small"]))
+            story.append(Spacer(1, 1*mm))
 
     doc.build(story)
     return buf.getvalue()
@@ -582,6 +662,7 @@ def handler(event: dict, context) -> dict:
     if not contract_id:
         return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "contract_id required"})}
 
+    is_preview = qp.get("preview", "") == "1"
     schema = os.environ.get("MAIN_DB_SCHEMA", "public")
     conn   = get_db()
     cur    = conn.cursor()
@@ -595,7 +676,7 @@ def handler(event: dict, context) -> dict:
             q.event_date, q.delivery_address,
             q.installation_time, q.installation_price, q.dismantling_time, q.dismantling_price,
             q.no_installation, q.delivery_time, q.pickup_time, q.discount,
-            c.signed_at
+            c.signed_at, c.pep_uid, c.manager_signed_at, c.manager_name
         FROM {schema}.contracts c
         JOIN {schema}.quotes q ON q.id = c.quote_id
         WHERE c.id = %s""",
@@ -614,25 +695,50 @@ def handler(event: dict, context) -> dict:
               "event_date","delivery_address",
               "installation_time","installation_price","dismantling_time","dismantling_price",
               "no_installation","delivery_time","pickup_time","discount"]
-    keys_extra = ["signed_at"]
+    keys_extra = ["signed_at","pep_uid","manager_signed_at","manager_name"]
     data     = dict(zip(keys_c + keys_q + keys_extra, row))
     contract = {k: data[k] for k in keys_c}
     quote    = {k: data[k] for k in keys_q}
-    contract["signed_at"] = data.get("signed_at")
+    for k in keys_extra:
+        contract[k] = data.get(k)
     for f in ("items", "extras"):
         if isinstance(quote[f], str):
             quote[f] = json.loads(quote[f])
 
-    pdf_bytes = build_pdf(contract, quote)
+    # Читаем реквизиты компании из settings
+    cur.execute(
+        f"SELECT key, value FROM {schema}.settings WHERE key LIKE 'company_%%'"
+    )
+    company_reqs = {r[0]: r[1] for r in cur.fetchall()}
 
-    key = f"contracts/contract_{contract['id']:04d}.pdf"
+    # Читаем шаблон договора
+    cur.execute(f"SELECT section, content FROM {schema}.contract_template ORDER BY section")
+    tpl = {r[0]: r[1] for r in cur.fetchall()}
+
+    # Генерируем уникальный UID ПЭП если нет
+    pep_uid = contract.get("pep_uid")
+    if not pep_uid and contract.get("signed_at") and not is_preview:
+        import hashlib
+        uid_src = f"{contract['id']}-{contract.get('email','')}-{str(contract.get('signed_at',''))}"
+        pep_uid = "PEP-" + hashlib.sha256(uid_src.encode()).hexdigest()[:16].upper()
+        cur.execute(f"UPDATE {schema}.contracts SET pep_uid=%s WHERE id=%s", (pep_uid, contract["id"]))
+        conn.commit()
+    contract["pep_uid"] = pep_uid
+
+    pdf_bytes = build_pdf(contract, quote, company_reqs=company_reqs, tpl=tpl, is_preview=is_preview)
+
+    if is_preview:
+        key = f"contracts/preview_{contract['id']:04d}.pdf"
+    else:
+        key = f"contracts/contract_{contract['id']:04d}.pdf"
     s3  = get_s3()
     s3.put_object(Bucket="files", Key=key, Body=pdf_bytes, ContentType="application/pdf")
     cdn = f"https://cdn.poehali.dev/projects/{os.environ['AWS_ACCESS_KEY_ID']}/bucket/{key}"
 
-    # Сохраняем URL PDF в контракте
-    cur.execute(f"UPDATE {schema}.contracts SET contract_pdf_url=%s WHERE id=%s", (cdn, contract["id"]))
-    conn.commit()
+    # Сохраняем URL PDF в контракте (только финальный, не превью)
+    if not is_preview:
+        cur.execute(f"UPDATE {schema}.contracts SET contract_pdf_url=%s WHERE id=%s", (cdn, contract["id"]))
+        conn.commit()
     cur.close(); conn.close()
 
     return {"statusCode": 200, "headers": CORS, "body": json.dumps({"ok": True, "pdf_url": cdn})}
