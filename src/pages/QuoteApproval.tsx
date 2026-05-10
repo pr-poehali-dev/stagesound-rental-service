@@ -44,6 +44,13 @@ export default function QuoteApproval() {
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
+  // PIN-защита
+  const [pinRequired, setPinRequired] = useState(false);
+  const [pinInput, setPinInput]       = useState("");
+  const [pinError, setPinError]       = useState("");
+  const [pinChecking, setPinChecking] = useState(false);
+  const [confirmedPin, setConfirmedPin] = useState("");
+
   // Флоу: "view" → "form" → "preview" → "otp" → "generating" → "done"
   const [step, setStep] = useState<"view" | "form" | "preview" | "otp" | "generating" | "done">("view");
   const [previewPdfUrl, setPreviewPdfUrl] = useState("");
@@ -93,40 +100,65 @@ export default function QuoteApproval() {
     return () => clearTimeout(t);
   }, [otpCooldown]);
 
-  // Загрузка КП + черновик контракта (предзаполнение формы)
-  useEffect(() => {
+  // Загрузка КП (с PIN если нужен)
+  const loadQuote = async (pin = "") => {
     if (!token) { setNotFound(true); setLoading(false); return; }
-    Promise.all([
-      fetch(`${QUOTES_URL}?token=${token}`).then(r => r.json()),
-      fetch(`${SIGN_URL}?token=${token}`).then(r => r.ok ? r.json() : null).catch(() => null),
-    ]).then(([q, c]) => {
-      if (q.error) { setNotFound(true); return; }
-      setQuote(q);
-      if (q.status === "signed") setStep("done");
-      // Предзаполняем форму из черновика контракта
-      if (c && !c.error) {
-        setContractId(c.contract_id ?? null);
-        if (c.client_type) setClientType(c.client_type);
-        if (c.phone)            setPhone(c.phone);
-        if (c.email)            setEmail(c.email);
-        if (c.full_name)        setFullName(c.full_name);
-        if (c.birth_date)       setBirthDate(c.birth_date);
-        if (c.address)          setAddress(c.address);
-        if (c.passport_series)  setPassportSeries(c.passport_series);
-        if (c.passport_number)  setPassportNumber(c.passport_number);
-        if (c.passport_issued)  setPassportIssued(c.passport_issued);
-        if (c.passport_date)    setPassportDate(c.passport_date);
-        if (c.company_name)     setCompanyName(c.company_name);
-        if (c.inn)              setInn(c.inn);
-        if (c.kpp)              setKpp(c.kpp);
-        if (c.ogrn)             setOgrn(c.ogrn);
-        if (c.director)         setDirector(c.director);
-        if (c.legal_address)    setLegalAddress(c.legal_address);
-      }
-    })
-    .catch(() => setNotFound(true))
-    .finally(() => setLoading(false));
-  }, [token]);
+    const headers: Record<string, string> = {};
+    if (pin) headers["X-Quote-Pin"] = pin;
+
+    const quoteRes = await fetch(`${QUOTES_URL}?token=${token}`, { headers });
+    if (quoteRes.status === 401) {
+      setPinRequired(true);
+      setLoading(false);
+      return;
+    }
+    const q = await quoteRes.json();
+    if (q.error) { setNotFound(true); setLoading(false); return; }
+
+    const c = await fetch(`${SIGN_URL}?token=${token}`)
+      .then(r => r.ok ? r.json() : null).catch(() => null);
+
+    setQuote(q);
+    if (q.status === "signed") setStep("done");
+    if (c && !c.error) {
+      setContractId(c.contract_id ?? null);
+      if (c.client_type) setClientType(c.client_type);
+      if (c.phone)            setPhone(c.phone);
+      if (c.email)            setEmail(c.email);
+      if (c.full_name)        setFullName(c.full_name);
+      if (c.birth_date)       setBirthDate(c.birth_date);
+      if (c.address)          setAddress(c.address);
+      if (c.passport_series)  setPassportSeries(c.passport_series);
+      if (c.passport_number)  setPassportNumber(c.passport_number);
+      if (c.passport_issued)  setPassportIssued(c.passport_issued);
+      if (c.passport_date)    setPassportDate(c.passport_date);
+      if (c.company_name)     setCompanyName(c.company_name);
+      if (c.inn)              setInn(c.inn);
+      if (c.kpp)              setKpp(c.kpp);
+      if (c.ogrn)             setOgrn(c.ogrn);
+      if (c.director)         setDirector(c.director);
+      if (c.legal_address)    setLegalAddress(c.legal_address);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => { loadQuote(); }, [token]);
+
+  const handlePinSubmit = async () => {
+    if (!pinInput.trim()) { setPinError("Введите пароль"); return; }
+    setPinChecking(true); setPinError("");
+    const headers: Record<string, string> = { "X-Quote-Pin": pinInput.trim() };
+    const res = await fetch(`${QUOTES_URL}?token=${token}`, { headers });
+    if (res.status === 401) {
+      setPinError("Неверный пароль");
+      setPinChecking(false);
+      return;
+    }
+    setConfirmedPin(pinInput.trim());
+    setPinRequired(false);
+    await loadQuote(pinInput.trim());
+    setPinChecking(false);
+  };
 
   // ── Загрузка паспорта ──────────────────────────────────────────────────
   const handlePassportUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -310,6 +342,42 @@ export default function QuoteApproval() {
   if (loading) return (
     <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
       <Icon name="Loader2" size={32} className="text-amber-500 animate-spin" />
+    </div>
+  );
+
+  // ── Экран ввода PIN ──────────────────────────────────────────────────────
+  if (pinRequired) return (
+    <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center p-4">
+      <div className="glass-card neon-border rounded-sm p-8 max-w-sm w-full text-center">
+        <div className="w-16 h-16 flex items-center justify-center border border-amber-500/30 rounded-sm mx-auto mb-5">
+          <Icon name="Lock" size={28} className="text-amber-500" />
+        </div>
+        <p className="text-amber-500 text-xs uppercase tracking-widest mb-1">Global Renta</p>
+        <h2 className="font-oswald text-2xl font-bold text-white uppercase mb-2">Защищённое КП</h2>
+        <p className="text-gray-500 text-sm mb-6">Введите пароль, который вам сообщил менеджер</p>
+
+        <input
+          type="password"
+          value={pinInput}
+          onChange={e => { setPinInput(e.target.value); setPinError(""); }}
+          onKeyDown={e => e.key === "Enter" && handlePinSubmit()}
+          placeholder="Пароль"
+          className={`w-full bg-transparent border rounded-sm px-4 py-3 text-white text-center text-lg tracking-widest placeholder-gray-700 focus:outline-none transition-colors mb-3 ${pinError ? "border-red-500/60" : "border-amber-500/30 focus:border-amber-500"}`}
+          autoFocus
+        />
+        {pinError && (
+          <p className="text-red-400 text-sm mb-3 flex items-center justify-center gap-1">
+            <Icon name="AlertCircle" size={14} /> {pinError}
+          </p>
+        )}
+        <button onClick={handlePinSubmit} disabled={pinChecking}
+          className="neon-btn w-full py-3 rounded-sm text-sm flex items-center justify-center gap-2 disabled:opacity-40">
+          {pinChecking
+            ? <><Icon name="Loader2" size={16} className="animate-spin" /> Проверяю...</>
+            : <><Icon name="Unlock" size={16} /> Открыть КП</>
+          }
+        </button>
+      </div>
     </div>
   );
 

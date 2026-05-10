@@ -549,7 +549,12 @@ export default function Admin() {
                     <tbody>
                       {quotes.map((q, i) => (
                         <tr key={q.id} className={`border-b border-amber-500/5 ${i % 2 === 0 ? "" : "bg-white/[0.01]"}`}>
-                          <td className="px-4 py-3 text-white font-medium">{q.title || "—"}</td>
+                          <td className="px-4 py-3 text-white font-medium">
+                            <div className="flex items-center gap-1.5">
+                              {q.title || "—"}
+                              {q.access_pin && <Icon name="Lock" size={11} className="text-amber-500/60 shrink-0" title={`Пароль: ${q.access_pin}`} />}
+                            </div>
+                          </td>
                           <td className="px-4 py-3 text-gray-400">{formatDate(q.created_at)}</td>
                           <td className="px-4 py-3 text-gray-400">{q.days}</td>
                           <td className="px-4 py-3 text-right font-oswald font-bold neon-text">{(q.total || 0).toLocaleString()} ₽</td>

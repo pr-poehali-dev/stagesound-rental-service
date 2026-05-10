@@ -66,7 +66,7 @@ def handler(event: dict, context) -> dict:
         cur.execute(
             f"SELECT id, token, title, items, days, delivery, delivery_price, extras, total, status, created_at, event_date, delivery_address, "
             f"installation_time, installation_price, dismantling_time, dismantling_price, "
-            f"no_installation, delivery_time, pickup_time, discount "
+            f"no_installation, delivery_time, pickup_time, discount, access_pin "
             f"FROM {schema}.quotes WHERE token = %s", (token,)
         )
         row = cur.fetchone()
@@ -75,9 +75,18 @@ def handler(event: dict, context) -> dict:
             return {"statusCode": 404, "headers": CORS, "body": json.dumps({"error": "Not found"})}
         keys = ["id", "token", "title", "items", "days", "delivery", "delivery_price", "extras", "total", "status", "created_at", "event_date", "delivery_address",
                 "installation_time", "installation_price", "dismantling_time", "dismantling_price",
-                "no_installation", "delivery_time", "pickup_time", "discount"]
+                "no_installation", "delivery_time", "pickup_time", "discount", "access_pin"]
         q = dict(zip(keys, row))
+        stored_pin = q.pop("access_pin") or ""
+
+        # Если PIN установлен — требуем его в заголовке X-Quote-Pin
+        if stored_pin:
+            provided_pin = (event.get("headers") or {}).get("X-Quote-Pin", "").strip()
+            if provided_pin != stored_pin.strip():
+                return {"statusCode": 401, "headers": CORS, "body": json.dumps({"error": "pin_required", "has_pin": True})}
+
         q["created_at"] = str(q["created_at"])
+        q["has_pin"] = bool(stored_pin)
         return {"statusCode": 200, "headers": CORS, "body": json.dumps(q)}
 
     # === Публичный: клиент загружает файл паспорта ===
@@ -169,10 +178,10 @@ def handler(event: dict, context) -> dict:
 
     if method == "GET":
         cur.execute(
-            f"SELECT id, token, title, items, days, delivery, delivery_price, extras, total, status, created_at, sent_at "
+            f"SELECT id, token, title, items, days, delivery, delivery_price, extras, total, status, created_at, sent_at, access_pin "
             f"FROM {schema}.quotes ORDER BY created_at DESC"
         )
-        keys = ["id", "token", "title", "items", "days", "delivery", "delivery_price", "extras", "total", "status", "created_at", "sent_at"]
+        keys = ["id", "token", "title", "items", "days", "delivery", "delivery_price", "extras", "total", "status", "created_at", "sent_at", "access_pin"]
         rows = [dict(zip(keys, r)) for r in cur.fetchall()]
         for r in rows:
             r["created_at"] = str(r["created_at"])
@@ -196,9 +205,10 @@ def handler(event: dict, context) -> dict:
         # Создать КП
         body = json.loads(event.get("body") or "{}")
         tok = secrets.token_urlsafe(16)
+        pin_val = (body.get("access_pin") or "").strip() or None
         cur.execute(
-            f"INSERT INTO {schema}.quotes (token, title, items, days, delivery, delivery_price, extras, total, status, event_date, delivery_address, installation_time, installation_price, dismantling_time, dismantling_price, no_installation, delivery_time, pickup_time, discount) "
-            f"VALUES (%s,%s,%s,%s,%s,%s,%s,%s,'draft',%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id",
+            f"INSERT INTO {schema}.quotes (token, title, items, days, delivery, delivery_price, extras, total, status, event_date, delivery_address, installation_time, installation_price, dismantling_time, dismantling_price, no_installation, delivery_time, pickup_time, discount, access_pin) "
+            f"VALUES (%s,%s,%s,%s,%s,%s,%s,%s,'draft',%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id",
             (
                 tok,
                 body.get("title", "КП"),
@@ -218,6 +228,7 @@ def handler(event: dict, context) -> dict:
                 body.get("delivery_time") or None,
                 body.get("pickup_time") or None,
                 int(body.get("discount", 0)),
+                pin_val,
             )
         )
         new_id = cur.fetchone()[0]
@@ -227,14 +238,15 @@ def handler(event: dict, context) -> dict:
     if method == "PUT":
         qid = int(qp.get("id", 0))
         body = json.loads(event.get("body") or "{}")
+        pin_val = (body.get("access_pin") or "").strip() or None
         cur.execute(
-            f"UPDATE {schema}.quotes SET title=%s, items=%s, days=%s, delivery=%s, delivery_price=%s, extras=%s, total=%s, event_date=%s, delivery_address=%s "
+            f"UPDATE {schema}.quotes SET title=%s, items=%s, days=%s, delivery=%s, delivery_price=%s, extras=%s, total=%s, event_date=%s, delivery_address=%s, access_pin=%s "
             f"WHERE id=%s",
             (
                 body.get("title", ""), json.dumps(body.get("items", [])),
                 body.get("days", 1), body.get("delivery", ""), body.get("delivery_price", 0),
                 json.dumps(body.get("extras", [])), body.get("total", 0),
-                body.get("event_date", ""), body.get("delivery_address", ""), qid,
+                body.get("event_date", ""), body.get("delivery_address", ""), pin_val, qid,
             )
         )
         conn.commit(); cur.close(); conn.close()

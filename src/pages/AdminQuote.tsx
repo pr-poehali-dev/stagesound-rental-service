@@ -94,6 +94,7 @@ export default function AdminQuote() {
   const [discount, setDiscount] = useState(0);
   const [discountInput, setDiscountInput] = useState("");
 
+  const [accessPin, setAccessPin] = useState("");
   const [saving, setSaving] = useState(false);
   const [copiedLink, setCopiedLink] = useState("");
   const [shareLink, setShareLink] = useState("");
@@ -209,6 +210,7 @@ export default function AdminQuote() {
         delivery_time: deliveryTime || null,
         pickup_time: pickupTime || null,
         discount,
+        access_pin: accessPin.trim() || null,
       }),
     });
     const data = await res.json();
@@ -334,6 +336,15 @@ export default function AdminQuote() {
                   <label className="text-xs text-gray-500 uppercase tracking-wider block mb-2">Адрес доставки / проведения</label>
                   <input value={deliveryAddress} onChange={(e) => setDeliveryAddress(e.target.value)}
                     placeholder="г. Москва, ул. Примерная, д. 1" className={iCls} />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 uppercase tracking-wider block mb-1">
+                    <Icon name="Lock" size={11} className="inline mr-1 text-amber-500" />
+                    Пароль на ссылку КП
+                  </label>
+                  <p className="text-gray-600 text-xs mb-2">Если не задан — ссылка открыта для всех</p>
+                  <input value={accessPin} onChange={(e) => setAccessPin(e.target.value)}
+                    placeholder="Например: 1234 или любое слово" className={iCls} />
                 </div>
               </div>
 
