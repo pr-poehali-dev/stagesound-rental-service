@@ -49,7 +49,7 @@ const DEFAULT_EXTRAS: ExtraService[] = [
 ];
 
 type Eq = { id: number; name: string; category: string; price: number; unit: string; image?: string };
-type CartItem = { id: number; qty: number };
+type CartItem = { id: number; qty: number; customPrice?: number; customName?: string; isCustom?: boolean };
 
 const iCls = "w-full bg-transparent border border-amber-500/20 rounded-sm px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/50";
 
@@ -102,6 +102,17 @@ export default function AdminQuote() {
   const [saving, setSaving] = useState(false);
   const [copiedLink, setCopiedLink] = useState("");
   const [shareLink, setShareLink] = useState("");
+
+  // Кастомная позиция
+  const [customName, setCustomName] = useState("");
+  const [customPrice, setCustomPrice] = useState("");
+  const [customUnit, setCustomUnit] = useState("шт");
+  const [showCustomForm, setShowCustomForm] = useState(false);
+  const [customIdCounter, setCustomIdCounter] = useState(-1);
+
+  // Редактирование цены в корзине
+  const [editingPriceId, setEditingPriceId] = useState<number | null>(null);
+  const [editingPriceVal, setEditingPriceVal] = useState("");
 
   const currentCity = CITIES[cityKey];
   const currentZones = currentCity.zones;
@@ -167,10 +178,28 @@ export default function AdminQuote() {
   const toggleExtra = (id: string) =>
     setSelectedExtras((prev) => prev.includes(id) ? prev.filter((e) => e !== id) : [...prev, id]);
 
+  const addCustomToCart = () => {
+    const p = Number(customPrice);
+    if (!customName.trim() || !p) return;
+    const id = customIdCounter;
+    setCustomIdCounter((n) => n - 1);
+    setCart((prev) => [...prev, { id, qty: 1, isCustom: true, customName: customName.trim(), customPrice: p }]);
+    // добавляем как фейковый equipment чтобы корзина его находила
+    setEquipment((prev) => [...prev, { id, name: customName.trim(), category: "Другое", price: p, unit: customUnit }]);
+    setCustomName(""); setCustomPrice(""); setCustomUnit("шт");
+    setShowCustomForm(false);
+  };
+
+  const setPriceOverride = (id: number, price: number) => {
+    setCart((prev) => prev.map((c) => c.id === id ? { ...c, customPrice: price } : c));
+    setEquipment((prev) => prev.map((e) => e.id === id ? { ...e, price } : e));
+  };
+
   const equipmentTotalRaw = useMemo(() =>
     cart.reduce((sum, item) => {
       const eq = equipment.find((e) => e.id === item.id);
-      return sum + (eq ? eq.price * item.qty * days : 0);
+      const price = item.customPrice !== undefined ? item.customPrice : eq?.price ?? 0;
+      return sum + (price * item.qty * days);
     }, 0), [cart, days, equipment]);
 
   const discountAmount = discount > 0 ? Math.round(equipmentTotalRaw * discount / 100) : 0;
@@ -193,7 +222,8 @@ export default function AdminQuote() {
     setSaving(true);
     const items = cart.map((c) => {
       const eq = equipment.find((e) => e.id === c.id)!;
-      return { id: eq.id, name: eq.name, price: eq.price, unit: eq.unit, qty: c.qty };
+      const price = c.customPrice !== undefined ? c.customPrice : eq.price;
+      return { id: c.isCustom ? null : eq.id, name: eq.name, price, unit: eq.unit, qty: c.qty };
     });
     const extrasData = selectedExtras.map((id) => {
       const s = extraServices.find((s) => s.id === id)!;
@@ -324,6 +354,35 @@ export default function AdminQuote() {
                   {filtered.length === 0 && <div className="col-span-2 text-center text-gray-500 py-12">Ничего не найдено</div>}
                 </div>
               )}
+
+              {/* Добавить свою позицию */}
+              <div className="glass-card rounded-sm p-4">
+                <button onClick={() => setShowCustomForm((v) => !v)}
+                  className="flex items-center gap-2 text-amber-500/80 hover:text-amber-500 text-sm transition-colors w-full">
+                  <Icon name={showCustomForm ? "ChevronUp" : "Plus"} size={15} />
+                  Добавить позицию не из каталога
+                </button>
+                {showCustomForm && (
+                  <div className="mt-3 space-y-2">
+                    <input value={customName} onChange={(e) => setCustomName(e.target.value)}
+                      placeholder="Название позиции" className={iCls} />
+                    <div className="flex gap-2">
+                      <input type="number" value={customPrice} onChange={(e) => setCustomPrice(e.target.value)}
+                        placeholder="Цена ₽" className={`${iCls} flex-1`} />
+                      <select value={customUnit} onChange={(e) => setCustomUnit(e.target.value)}
+                        className="bg-transparent border border-amber-500/20 rounded-sm px-2 py-2 text-sm text-gray-300 focus:outline-none w-24"
+                        style={{ background: "#111" }}>
+                        {["шт", "день", "час", "компл.", "услуга"].map(u => <option key={u} value={u}>{u}</option>)}
+                      </select>
+                    </div>
+                    <button onClick={addCustomToCart}
+                      disabled={!customName.trim() || !customPrice}
+                      className="neon-btn w-full py-2 rounded-sm text-sm disabled:opacity-40">
+                      Добавить в КП
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* ── Правая панель ── */}
@@ -367,16 +426,39 @@ export default function AdminQuote() {
                     {cart.map((c) => {
                       const eq = equipment.find((e) => e.id === c.id);
                       if (!eq) return null;
+                      const price = c.customPrice !== undefined ? c.customPrice : eq.price;
+                      const isEditing = editingPriceId === c.id;
                       return (
-                        <div key={c.id} className="flex items-center gap-2 text-sm">
-                          <div className="flex-1 min-w-0">
-                            <p className="text-gray-300 truncate">{eq.name}</p>
-                            <p className="text-amber-500 text-xs">{eq.price.toLocaleString()} × {c.qty} × {days} дн.</p>
+                        <div key={c.id} className="text-sm">
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-gray-300 truncate">{eq.name}</p>
+                              <div className="flex items-center gap-1.5 mt-0.5">
+                                {isEditing ? (
+                                  <input
+                                    type="number"
+                                    value={editingPriceVal}
+                                    onChange={(e) => setEditingPriceVal(e.target.value)}
+                                    onBlur={() => { const v = Number(editingPriceVal); if (v > 0) setPriceOverride(c.id, v); setEditingPriceId(null); }}
+                                    onKeyDown={(e) => { if (e.key === "Enter") { const v = Number(editingPriceVal); if (v > 0) setPriceOverride(c.id, v); setEditingPriceId(null); } }}
+                                    autoFocus
+                                    className="w-24 bg-transparent border border-amber-500/50 rounded-sm px-1.5 py-0.5 text-xs text-white focus:outline-none"
+                                  />
+                                ) : (
+                                  <button onClick={() => { setEditingPriceId(c.id); setEditingPriceVal(String(price)); }}
+                                    className="text-amber-500 text-xs hover:underline flex items-center gap-1">
+                                    {price.toLocaleString()} ₽/{eq.unit}
+                                    <Icon name="Pencil" size={10} />
+                                  </button>
+                                )}
+                                <span className="text-gray-600 text-xs">× {c.qty} × {days} дн.</span>
+                              </div>
+                            </div>
+                            <span className="text-white font-bold shrink-0">{(price * c.qty * days).toLocaleString()} ₽</span>
+                            <button onClick={() => setQty(eq.id, 0)} className="text-gray-600 hover:text-red-400 transition-colors shrink-0">
+                              <Icon name="X" size={14} />
+                            </button>
                           </div>
-                          <span className="text-white font-bold shrink-0">{(eq.price * c.qty * days).toLocaleString()} ₽</span>
-                          <button onClick={() => setQty(eq.id, 0)} className="text-gray-600 hover:text-red-400 transition-colors shrink-0">
-                            <Icon name="X" size={14} />
-                          </button>
                         </div>
                       );
                     })}
