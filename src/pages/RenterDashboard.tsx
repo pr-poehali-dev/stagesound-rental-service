@@ -316,40 +316,39 @@ export default function RenterDashboard() {
   const pendingCatsCount = mineCats.filter(c => c.status === "pending").length;
   const pendingSubsCount = mineSubs.filter(s => s.status === "pending").length;
 
-  // ── Список категорий для select (все одобренные + свои одобренные) ──
+  // ── Список категорий для select ──
   const availableCategories = allCats.map(c => c.name);
 
-  // ── Форма оборудования (переиспользуется для новой и редактирования) ──
-  const EqForm = ({ isEdit }: { isEdit: boolean }) => {
-    const base = isEdit ? editEq! : newEq;
-    const setF = isEdit
-      ? (upd: Partial<typeof newEq>) => setEditEq(e => e ? ({ ...e, ...upd } as RenterEq) : e)
-      : (upd: Partial<typeof newEq>) => setNewEq(e => ({ ...e, ...upd }));
-    const specsStr = isEdit ? editSpecsStr : newSpecsStr;
+  // ── Рендер полей формы оборудования (не компонент — inline JSX, чтобы не сбрасывался фокус) ──
+  const renderEqFields = (isEdit: boolean) => {
+    const name      = isEdit ? (editEq?.name ?? "")        : newEq.name;
+    const category  = isEdit ? (editEq?.category ?? "")    : newEq.category;
+    const subcategory = isEdit ? (editEq?.subcategory ?? "") : newEq.subcategory;
+    const price     = isEdit ? (editEq?.price ?? 0)        : newEq.price;
+    const unit      = isEdit ? (editEq?.unit ?? "день")    : newEq.unit;
+    const description = isEdit ? (editEq?.description ?? "") : newEq.description;
+    const tagsVal   = isEdit
+      ? ((editEq?.tags || []).join(", "))
+      : (typeof newEq.tags === "string" ? newEq.tags : (newEq.tags as string[]).join(", "));
+    const image     = isEdit ? (editEq?.image ?? "")       : newEq.image;
+    const specsStr  = isEdit ? editSpecsStr : newSpecsStr;
     const setSpecsStr = isEdit ? setEditSpecsStr : setNewSpecsStr;
-    const name = (base as typeof newEq).name ?? (base as RenterEq).name ?? "";
-    const category = (base as typeof newEq).category ?? (base as RenterEq).category ?? "";
-    const subcategory = (base as typeof newEq).subcategory ?? (base as RenterEq).subcategory ?? "";
-    const price = (base as typeof newEq).price ?? (base as RenterEq).price ?? 0;
-    const unit = (base as typeof newEq).unit ?? (base as RenterEq).unit ?? "день";
-    const description = (base as typeof newEq).description ?? (base as RenterEq).description ?? "";
-    const tagsVal = typeof (base as typeof newEq).tags === "string"
-      ? (base as typeof newEq).tags
-      : ((base as RenterEq).tags || []).join(", ");
-    const image = (base as typeof newEq).image ?? (base as RenterEq).image ?? "";
+    const setF = isEdit
+      ? (upd: Partial<RenterEq>) => setEditEq(e => e ? ({ ...e, ...upd }) : e)
+      : (upd: Partial<typeof newEq>) => setNewEq(e => ({ ...e, ...upd }));
 
     return (
       <div className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1.5">Название *</label>
-            <input value={name} onChange={e => setF({ name: e.target.value })}
+            <input value={name} onChange={e => setF({ name: e.target.value } as never)}
               placeholder="Напр.: Line Array JBL VTX A12"
               className="w-full bg-transparent border border-amber-500/20 rounded-sm px-3 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500/60" />
           </div>
           <div>
             <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1.5">Раздел *</label>
-            <select value={category} onChange={e => setF({ category: e.target.value })}
+            <select value={category} onChange={e => setF({ category: e.target.value } as never)}
               className="w-full bg-[#111] border border-amber-500/20 rounded-sm px-3 py-2.5 text-sm text-gray-300 focus:outline-none focus:border-amber-500/60">
               <option value="">— выберите —</option>
               {availableCategories.map(c => <option key={c} value={c}>{c}</option>)}
@@ -360,7 +359,7 @@ export default function RenterDashboard() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1.5">Подраздел</label>
-            <select value={subcategory} onChange={e => setF({ subcategory: e.target.value })}
+            <select value={subcategory} onChange={e => setF({ subcategory: e.target.value } as never)}
               className="w-full bg-[#111] border border-amber-500/20 rounded-sm px-3 py-2.5 text-sm text-gray-300 focus:outline-none focus:border-amber-500/60">
               <option value="">— без подраздела —</option>
               {allSubs.filter(s => s.category === category).map(s => (
@@ -371,9 +370,9 @@ export default function RenterDashboard() {
           <div>
             <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1.5">Цена</label>
             <div className="flex gap-2">
-              <input type="number" value={price} onChange={e => setF({ price: Number(e.target.value) })}
+              <input type="number" value={price} onChange={e => setF({ price: Number(e.target.value) } as never)}
                 className="flex-1 bg-transparent border border-amber-500/20 rounded-sm px-3 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500/60" />
-              <select value={unit} onChange={e => setF({ unit: e.target.value })}
+              <select value={unit} onChange={e => setF({ unit: e.target.value } as never)}
                 className="bg-[#111] border border-amber-500/20 rounded-sm px-2 py-2.5 text-sm text-gray-300 focus:outline-none">
                 <option>день</option><option>час</option><option>шт</option>
               </select>
@@ -383,7 +382,7 @@ export default function RenterDashboard() {
 
         <div>
           <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1.5">Описание</label>
-          <textarea value={description} onChange={e => setF({ description: e.target.value })}
+          <textarea value={description} onChange={e => setF({ description: e.target.value } as never)}
             rows={3} placeholder="Технические характеристики, особенности, комплектация..."
             className="w-full bg-transparent border border-amber-500/20 rounded-sm px-3 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500/60 resize-none" />
         </div>
@@ -409,7 +408,7 @@ export default function RenterDashboard() {
 
         <div>
           <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1.5">Теги (через запятую)</label>
-          <input value={tagsVal} onChange={e => setF({ tags: e.target.value })}
+          <input value={tagsVal} onChange={e => setF({ tags: e.target.value } as never)}
             placeholder="line array, jbl, звук"
             className="w-full bg-transparent border border-amber-500/20 rounded-sm px-3 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500/60" />
         </div>
@@ -425,7 +424,7 @@ export default function RenterDashboard() {
             <input ref={isEdit ? editFileRef : fileRef} type="file" accept="image/*" className="hidden"
               onChange={async e => {
                 const file = e.target.files?.[0];
-                if (file) { const url = await uploadImage(file); if (url) setF({ image: url }); }
+                if (file) { const url = await uploadImage(file); if (url) setF({ image: url } as never); }
               }} />
             <button type="button" onClick={() => (isEdit ? editFileRef : fileRef).current?.click()} disabled={uploading}
               className="flex items-center gap-2 border border-amber-500/20 text-gray-400 hover:text-white px-3 py-2 rounded-sm text-xs transition-colors disabled:opacity-40">
@@ -433,16 +432,16 @@ export default function RenterDashboard() {
               {uploading ? "Загружаю..." : image ? "Заменить" : "Загрузить"}
             </button>
             {image && (
-              <button type="button" onClick={() => setF({ image: "" })}
+              <button type="button" onClick={() => setF({ image: "" } as never)}
                 className="text-gray-600 hover:text-red-400 text-xs transition-colors">Удалить</button>
             )}
           </div>
         </div>
 
         <RenterVariantsEditor
-          variants={isEdit ? ((editEq as RenterEq).variants || []) : (newEq.variants || [])}
+          variants={isEdit ? (editEq?.variants || []) : (newEq.variants || [])}
           unit={unit}
-          onChange={v => setF({ variants: v } as Partial<typeof newEq>)}
+          onChange={v => setF({ variants: v } as never)}
         />
       </div>
     );
@@ -552,7 +551,7 @@ export default function RenterDashboard() {
                     <Icon name="X" size={20} />
                   </button>
                 </div>
-                <EqForm isEdit={true} />
+                {renderEqFields(true)}
                 <div className="flex gap-3 mt-5">
                   <button onClick={() => saveEq(true)} disabled={eqSaving}
                     className="neon-btn px-6 py-2.5 rounded-sm text-sm flex items-center gap-2 disabled:opacity-40">
@@ -577,7 +576,7 @@ export default function RenterDashboard() {
                     <Icon name="X" size={20} />
                   </button>
                 </div>
-                <EqForm isEdit={false} />
+                {renderEqFields(false)}
                 <div className="flex gap-3 mt-5">
                   <button onClick={() => saveEq(false)} disabled={eqSaving}
                     className="neon-btn px-6 py-2.5 rounded-sm text-sm flex items-center gap-2 disabled:opacity-40">
