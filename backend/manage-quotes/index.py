@@ -177,11 +177,15 @@ def handler(event: dict, context) -> dict:
     cur = conn.cursor()
 
     if method == "GET":
+        staff_filter = qp.get("staff_id", "")
+        where = f"WHERE q.staff_id = %s" if staff_filter else ""
+        params = [int(staff_filter)] if staff_filter else []
         cur.execute(
-            f"SELECT id, token, title, items, days, delivery, delivery_price, extras, total, status, created_at, sent_at, access_pin "
-            f"FROM {schema}.quotes ORDER BY created_at DESC"
+            f"SELECT q.id, q.token, q.title, q.items, q.days, q.delivery, q.delivery_price, q.extras, q.total, q.status, q.created_at, q.sent_at, q.access_pin, q.staff_id, s.name as staff_name "
+            f"FROM {schema}.quotes q LEFT JOIN {schema}.staff s ON s.id = q.staff_id {where} ORDER BY q.created_at DESC",
+            params
         )
-        keys = ["id", "token", "title", "items", "days", "delivery", "delivery_price", "extras", "total", "status", "created_at", "sent_at", "access_pin"]
+        keys = ["id", "token", "title", "items", "days", "delivery", "delivery_price", "extras", "total", "status", "created_at", "sent_at", "access_pin", "staff_id", "staff_name"]
         rows = [dict(zip(keys, r)) for r in cur.fetchall()]
         for r in rows:
             r["created_at"] = str(r["created_at"])
@@ -206,9 +210,10 @@ def handler(event: dict, context) -> dict:
         body = json.loads(event.get("body") or "{}")
         tok = secrets.token_urlsafe(16)
         pin_val = (body.get("access_pin") or "").strip() or None
+        staff_id_val = body.get("staff_id") or None
         cur.execute(
-            f"INSERT INTO {schema}.quotes (token, title, items, days, delivery, delivery_price, extras, total, status, event_date, delivery_address, installation_time, installation_price, dismantling_time, dismantling_price, no_installation, delivery_time, pickup_time, discount, access_pin) "
-            f"VALUES (%s,%s,%s,%s,%s,%s,%s,%s,'draft',%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id",
+            f"INSERT INTO {schema}.quotes (token, title, items, days, delivery, delivery_price, extras, total, status, event_date, delivery_address, installation_time, installation_price, dismantling_time, dismantling_price, no_installation, delivery_time, pickup_time, discount, access_pin, staff_id) "
+            f"VALUES (%s,%s,%s,%s,%s,%s,%s,%s,'draft',%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id",
             (
                 tok,
                 body.get("title", "КП"),
@@ -229,6 +234,7 @@ def handler(event: dict, context) -> dict:
                 body.get("pickup_time") or None,
                 int(body.get("discount", 0)),
                 pin_val,
+                int(staff_id_val) if staff_id_val else None,
             )
         )
         new_id = cur.fetchone()[0]

@@ -59,7 +59,7 @@ export default function Admin() {
   const [authed, setAuthed] = useState(false);
   const [authError, setAuthError] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [tab, setTab] = useState<"orders" | "quotes" | "contracts" | "settings" | "pages" | "portfolio" | "ai" | "renters">("orders");
+  const [tab, setTab] = useState<"orders" | "quotes" | "contracts" | "settings" | "pages" | "portfolio" | "ai" | "renters" | "staff">("orders");
 
   // Renters moderation
   type RenterMod = { id: number; email: string; company_name: string; contact_name: string; phone: string; city: string; telegram?: string; status: string; created_at: string; };
@@ -204,6 +204,44 @@ export default function Admin() {
   const [newExpenseAmount, setNewExpenseAmount] = useState("");
   const [expenseSaving, setExpenseSaving] = useState(false);
 
+  // Сотрудники
+  type StaffMember = { id: number; name: string; email: string; role: string; is_active: boolean; created_at: string; };
+  const [staffList, setStaffList] = useState<StaffMember[]>([]);
+  const [staffLoading, setStaffLoading] = useState(false);
+  const [newStaff, setNewStaff] = useState({ name: "", email: "", password: "" });
+  const [staffSaving, setStaffSaving] = useState(false);
+  const [staffError, setStaffError] = useState("");
+  const [staffSuccess, setStaffSuccess] = useState("");
+
+  const loadStaff = async () => {
+    setStaffLoading(true);
+    const res = await fetch(`${URLS["staff-auth"]}?admin=1&pwd=${encodeURIComponent(password)}`);
+    if (res.ok) setStaffList(await res.json());
+    setStaffLoading(false);
+  };
+
+  const createStaff = async () => {
+    setStaffError(""); setStaffSuccess(""); setStaffSaving(true);
+    const res = await fetch(`${URLS["staff-auth"]}?action=create&pwd=${encodeURIComponent(password)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(newStaff),
+    });
+    const d = await res.json();
+    if (!res.ok) { setStaffError(d.error || "Ошибка"); }
+    else { setStaffSuccess("Сотрудник создан"); setNewStaff({ name: "", email: "", password: "" }); loadStaff(); }
+    setStaffSaving(false);
+  };
+
+  const toggleStaffActive = async (id: number, active: boolean) => {
+    await fetch(`${URLS["staff-auth"]}?admin=1&pwd=${encodeURIComponent(password)}&id=${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ is_active: active }),
+    });
+    loadStaff();
+  };
+
   const login = async () => {
     setLoading(true);
     setAuthError(false);
@@ -321,6 +359,7 @@ export default function Admin() {
     if (tab === "contracts") loadContracts();
     if (tab === "settings") { loadSettings(); loadContractTemplate(); }
     if (tab === "renters") loadRenters();
+    if (tab === "staff") loadStaff();
   }, [tab, authed]);
 
   const copyQuoteLink = (token: string) => {
@@ -383,10 +422,11 @@ export default function Admin() {
   const downloadReport = async () => {
     setDownloadingReport(true);
     const res = await fetch(`${URLS["get-contracts"]}?pwd=${encodeURIComponent(password)}&report=1&month=${dashMonth}`);
-    const blob = await res.blob();
+    const buf = await res.arrayBuffer();
+    const blob = new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = url; a.download = `report_${dashMonth}.csv`; a.click();
+    a.href = url; a.download = `report_${dashMonth}.xlsx`; a.click();
     URL.revokeObjectURL(url);
     setDownloadingReport(false);
   };
@@ -521,6 +561,7 @@ export default function Admin() {
             { key: "portfolio", label: "Портфолио", icon: "Images", count: portfolioItems.length },
             { key: "ai", label: "AI Авито", icon: "Sparkles", count: 0 },
             { key: "renters", label: "Прокатчики", icon: "Users", count: renterEq.filter(e => e.status === "pending").length + renterCats.filter(c => c.status === "pending").length + renterSubs.filter(s => s.status === "pending").length },
+            { key: "staff", label: "Сотрудники", icon: "UserCog", count: 0 },
           ].map((t) => (
             <button key={t.key} onClick={() => setTab(t.key as typeof tab)}
               className={`flex items-center gap-2 px-5 py-3 text-sm transition-all border-b-2 -mb-px ${tab === t.key ? "border-amber-500 text-amber-500" : "border-transparent text-gray-500 hover:text-gray-300"}`}>
@@ -765,6 +806,100 @@ export default function Admin() {
           );
         })()}
       </div>
+
+      {/* ── СОТРУДНИКИ ── */}
+      {tab === "staff" && (
+        <div className="max-w-3xl">
+          <div className="flex items-center justify-between mb-5">
+            <h2 className="font-oswald text-2xl font-bold text-white uppercase">Сотрудники</h2>
+            <div className="flex gap-2">
+              <a href="/staff" target="_blank"
+                className="flex items-center gap-2 border border-amber-500/20 text-gray-400 hover:text-amber-500 px-4 py-2 rounded-sm text-sm transition-colors">
+                <Icon name="ExternalLink" size={14} /> Кабинет сотрудника
+              </a>
+              <button onClick={loadStaff} disabled={staffLoading}
+                className="flex items-center gap-2 border border-amber-500/30 text-amber-500 hover:bg-amber-500/10 px-4 py-2 rounded-sm text-sm transition-colors">
+                <Icon name="RefreshCw" size={14} className={staffLoading ? "animate-spin" : ""} /> Обновить
+              </button>
+            </div>
+          </div>
+
+          {/* Форма создания */}
+          <div className="glass-card rounded-sm p-5 mb-5">
+            <h3 className="text-xs text-gray-500 uppercase tracking-wider mb-3">Добавить сотрудника</h3>
+            {staffError && <p className="text-red-400 text-sm mb-3">{staffError}</p>}
+            {staffSuccess && <p className="text-green-400 text-sm mb-3">{staffSuccess}</p>}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+              {[
+                { key: "name", label: "Имя", placeholder: "Иван Иванов" },
+                { key: "email", label: "Email", placeholder: "ivan@company.ru" },
+                { key: "password", label: "Пароль", placeholder: "Мин. 6 символов" },
+              ].map(f => (
+                <div key={f.key}>
+                  <label className="block text-xs text-gray-500 mb-1">{f.label}</label>
+                  <input
+                    type={f.key === "password" ? "password" : "text"}
+                    value={newStaff[f.key as keyof typeof newStaff]}
+                    onChange={e => setNewStaff(p => ({ ...p, [f.key]: e.target.value }))}
+                    placeholder={f.placeholder}
+                    className="w-full bg-transparent border border-amber-500/20 rounded-sm px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/50"
+                  />
+                </div>
+              ))}
+            </div>
+            <button onClick={createStaff} disabled={staffSaving || !newStaff.name || !newStaff.email || !newStaff.password}
+              className="neon-btn flex items-center gap-2 px-5 py-2 rounded-sm text-sm disabled:opacity-40">
+              {staffSaving ? <Icon name="Loader2" size={14} className="animate-spin" /> : <Icon name="UserPlus" size={14} />}
+              Создать сотрудника
+            </button>
+          </div>
+
+          {/* Список */}
+          {staffLoading ? (
+            <div className="flex justify-center py-12"><Icon name="Loader2" size={28} className="text-amber-500 animate-spin" /></div>
+          ) : staffList.length === 0 ? (
+            <div className="glass-card rounded-sm p-12 text-center text-gray-500">Сотрудников пока нет</div>
+          ) : (
+            <div className="glass-card rounded-sm overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-amber-500/10 text-left">
+                    <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider">Имя</th>
+                    <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider">Email</th>
+                    <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider">Дата</th>
+                    <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider">Статус</th>
+                    <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider">Кабинет</th>
+                    <th className="px-4 py-3"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {staffList.map((m, i) => (
+                    <tr key={m.id} className={`border-b border-amber-500/5 ${i % 2 === 0 ? "" : "bg-white/[0.01]"}`}>
+                      <td className="px-4 py-3 text-white font-medium">{m.name}</td>
+                      <td className="px-4 py-3 text-gray-400">{m.email}</td>
+                      <td className="px-4 py-3 text-gray-500 text-xs">{formatDate(m.created_at)}</td>
+                      <td className="px-4 py-3">
+                        {m.is_active
+                          ? <span className="text-xs text-green-400 border border-green-500/30 px-2 py-0.5 rounded-sm">Активен</span>
+                          : <span className="text-xs text-red-400 border border-red-500/30 px-2 py-0.5 rounded-sm">Отключён</span>}
+                      </td>
+                      <td className="px-4 py-3">
+                        <a href="/staff" target="_blank" className="text-xs text-amber-500/70 hover:text-amber-500 underline">/staff</a>
+                      </td>
+                      <td className="px-4 py-3">
+                        <button onClick={() => toggleStaffActive(m.id, !m.is_active)}
+                          className={`text-xs px-3 py-1 rounded-sm border transition-colors ${m.is_active ? "border-red-500/20 text-red-400 hover:bg-red-500/10" : "border-green-500/20 text-green-400 hover:bg-green-500/10"}`}>
+                          {m.is_active ? "Отключить" : "Включить"}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── НАСТРОЙКИ ── */}
       {tab === "settings" && (

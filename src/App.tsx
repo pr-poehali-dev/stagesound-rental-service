@@ -21,6 +21,7 @@ import NotFound from "./pages/NotFound";
 import RenterRegister from "./pages/RenterRegister";
 import RenterLogin from "./pages/RenterLogin";
 import RenterDashboard from "./pages/RenterDashboard";
+import StaffDashboard from "./pages/StaffDashboard";
 
 const queryClient = new QueryClient();
 
@@ -49,6 +50,8 @@ const App = () => (
             <Route path="/renter/register" element={<RenterRegister />} />
             <Route path="/renter/login" element={<RenterLogin />} />
             <Route path="/renter/dashboard" element={<RenterDashboard />} />
+
+            <Route path="/staff" element={<StaffDashboard />} />
 
             <Route path="*" element={<NotFound />} />
           </Routes>

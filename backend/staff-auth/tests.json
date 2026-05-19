@@ -1,0 +1,23 @@
+{
+  "tests": [
+    {
+      "name": "OPTIONS preflight",
+      "method": "OPTIONS",
+      "path": "/",
+      "expectedStatus": 200
+    },
+    {
+      "name": "GET profile without token",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 401
+    },
+    {
+      "name": "Login with wrong credentials",
+      "method": "POST",
+      "path": "/?action=login",
+      "body": {"email": "nobody@example.com", "password": "wrong"},
+      "expectedStatus": 401
+    }
+  ]
+}
