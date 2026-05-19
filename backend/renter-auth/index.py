@@ -10,6 +10,8 @@ import json
 import os
 import secrets
 import smtplib
+import urllib.request
+import urllib.parse
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import psycopg2
@@ -75,6 +77,27 @@ def send_welcome_email(to_email: str, company_name: str, contact_name: str):
         srv.ehlo(); srv.starttls(); srv.login(smtp_user, smtp_pass)
         srv.sendmail(smtp_user, to_email, msg.as_string())
 
+def notify_admin_new_renter(company_name: str, contact_name: str, phone: str, email: str, city: str):
+    tg_token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+    tg_chat  = os.environ.get("TELEGRAM_CHAT_ID", "")
+    if not tg_token or not tg_chat:
+        return
+    text = (
+        f"🤝 <b>Новый партнёр зарегистрировался</b>\n\n"
+        f"🏢 Компания: <b>{company_name}</b>\n"
+        f"👤 Контакт: {contact_name}\n"
+        f"📞 Телефон: {phone}\n"
+        f"📧 Email: {email}\n"
+        f"🌆 Город: {city}\n\n"
+        f"➡️ Одобрить: Admin → Прокатчики"
+    )
+    data = urllib.parse.urlencode({"chat_id": tg_chat, "text": text, "parse_mode": "HTML"}).encode()
+    req = urllib.request.Request(
+        f"https://api.telegram.org/bot{tg_token}/sendMessage",
+        data=data, method="POST"
+    )
+    urllib.request.urlopen(req, timeout=8)
+
 def get_renter_by_token(cur, token: str):
     cur.execute(
         f"SELECT r.id, r.email, r.company_name, r.contact_name, r.phone, r.city, r.telegram, r.description, r.status "
@@ -134,6 +157,10 @@ def handler(event: dict, context) -> dict:
                 send_welcome_email(email, company_name, contact_name)
             except Exception as e:
                 print(f"[SMTP register] {e}")
+            try:
+                notify_admin_new_renter(company_name, contact_name, phone, email, city)
+            except Exception as e:
+                print(f"[TG register] {e}")
             return {"statusCode": 201, "headers": CORS, "body": json.dumps({"ok": True, "renter_id": renter_id, "message": "Регистрация прошла успешно. Ожидайте одобрения аккаунта администратором."}, ensure_ascii=False)}
 
         # ── ВХОД ──
