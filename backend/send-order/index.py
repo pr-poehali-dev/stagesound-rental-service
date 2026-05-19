@@ -229,8 +229,8 @@ def handler(event: dict, context) -> dict:
                     event_date=date,
                     place=place,
                 )
-            except Exception:
-                pass
+            except Exception as email_err:
+                print(f"[RENTER EMAIL ERROR] {renter_email}: {email_err}")
             # Telegram прокатчику
             if tg_token and renter_tg:
                 try:

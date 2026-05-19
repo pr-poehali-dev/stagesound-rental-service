@@ -595,6 +595,34 @@ export default function Admin() {
         {/* ── ДОГОВОРЫ ── */}
         {tab === "contracts" && (
           <div>
+            {/* Дашборд */}
+            {contracts.length > 0 && (() => {
+              const signed = contracts.filter(c => c.signed_at);
+              const pending = contracts.filter(c => !c.signed_at);
+              const totalSigned = signed.reduce((s, c) => s + (c.total || 0), 0);
+              const totalAll = contracts.reduce((s, c) => s + (c.total || 0), 0);
+              const invoice = signed.filter(c => c.payment_method === "invoice");
+              const invoiceTotal = invoice.reduce((s, c) => s + (c.invoice_total || c.total || 0), 0);
+              return (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                  {[
+                    { label: "Подписано договоров", value: signed.length, sub: `из ${contracts.length}`, color: "text-emerald-400", icon: "ShieldCheck" },
+                    { label: "Сумма подписанных", value: `${totalSigned.toLocaleString()} ₽`, sub: "по всем подписанным", color: "neon-text", icon: "BadgeDollarSign" },
+                    { label: "Ожидают подписи", value: pending.length, sub: "договоров", color: "text-yellow-400", icon: "Clock" },
+                    { label: "Счетов (безнал)", value: `${invoiceTotal.toLocaleString()} ₽`, sub: `${invoice.length} счёт(ов)`, color: "text-blue-400", icon: "Receipt" },
+                  ].map(card => (
+                    <div key={card.label} className="glass-card rounded-sm p-4">
+                      <div className="flex items-start justify-between mb-2">
+                        <p className="text-xs text-gray-500 uppercase tracking-wider leading-tight">{card.label}</p>
+                        <Icon name={card.icon} size={14} className={card.color} />
+                      </div>
+                      <p className={`font-oswald text-2xl font-bold ${card.color}`}>{card.value}</p>
+                      <p className="text-xs text-gray-600 mt-0.5">{card.sub}</p>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
             <div className="flex justify-end mb-3">
               <button onClick={loadContracts} disabled={contractsLoading}
                 className="flex items-center gap-2 border border-amber-500/30 text-amber-500 hover:bg-amber-500/10 px-4 py-2 rounded-sm text-sm transition-colors">

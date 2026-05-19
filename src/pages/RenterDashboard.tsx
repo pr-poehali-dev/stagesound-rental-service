@@ -75,6 +75,7 @@ export default function RenterDashboard() {
   const navigate = useNavigate();
   const token = localStorage.getItem("renter_token") || "";
   const fileRef = useRef<HTMLInputElement>(null);
+  const editFileRef = useRef<HTMLInputElement>(null);
 
   const [renter, setRenter] = useState<Renter | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -166,9 +167,14 @@ export default function RenterDashboard() {
 
   useEffect(() => {
     if (!renter) return;
+    // Всегда грузим категории и подкатегории — нужны для формы оборудования
+    loadCategories();
+    loadSubcategories();
+  }, [renter]);
+
+  useEffect(() => {
+    if (!renter) return;
     if (tab === "equipment")    loadEquipment();
-    if (tab === "categories")   loadCategories();
-    if (tab === "subcategories") loadSubcategories();
     if (tab === "orders")       loadOrders();
   }, [tab, renter]);
 
@@ -416,12 +422,12 @@ export default function RenterDashboard() {
                 <img src={image} alt="" className="w-full h-full object-cover" />
               </div>
             )}
-            <input ref={fileRef} type="file" accept="image/*" className="hidden"
+            <input ref={isEdit ? editFileRef : fileRef} type="file" accept="image/*" className="hidden"
               onChange={async e => {
                 const file = e.target.files?.[0];
                 if (file) { const url = await uploadImage(file); if (url) setF({ image: url }); }
               }} />
-            <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading}
+            <button type="button" onClick={() => (isEdit ? editFileRef : fileRef).current?.click()} disabled={uploading}
               className="flex items-center gap-2 border border-amber-500/20 text-gray-400 hover:text-white px-3 py-2 rounded-sm text-xs transition-colors disabled:opacity-40">
               {uploading ? <Icon name="Loader2" size={12} className="animate-spin" /> : <Icon name="Upload" size={12} />}
               {uploading ? "Загружаю..." : image ? "Заменить" : "Загрузить"}

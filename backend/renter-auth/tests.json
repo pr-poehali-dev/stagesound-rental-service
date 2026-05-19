@@ -11,11 +11,11 @@
       "method": "POST",
       "path": "/?action=register",
       "body": {
-        "email": "test_renter@example.com",
-        "password": "test123",
-        "company_name": "ТестПрокат",
-        "contact_name": "Иван Иванов",
-        "phone": "+79001234567",
+        "email": "test_renter_ci@example.com",
+        "password": "test123456",
+        "company_name": "ТестПрокатCI",
+        "contact_name": "Тест Тестов",
+        "phone": "+79000000001",
         "city": "Санкт-Петербург"
       },
       "expectedStatus": 201,
