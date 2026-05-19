@@ -17,6 +17,7 @@ type Quote = {
   id: number; token: string; title: string; days: number;
   total: number; status: string; created_at: string; sent_at: string | null;
 };
+type Expense = { label: string; amount: number };
 type Contract = {
   id: number; quote_id: number; client_type: "individual" | "company";
   full_name: string; company_name: string; phone: string; email: string;
@@ -26,6 +27,8 @@ type Contract = {
   signed_at?: string | null; contract_pdf_url?: string | null;
   payment_method?: "cash" | "invoice";
   invoice_pdf_url?: string | null; invoice_total?: number | null;
+  paid?: boolean; paid_at?: string | null;
+  expenses?: Expense[]; expenses_total?: number;
 };
 
 const formatDate = (iso: string | null) => {
@@ -189,6 +192,18 @@ export default function Admin() {
   const [exportingXlsx, setExportingXlsx] = useState(false);
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
 
+  // Дашборд договоров
+  const [dashMonth, setDashMonth] = useState(() => {
+    const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,"0")}`;
+  });
+  const [downloadingReport, setDownloadingReport] = useState(false);
+  const [deletingContract, setDeletingContract] = useState(false);
+
+  // Расходы по выбранному договору
+  const [newExpenseLabel, setNewExpenseLabel] = useState("");
+  const [newExpenseAmount, setNewExpenseAmount] = useState("");
+  const [expenseSaving, setExpenseSaving] = useState(false);
+
   const login = async () => {
     setLoading(true);
     setAuthError(false);
@@ -329,6 +344,51 @@ export default function Admin() {
     });
     loadContracts();
     setSelectedContract(null);
+  };
+
+  const markPaid = async (id: number, paid: boolean) => {
+    await fetch(`${URLS["get-contracts"]}?pwd=${encodeURIComponent(password)}&id=${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ paid }),
+    });
+    setContracts(prev => prev.map(c => c.id === id ? { ...c, paid, paid_at: paid ? new Date().toISOString() : null } : c));
+    setSelectedContract(prev => prev && prev.id === id ? { ...prev, paid, paid_at: paid ? new Date().toISOString() : null } : prev);
+  };
+
+  const saveExpenses = async (id: number, expenses: Expense[]) => {
+    setExpenseSaving(true);
+    const res = await fetch(`${URLS["get-contracts"]}?pwd=${encodeURIComponent(password)}&id=${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ expenses }),
+    });
+    const d = await res.json();
+    const total = d.expenses_total ?? expenses.reduce((s, e) => s + e.amount, 0);
+    setContracts(prev => prev.map(c => c.id === id ? { ...c, expenses, expenses_total: total } : c));
+    setSelectedContract(prev => prev && prev.id === id ? { ...prev, expenses, expenses_total: total } : prev);
+    setExpenseSaving(false);
+  };
+
+  const deleteContract = async (id: number) => {
+    if (!confirm("Удалить договор? Это действие необратимо.")) return;
+    if (!confirm("Подтвердите ещё раз: удалить договор безвозвратно?")) return;
+    setDeletingContract(true);
+    await fetch(`${URLS["get-contracts"]}?pwd=${encodeURIComponent(password)}&id=${id}&confirm=yes`, { method: "DELETE" });
+    setDeletingContract(false);
+    setSelectedContract(null);
+    loadContracts();
+  };
+
+  const downloadReport = async () => {
+    setDownloadingReport(true);
+    const res = await fetch(`${URLS["get-contracts"]}?pwd=${encodeURIComponent(password)}&report=1&month=${dashMonth}`);
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `report_${dashMonth}.csv`; a.click();
+    URL.revokeObjectURL(url);
+    setDownloadingReport(false);
   };
 
   const exportCatalogXlsx = async (mode: "basic" | "full") => {
@@ -593,36 +653,54 @@ export default function Admin() {
         )}
 
         {/* ── ДОГОВОРЫ ── */}
-        {tab === "contracts" && (
+        {tab === "contracts" && (() => {
+          // Данные для дашборда — только оплаченные за выбранный месяц
+          const paidAll = contracts.filter(c => c.paid && c.signed_at);
+          const paidInMonth = paidAll.filter(c => {
+            if (!dashMonth) return true;
+            const d = c.paid_at || c.signed_at || "";
+            return d.startsWith(dashMonth);
+          });
+          const revMonth   = paidInMonth.reduce((s, c) => s + (c.total || 0), 0);
+          const expMonth   = paidInMonth.reduce((s, c) => s + (c.expenses_total || 0), 0);
+          const profitMonth = revMonth - expMonth;
+          const pendingPay = contracts.filter(c => c.signed_at && !c.paid).length;
+
+          return (
           <div>
             {/* Дашборд */}
-            {contracts.length > 0 && (() => {
-              const signed = contracts.filter(c => c.signed_at);
-              const pending = contracts.filter(c => !c.signed_at);
-              const totalSigned = signed.reduce((s, c) => s + (c.total || 0), 0);
-              const totalAll = contracts.reduce((s, c) => s + (c.total || 0), 0);
-              const invoice = signed.filter(c => c.payment_method === "invoice");
-              const invoiceTotal = invoice.reduce((s, c) => s + (c.invoice_total || c.total || 0), 0);
-              return (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-                  {[
-                    { label: "Подписано договоров", value: signed.length, sub: `из ${contracts.length}`, color: "text-emerald-400", icon: "ShieldCheck" },
-                    { label: "Сумма подписанных", value: `${totalSigned.toLocaleString()} ₽`, sub: "по всем подписанным", color: "neon-text", icon: "BadgeDollarSign" },
-                    { label: "Ожидают подписи", value: pending.length, sub: "договоров", color: "text-yellow-400", icon: "Clock" },
-                    { label: "Счетов (безнал)", value: `${invoiceTotal.toLocaleString()} ₽`, sub: `${invoice.length} счёт(ов)`, color: "text-blue-400", icon: "Receipt" },
-                  ].map(card => (
-                    <div key={card.label} className="glass-card rounded-sm p-4">
-                      <div className="flex items-start justify-between mb-2">
-                        <p className="text-xs text-gray-500 uppercase tracking-wider leading-tight">{card.label}</p>
-                        <Icon name={card.icon} size={14} className={card.color} />
-                      </div>
-                      <p className={`font-oswald text-2xl font-bold ${card.color}`}>{card.value}</p>
-                      <p className="text-xs text-gray-600 mt-0.5">{card.sub}</p>
-                    </div>
-                  ))}
+            <div className="glass-card rounded-sm p-4 mb-4">
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                <h3 className="text-xs text-gray-500 uppercase tracking-wider font-medium">Финансовый дашборд</h3>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <input type="month" value={dashMonth} onChange={e => setDashMonth(e.target.value)}
+                    className="bg-transparent border border-amber-500/20 rounded-sm px-3 py-1.5 text-sm text-white focus:outline-none focus:border-amber-500/50" />
+                  <button onClick={downloadReport} disabled={downloadingReport}
+                    className="flex items-center gap-2 border border-green-500/30 text-green-400 hover:bg-green-500/10 px-3 py-1.5 rounded-sm text-sm transition-colors disabled:opacity-40">
+                    <Icon name={downloadingReport ? "Loader2" : "Download"} size={14} className={downloadingReport ? "animate-spin" : ""} />
+                    CSV отчёт
+                  </button>
                 </div>
-              );
-            })()}
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {[
+                  { label: "Выручка (оплач.)", value: `${revMonth.toLocaleString()} ₽`, sub: `${paidInMonth.length} договоров`, color: "neon-text", icon: "TrendingUp" },
+                  { label: "Расходы", value: `${expMonth.toLocaleString()} ₽`, sub: "по оплаченным", color: "text-red-400", icon: "Receipt" },
+                  { label: "Прибыль", value: `${profitMonth.toLocaleString()} ₽`, sub: "выручка − расходы", color: profitMonth >= 0 ? "text-emerald-400" : "text-red-400", icon: "BadgeDollarSign" },
+                  { label: "Ждут оплаты", value: pendingPay, sub: "подписанных", color: "text-yellow-400", icon: "Clock" },
+                ].map(card => (
+                  <div key={card.label} className="bg-black/20 rounded-sm p-3">
+                    <div className="flex items-start justify-between mb-1">
+                      <p className="text-xs text-gray-500 uppercase tracking-wider leading-tight">{card.label}</p>
+                      <Icon name={card.icon} size={13} className={card.color} />
+                    </div>
+                    <p className={`font-oswald text-xl font-bold ${card.color}`}>{card.value}</p>
+                    <p className="text-xs text-gray-600 mt-0.5">{card.sub}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
             <div className="flex justify-end mb-3">
               <button onClick={loadContracts} disabled={contractsLoading}
                 className="flex items-center gap-2 border border-amber-500/30 text-amber-500 hover:bg-amber-500/10 px-4 py-2 rounded-sm text-sm transition-colors">
@@ -642,11 +720,11 @@ export default function Admin() {
                       <tr className="border-b border-amber-500/10 text-left">
                         <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider font-medium">КП</th>
                         <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider font-medium">Клиент</th>
-                        <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider font-medium">Тип</th>
                         <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider font-medium">Телефон</th>
                         <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider font-medium">Дата</th>
                         <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider font-medium text-right">Сумма</th>
                         <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider font-medium">Статус</th>
+                        <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider font-medium">Оплата</th>
                         <th className="px-4 py-3"></th>
                       </tr>
                     </thead>
@@ -654,15 +732,10 @@ export default function Admin() {
                       {contracts.map((c, i) => (
                         <tr key={c.id}
                           className={`border-b border-amber-500/5 hover:bg-amber-500/5 cursor-pointer transition-colors ${c.status === "pending" ? "bg-amber-500/5" : i % 2 === 0 ? "" : "bg-white/[0.01]"}`}
-                          onClick={() => setSelectedContract(c)}>
-                          <td className="px-4 py-3 text-gray-300 max-w-[160px] truncate">{c.quote_title}</td>
+                          onClick={() => { setSelectedContract(c); setNewExpenseLabel(""); setNewExpenseAmount(""); }}>
+                          <td className="px-4 py-3 text-gray-300 max-w-[140px] truncate">{c.quote_title}</td>
                           <td className="px-4 py-3 text-white font-medium">
                             {c.client_type === "individual" ? c.full_name : c.company_name}
-                          </td>
-                          <td className="px-4 py-3">
-                            <span className="text-xs text-gray-500">
-                              {c.client_type === "individual" ? "Физ. лицо" : "Юр. лицо"}
-                            </span>
                           </td>
                           <td className="px-4 py-3 text-gray-300">{c.phone || "—"}</td>
                           <td className="px-4 py-3 text-gray-400">{formatDate(c.created_at)}</td>
@@ -673,6 +746,13 @@ export default function Admin() {
                               {c.signed_at && <Icon name="ShieldCheck" size={13} className="text-emerald-400" title="ПЭП подписан" />}
                             </div>
                           </td>
+                          <td className="px-4 py-3">
+                            {c.signed_at && (
+                              c.paid
+                                ? <span className="text-xs text-green-400 border border-green-500/30 px-2 py-0.5 rounded-sm">✓ Оплачен</span>
+                                : <span className="text-xs text-yellow-400 border border-yellow-500/30 px-2 py-0.5 rounded-sm">Ожидает</span>
+                            )}
+                          </td>
                           <td className="px-4 py-3"><Icon name="ChevronRight" size={16} className="text-gray-600" /></td>
                         </tr>
                       ))}
@@ -682,7 +762,8 @@ export default function Admin() {
               </div>
             )}
           </div>
-        )}
+          );
+        })()}
       </div>
 
       {/* ── НАСТРОЙКИ ── */}
@@ -1012,6 +1093,73 @@ export default function Admin() {
               </div>
             )}
 
+            {/* Оплата */}
+            {selectedContract.signed_at && (
+              <div className="mb-3 p-3 rounded-sm border border-white/5 bg-white/[0.02]">
+                <p className="text-xs text-gray-500 uppercase tracking-wider mb-2">Оплата</p>
+                <button
+                  onClick={() => markPaid(selectedContract.id, !selectedContract.paid)}
+                  className={`w-full py-2 rounded-sm text-sm font-medium transition-colors flex items-center justify-center gap-2 ${
+                    selectedContract.paid
+                      ? "bg-green-500/20 border border-green-500/40 text-green-400 hover:bg-red-500/10 hover:border-red-500/30 hover:text-red-400"
+                      : "border border-amber-500/30 text-amber-500 hover:bg-amber-500/10"
+                  }`}>
+                  <Icon name={selectedContract.paid ? "CheckCircle" : "Circle"} size={14} />
+                  {selectedContract.paid
+                    ? `Оплачен${selectedContract.paid_at ? ` • ${formatDate(selectedContract.paid_at)}` : ""}`
+                    : "Отметить как оплаченный"}
+                </button>
+              </div>
+            )}
+
+            {/* Расходы */}
+            {selectedContract.signed_at && (
+              <div className="mb-3 p-3 rounded-sm border border-white/5 bg-white/[0.02]">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs text-gray-500 uppercase tracking-wider">Расходы по договору</p>
+                  {(selectedContract.expenses_total || 0) > 0 && (
+                    <span className="text-xs text-red-400">{(selectedContract.expenses_total || 0).toLocaleString()} ₽</span>
+                  )}
+                </div>
+                {(selectedContract.expenses || []).length > 0 && (
+                  <div className="space-y-1 mb-3">
+                    {(selectedContract.expenses || []).map((e, idx) => (
+                      <div key={idx} className="flex items-center justify-between text-xs">
+                        <span className="text-gray-400">{e.label}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-white">{e.amount.toLocaleString()} ₽</span>
+                          <button onClick={() => {
+                            const updated = (selectedContract.expenses || []).filter((_, i) => i !== idx);
+                            saveExpenses(selectedContract.id, updated);
+                          }} className="text-gray-600 hover:text-red-400 transition-colors">
+                            <Icon name="X" size={11} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                    <div className="border-t border-white/5 pt-1 flex justify-between text-xs mt-1">
+                      <span className="text-gray-500">Прибыль</span>
+                      <span className={`font-bold ${((selectedContract.total || 0) - (selectedContract.expenses_total || 0)) >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                        {((selectedContract.total || 0) - (selectedContract.expenses_total || 0)).toLocaleString()} ₽
+                      </span>
+                    </div>
+                  </div>
+                )}
+                <div className="flex gap-2">
+                  <input value={newExpenseLabel} onChange={e => setNewExpenseLabel(e.target.value)}
+                    placeholder="Статья расхода" onKeyDown={e => { if (e.key === "Enter" && newExpenseLabel && newExpenseAmount) { saveExpenses(selectedContract.id, [...(selectedContract.expenses||[]), {label: newExpenseLabel, amount: Number(newExpenseAmount)}]); setNewExpenseLabel(""); setNewExpenseAmount(""); } }}
+                    className="flex-1 bg-transparent border border-white/10 rounded-sm px-2 py-1.5 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/40" />
+                  <input type="number" value={newExpenseAmount} onChange={e => setNewExpenseAmount(e.target.value)}
+                    placeholder="₽" className="w-20 bg-transparent border border-white/10 rounded-sm px-2 py-1.5 text-xs text-white text-right placeholder-gray-600 focus:outline-none focus:border-amber-500/40" />
+                  <button disabled={!newExpenseLabel || !newExpenseAmount || expenseSaving}
+                    onClick={() => { saveExpenses(selectedContract.id, [...(selectedContract.expenses||[]), {label: newExpenseLabel, amount: Number(newExpenseAmount)}]); setNewExpenseLabel(""); setNewExpenseAmount(""); }}
+                    className="border border-amber-500/30 text-amber-500 hover:bg-amber-500/10 px-2 py-1.5 rounded-sm text-xs transition-colors disabled:opacity-40">
+                    {expenseSaving ? <Icon name="Loader2" size={11} className="animate-spin" /> : <Icon name="Plus" size={11} />}
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div className="flex gap-3">
               {(selectedContract.status === "pending" || selectedContract.status === "contracted") && (
                 <button onClick={() => markContractReviewed(selectedContract.id)}
@@ -1026,6 +1174,17 @@ export default function Admin() {
                 </a>
               )}
             </div>
+
+            {/* Удаление */}
+            {selectedContract.signed_at && (
+              <div className="mt-4 pt-4 border-t border-white/5">
+                <button onClick={() => deleteContract(selectedContract.id)} disabled={deletingContract}
+                  className="w-full border border-red-500/20 text-red-500/60 hover:text-red-400 hover:border-red-500/40 py-2 rounded-sm text-xs transition-colors flex items-center justify-center gap-2 disabled:opacity-40">
+                  {deletingContract ? <Icon name="Loader2" size={12} className="animate-spin" /> : <Icon name="Trash2" size={12} />}
+                  Удалить договор
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
