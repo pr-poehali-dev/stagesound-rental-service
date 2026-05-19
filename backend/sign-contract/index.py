@@ -171,6 +171,10 @@ def handler(event: dict, context) -> dict:
                                             _signed_email_html(client_name, payment_method, invoice_total), attachments)
             except Exception as e:
                 print(f"[SMTP ERROR manager_sign] {e}")
+            try:
+                _notify_manager(contract_id, "", client_email, signed_by="manager")
+            except Exception as e:
+                print(f"[TG ERROR manager_sign] {e}")
             return {"statusCode": 200, "headers": CORS,
                     "body": json.dumps({"ok": True, "contract_pdf_url": contract_pdf_url,
                                         "invoice_pdf_url": invoice_pdf_url}, ensure_ascii=False)}
@@ -540,25 +544,96 @@ def _signed_email_html(name: str, payment_method: str, invoice_total) -> str:
 </body></html>"""
 
 
-def _notify_manager(contract_id: int, token: str, client_email: str):
-    import urllib.request
-    import urllib.parse
+def _notify_manager(contract_id: int, token: str, client_email: str, signed_by: str = "client"):
     try:
-        tg_token  = os.environ.get("TELEGRAM_BOT_TOKEN", "")
-        tg_chat   = os.environ.get("TELEGRAM_CHAT_ID", "")
+        tg_token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+        tg_chat  = os.environ.get("TELEGRAM_CHAT_ID", "")
         if not tg_token or not tg_chat:
             return
+
+        # Загружаем состав заказа из БД
+        conn2 = db()
+        cur2  = conn2.cursor()
+        try:
+            cur2.execute(
+                f"SELECT c.full_name, c.company_name, c.phone, c.payment_method, c.invoice_total, "
+                f"q.title, q.items, q.days, q.delivery, q.delivery_price, q.extras, q.total, "
+                f"q.event_date, q.delivery_address "
+                f"FROM {s()}.contracts c "
+                f"JOIN {s()}.quotes q ON q.id = c.quote_id "
+                f"WHERE c.id = %s",
+                (contract_id,)
+            )
+            row = cur2.fetchone()
+        finally:
+            cur2.close(); conn2.close()
+
+        if not row:
+            return
+
+        full_name, company_name, phone, payment_method, invoice_total, \
+        title, items_json, days, delivery, delivery_price, extras_json, total, \
+        event_date, delivery_address = row
+
+        client_name = full_name or company_name or client_email
+        pay_label = "Безналичный (счёт)" if payment_method == "invoice" else "Наличные / по факту"
+
+        # Состав позиций
+        items = items_json if isinstance(items_json, list) else []
+        extras = extras_json if isinstance(extras_json, list) else []
+
+        lines = []
+        for it in items:
+            name = it.get("name", "—")
+            price = it.get("price", 0)
+            qty = it.get("qty", 1)
+            unit = it.get("unit", "шт")
+            line_total = price * qty * (days or 1)
+            lines.append(f"  • {name} — {qty} {unit} × {price:,} ₽ × {days} дн. = {line_total:,} ₽".replace(",", " "))
+        for ex in extras:
+            name = ex.get("name", "—")
+            price = ex.get("price", 0)
+            lines.append(f"  • {name} — {price:,} ₽".replace(",", " "))
+        if delivery and delivery != "Без доставки" and delivery_price:
+            lines.append(f"  • Доставка ({delivery}) — {delivery_price:,} ₽".replace(",", " "))
+
+        items_text = "\n".join(lines) if lines else "  (нет позиций)"
+
+        header = "✅ <b>Договор #{} подписан</b>".format(contract_id)
+        if signed_by == "manager":
+            header = "📋 <b>Договор #{} подписан менеджером</b>".format(contract_id)
+
+        event_str = ""
+        if event_date:
+            try:
+                from datetime import date
+                d = date.fromisoformat(str(event_date)[:10])
+                event_str = f"\n📅 Дата мероприятия: {d.strftime('%d.%m.%Y')}"
+            except Exception:
+                event_str = f"\n📅 Дата мероприятия: {event_date}"
+
+        address_str = f"\n📍 Адрес: {delivery_address}" if delivery_address else ""
+
+        total_str = f"{int(total):,}".replace(",", " ") if total else "—"
+
         text = (
-            f"✅ <b>Договор #{contract_id} подписан ПЭП</b>\n\n"
-            f"Клиент: {client_email}\n"
-            f"КП: {token}\n\n"
-            f"➡️ Просмотр: /admin → Договоры"
+            f"{header}\n\n"
+            f"👤 Клиент: <b>{client_name}</b>\n"
+            f"📧 Email: {client_email}\n"
+            f"📞 Телефон: {phone or '—'}\n"
+            f"💳 Оплата: {pay_label}"
+            f"{event_str}"
+            f"{address_str}\n\n"
+            f"🛒 <b>Состав заказа</b> ({title or 'КП'}):\n"
+            f"{items_text}\n\n"
+            f"💰 <b>Итого: {total_str} ₽</b>"
         )
+
         data = urllib.parse.urlencode({"chat_id": tg_chat, "text": text, "parse_mode": "HTML"}).encode()
-        req  = urllib.request.Request(
+        req = urllib.request.Request(
             f"https://api.telegram.org/bot{tg_token}/sendMessage",
             data=data, method="POST"
         )
-        urllib.request.urlopen(req, timeout=8)
-    except Exception:
-        pass
+        urllib.request.urlopen(req, timeout=10)
+    except Exception as e:
+        print(f"[TG ERROR] {e}")
