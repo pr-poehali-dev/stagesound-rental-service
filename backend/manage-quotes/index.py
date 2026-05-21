@@ -177,6 +177,28 @@ def handler(event: dict, context) -> dict:
     cur = conn.cursor()
 
     if method == "GET":
+        # Получить одно КП по id (для редактирования)
+        qid_single = qp.get("id", "")
+        if qid_single:
+            cur.execute(
+                f"SELECT id, token, title, items, days, delivery, delivery_price, extras, total, status, created_at, sent_at, access_pin, "
+                f"event_date, delivery_address, installation_time, installation_price, dismantling_time, dismantling_price, "
+                f"no_installation, delivery_time, pickup_time, discount, staff_id "
+                f"FROM {schema}.quotes WHERE id = %s", (int(qid_single),)
+            )
+            row = cur.fetchone()
+            cur.close(); conn.close()
+            if not row:
+                return {"statusCode": 404, "headers": CORS, "body": json.dumps({"error": "Not found"})}
+            keys = ["id", "token", "title", "items", "days", "delivery", "delivery_price", "extras", "total", "status", "created_at", "sent_at", "access_pin",
+                    "event_date", "delivery_address", "installation_time", "installation_price", "dismantling_time", "dismantling_price",
+                    "no_installation", "delivery_time", "pickup_time", "discount", "staff_id"]
+            q = dict(zip(keys, row))
+            q["created_at"] = str(q["created_at"])
+            q["sent_at"] = str(q["sent_at"]) if q["sent_at"] else None
+            return {"statusCode": 200, "headers": CORS, "body": json.dumps(q, default=str)}
+
+        # Список всех КП
         staff_filter = qp.get("staff_id", "")
         where = f"WHERE q.staff_id = %s" if staff_filter else ""
         params = [int(staff_filter)] if staff_filter else []
@@ -246,13 +268,22 @@ def handler(event: dict, context) -> dict:
         body = json.loads(event.get("body") or "{}")
         pin_val = (body.get("access_pin") or "").strip() or None
         cur.execute(
-            f"UPDATE {schema}.quotes SET title=%s, items=%s, days=%s, delivery=%s, delivery_price=%s, extras=%s, total=%s, event_date=%s, delivery_address=%s, access_pin=%s "
+            f"UPDATE {schema}.quotes SET title=%s, items=%s, days=%s, delivery=%s, delivery_price=%s, extras=%s, total=%s, "
+            f"event_date=%s, delivery_address=%s, access_pin=%s, "
+            f"installation_time=%s, installation_price=%s, dismantling_time=%s, dismantling_price=%s, "
+            f"no_installation=%s, delivery_time=%s, pickup_time=%s, discount=%s "
             f"WHERE id=%s",
             (
                 body.get("title", ""), json.dumps(body.get("items", [])),
                 body.get("days", 1), body.get("delivery", ""), body.get("delivery_price", 0),
                 json.dumps(body.get("extras", [])), body.get("total", 0),
-                body.get("event_date", ""), body.get("delivery_address", ""), pin_val, qid,
+                body.get("event_date", "") or None, body.get("delivery_address", "") or None, pin_val,
+                body.get("installation_time") or None, body.get("installation_price", 0),
+                body.get("dismantling_time") or None, body.get("dismantling_price", 0),
+                bool(body.get("no_installation", False)),
+                body.get("delivery_time") or None, body.get("pickup_time") or None,
+                int(body.get("discount", 0)),
+                qid,
             )
         )
         conn.commit(); cur.close(); conn.close()

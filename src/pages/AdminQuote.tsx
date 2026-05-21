@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import Icon from "@/components/ui/icon";
 import func2url from "../../backend/func2url.json";
 
@@ -55,6 +55,11 @@ const iCls = "w-full bg-transparent border border-amber-500/20 rounded-sm px-3 p
 
 export default function AdminQuote() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const editId = searchParams.get("id") ? Number(searchParams.get("id")) : null;
+  const [editToken, setEditToken] = useState<string | null>(null);
+  const [editLoading, setEditLoading] = useState(false);
+
   const [password, setPassword] = useState(() => sessionStorage.getItem("admin_pwd") || "");
   const [authed, setAuthed] = useState(false);
   const [authError, setAuthError] = useState(false);
@@ -147,6 +152,56 @@ export default function AdminQuote() {
       .catch(() => setLoading(false));
   }, [authed]);
 
+  // Загружаем существующее КП для редактирования
+  useEffect(() => {
+    if (!authed || !editId) return;
+    setEditLoading(true);
+    fetch(`${URLS["manage-quotes"]}?pwd=${encodeURIComponent(password)}&id=${editId}`)
+      .then(r => r.json())
+      .then((q: Record<string, unknown>) => {
+        setTitle((q.title as string) || "");
+        setEventDate((q.event_date as string) || "");
+        setDeliveryAddress((q.delivery_address as string) || "");
+        setDays(Number(q.days) || 1);
+        setDiscount(Number(q.discount) || 0);
+        setDiscountInput(q.discount ? String(q.discount) : "");
+        setAccessPin((q.access_pin as string) || "");
+        setEditToken((q.token as string) || null);
+
+        // Восстанавливаем корзину из items
+        const items = (q.items as {id:number|null;name:string;price:number;unit:string;qty:number}[]) || [];
+        let counter = -1;
+        const cartItems: CartItem[] = [];
+        const fakeEq: Eq[] = [];
+        for (const item of items) {
+          if (item.id === null || item.id < 0) {
+            // кастомная позиция
+            cartItems.push({ id: counter, qty: item.qty, isCustom: true, customName: item.name, customPrice: item.price });
+            fakeEq.push({ id: counter, name: item.name, category: "Другое", price: item.price, unit: item.unit });
+            counter--;
+          } else {
+            cartItems.push({ id: item.id, qty: item.qty, customPrice: item.price });
+          }
+        }
+        setCart(cartItems);
+        if (fakeEq.length) setEquipment(prev => [...prev, ...fakeEq]);
+
+        // Восстанавливаем extras
+        const extras = (q.extras as {id:string}[]) || [];
+        setSelectedExtras(extras.map(e => e.id).filter(Boolean));
+
+        // Монтаж / доставка
+        setNoInstallation(Boolean(q.no_installation));
+        setInstallationPrice(Number(q.installation_price) || 0);
+        setDismantlingPrice(Number(q.dismantling_price) || 0);
+
+        // Ссылка на КП (уже отправлено)
+        if (q.token) setShareLink(`${window.location.origin}/quote/${q.token}`);
+        setEditLoading(false);
+      })
+      .catch(() => setEditLoading(false));
+  }, [authed, editId]);
+
   // Сбрасываем зону при смене города
   useEffect(() => { setDeliveryZoneIdx(0); }, [cityKey]);
 
@@ -217,9 +272,7 @@ export default function AdminQuote() {
     return parts.join(", ") || null;
   };
 
-  const handleSaveAndShare = async () => {
-    if (cart.length === 0) return;
-    setSaving(true);
+  const buildPayload = () => {
     const items = cart.map((c) => {
       const eq = equipment.find((e) => e.id === c.id)!;
       const price = c.customPrice !== undefined ? c.customPrice : eq.price;
@@ -230,27 +283,47 @@ export default function AdminQuote() {
       return { id, name: s.label, price: s.price };
     });
     const deliveryName = deliveryZoneIdx === 0 ? "Без доставки" : `${currentCity.label} — ${deliveryZone.name}`;
+    return {
+      title: title || "КП без названия",
+      items, days,
+      delivery: deliveryName,
+      delivery_price: deliveryTotal,
+      extras: extrasData, total,
+      event_date: eventDate,
+      delivery_address: deliveryAddress,
+      installation_time: noInstallation ? null : (fmtDateTime(installationDate, installationTime) || null),
+      installation_price: noInstallation ? 0 : (installationTime ? installationPrice : 0),
+      dismantling_time: noInstallation ? null : (fmtDateTime(dismantlingDate, dismantlingTime) || null),
+      dismantling_price: noInstallation ? 0 : (dismantlingTime ? dismantlingPrice : 0),
+      no_installation: noInstallation,
+      delivery_time: fmtDateTime(deliveryDate, deliveryTime) || null,
+      pickup_time: fmtDateTime(pickupDate, pickupTime) || null,
+      discount,
+      access_pin: accessPin.trim() || null,
+    };
+  };
+
+  const handleSaveAndShare = async () => {
+    if (cart.length === 0) return;
+    setSaving(true);
+
+    if (editId) {
+      // Режим редактирования — PUT
+      await fetch(`${URLS["manage-quotes"]}?pwd=${encodeURIComponent(password)}&id=${editId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(buildPayload()),
+      });
+      if (editToken) setShareLink(`${window.location.origin}/quote/${editToken}`);
+      setSaving(false);
+      return;
+    }
+
+    // Режим создания — POST
     const res = await fetch(`${URLS["manage-quotes"]}?pwd=${encodeURIComponent(password)}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        title: title || "КП без названия",
-        items, days,
-        delivery: deliveryName,
-        delivery_price: deliveryTotal,
-        extras: extrasData, total,
-        event_date: eventDate,
-        delivery_address: deliveryAddress,
-        installation_time: noInstallation ? null : (fmtDateTime(installationDate, installationTime) || null),
-        installation_price: noInstallation ? 0 : (installationTime ? installationPrice : 0),
-        dismantling_time: noInstallation ? null : (fmtDateTime(dismantlingDate, dismantlingTime) || null),
-        dismantling_price: noInstallation ? 0 : (dismantlingTime ? dismantlingPrice : 0),
-        no_installation: noInstallation,
-        delivery_time: fmtDateTime(deliveryDate, deliveryTime) || null,
-        pickup_time: fmtDateTime(pickupDate, pickupTime) || null,
-        discount,
-        access_pin: accessPin.trim() || null,
-      }),
+      body: JSON.stringify(buildPayload()),
     });
     const data = await res.json();
     await fetch(`${URLS["manage-quotes"]}?pwd=${encodeURIComponent(password)}&action=send&id=${data.id}`, { method: "POST" });
@@ -287,32 +360,53 @@ export default function AdminQuote() {
           </button>
           <div>
             <p className="text-amber-500 text-xs uppercase tracking-widest mb-1">Admin Panel</p>
-            <h1 className="font-oswald text-3xl font-bold text-white uppercase">Новое коммерческое предложение</h1>
+            <h1 className="font-oswald text-3xl font-bold text-white uppercase">
+              {editId ? "Редактирование КП" : "Новое коммерческое предложение"}
+            </h1>
+            {editId && <p className="text-gray-500 text-xs mt-0.5">КП #{editId} — не подписан, доступен для изменений</p>}
           </div>
         </div>
 
-        {shareLink ? (
+        {editLoading && (
+          <div className="flex items-center justify-center gap-3 py-20 text-gray-400">
+            <Icon name="Loader2" size={24} className="animate-spin text-amber-500" />
+            Загружаю данные КП...
+          </div>
+        )}
+
+        {shareLink && !editLoading ? (
           <div className="glass-card neon-border rounded-sm p-8 text-center max-w-2xl mx-auto">
             <Icon name="CheckCircle" size={48} className="text-amber-500 mx-auto mb-4" />
-            <h2 className="font-oswald text-2xl font-bold text-white uppercase mb-2">КП готово!</h2>
-            <p className="text-gray-400 text-sm mb-6">Отправьте эту ссылку клиенту для согласования</p>
+            <h2 className="font-oswald text-2xl font-bold text-white uppercase mb-2">
+              {editId ? "КП обновлено!" : "КП готово!"}
+            </h2>
+            <p className="text-gray-400 text-sm mb-6">
+              {editId ? "Изменения сохранены. Ссылка клиенту остаётся прежней." : "Отправьте эту ссылку клиенту для согласования"}
+            </p>
             <div className="bg-black/40 border border-amber-500/30 rounded-sm px-4 py-3 text-amber-400 text-sm break-all mb-4 text-left">{shareLink}</div>
             <div className="flex gap-3 justify-center flex-wrap">
               <button onClick={copyLink} className="neon-btn flex items-center gap-2 px-6 py-2 rounded-sm text-sm">
                 <Icon name={copiedLink ? "Check" : "Copy"} size={14} />
                 {copiedLink ? "Скопировано!" : "Скопировать ссылку"}
               </button>
-              <button onClick={() => { setShareLink(""); setCart([]); setTitle(""); setSelectedExtras([]); setEventDate(""); setDeliveryAddress(""); setInstallationTime(""); setInstallationPrice(0); setDismantlingTime(""); setDismantlingPrice(0); setNoInstallation(false); setDeliveryTime(""); setPickupTime(""); setDiscount(0); setDiscountInput(""); }}
-                className="border border-gray-700 text-gray-400 px-6 py-2 rounded-sm text-sm hover:border-gray-500 transition-colors">
-                Создать новое КП
-              </button>
+              {editId ? (
+                <button onClick={() => setShareLink("")}
+                  className="border border-gray-700 text-gray-400 px-6 py-2 rounded-sm text-sm hover:border-gray-500 transition-colors">
+                  Продолжить редактирование
+                </button>
+              ) : (
+                <button onClick={() => { setShareLink(""); setCart([]); setTitle(""); setSelectedExtras([]); setEventDate(""); setDeliveryAddress(""); setInstallationTime(""); setInstallationPrice(0); setDismantlingTime(""); setDismantlingPrice(0); setNoInstallation(false); setDeliveryTime(""); setPickupTime(""); setDiscount(0); setDiscountInput(""); }}
+                  className="border border-gray-700 text-gray-400 px-6 py-2 rounded-sm text-sm hover:border-gray-500 transition-colors">
+                  Создать новое КП
+                </button>
+              )}
               <button onClick={() => navigate("/admin")}
                 className="border border-gray-700 text-gray-400 px-6 py-2 rounded-sm text-sm hover:border-gray-500 transition-colors">
                 В Admin Panel
               </button>
             </div>
           </div>
-        ) : (
+        ) : !editLoading ? (
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
             {/* ── Каталог ── */}
             <div className="xl:col-span-2 space-y-4">
@@ -729,13 +823,13 @@ export default function AdminQuote() {
                   disabled={cart.length === 0 || saving}
                   className="neon-btn w-full py-3 rounded-sm text-sm flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                  <Icon name={saving ? "Loader2" : "Share2"} size={16} className={saving ? "animate-spin" : ""} />
-                  {saving ? "Создаю КП..." : "Сформировать и отправить клиенту"}
+                  <Icon name={saving ? "Loader2" : (editId ? "Save" : "Share2")} size={16} className={saving ? "animate-spin" : ""} />
+                  {saving ? (editId ? "Сохраняю..." : "Создаю КП...") : (editId ? "Сохранить изменения" : "Сформировать и отправить клиенту")}
                 </button>
               </div>
             </div>
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   );

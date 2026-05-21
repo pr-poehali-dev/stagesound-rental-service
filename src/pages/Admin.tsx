@@ -677,6 +677,14 @@ export default function Admin() {
                                 <Icon name={copiedToken === q.token ? "Check" : "Copy"} size={12} />
                                 {copiedToken === q.token ? "Скопировано" : "Ссылка"}
                               </button>
+                              {q.status !== "contracted" && (
+                                <button onClick={() => navigate(`/admin/quote?id=${q.id}`)}
+                                  className="flex items-center gap-1 border border-blue-500/30 text-blue-400 hover:bg-blue-500/10 px-3 py-1 rounded-sm text-xs transition-colors"
+                                  title="Редактировать КП">
+                                  <Icon name="Pencil" size={12} />
+                                  Изменить
+                                </button>
+                              )}
                               <button onClick={() => deleteQuote(q.id)}
                                 className="border border-red-500/20 text-red-500/50 hover:text-red-400 hover:border-red-500/40 px-3 py-1 rounded-sm text-xs transition-colors">
                                 <Icon name="Trash2" size={12} />
