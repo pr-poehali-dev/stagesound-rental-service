@@ -56,7 +56,8 @@ const iCls = "w-full bg-transparent border border-amber-500/20 rounded-sm px-3 p
 export default function AdminQuote() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const editId = searchParams.get("id") ? Number(searchParams.get("id")) : null;
+  const editIdRaw = searchParams.get("id");
+  const editId = editIdRaw && editIdRaw !== "undefined" && !isNaN(Number(editIdRaw)) ? Number(editIdRaw) : null;
   const [editToken, setEditToken] = useState<string | null>(null);
   const [editLoading, setEditLoading] = useState(false);
 

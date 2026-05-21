@@ -218,7 +218,8 @@ def handler(event: dict, context) -> dict:
     if method == "POST":
         # Пометить как отправленное
         if action == "send":
-            qid = int(qp.get("id", 0))
+            raw_id = qp.get("id", "0") or "0"
+            qid = int(raw_id) if raw_id.isdigit() else 0
             cur.execute(
                 f"UPDATE {schema}.quotes SET status='sent', sent_at=NOW() WHERE id=%s RETURNING token", (qid,)
             )
@@ -245,8 +246,8 @@ def handler(event: dict, context) -> dict:
                 body.get("delivery_price", 0),
                 json.dumps(body.get("extras", [])),
                 body.get("total", 0),
-                body.get("event_date", "") or None,
-                body.get("delivery_address", "") or None,
+                body.get("event_date") or "",
+                body.get("delivery_address") or "",
                 body.get("installation_time") or None,
                 body.get("installation_price", 0),
                 body.get("dismantling_time") or None,
@@ -264,7 +265,8 @@ def handler(event: dict, context) -> dict:
         return {"statusCode": 200, "headers": CORS, "body": json.dumps({"ok": True, "id": new_id, "token": tok})}
 
     if method == "PUT":
-        qid = int(qp.get("id", 0))
+        raw_id = qp.get("id", "0") or "0"
+        qid = int(raw_id) if raw_id.isdigit() else 0
         body = json.loads(event.get("body") or "{}")
         pin_val = (body.get("access_pin") or "").strip() or None
         cur.execute(
@@ -277,7 +279,7 @@ def handler(event: dict, context) -> dict:
                 body.get("title", ""), json.dumps(body.get("items", [])),
                 body.get("days", 1), body.get("delivery", ""), body.get("delivery_price", 0),
                 json.dumps(body.get("extras", [])), body.get("total", 0),
-                body.get("event_date", "") or None, body.get("delivery_address", "") or None, pin_val,
+                body.get("event_date") or "", body.get("delivery_address") or "", pin_val,
                 body.get("installation_time") or None, body.get("installation_price", 0),
                 body.get("dismantling_time") or None, body.get("dismantling_price", 0),
                 bool(body.get("no_installation", False)),
