@@ -48,8 +48,9 @@ const DEFAULT_EXTRAS: ExtraService[] = [
   { id: "light", label: "Световой оператор (1 день)", price: 19500 },
 ];
 
-type Eq = { id: number; name: string; category: string; price: number; unit: string; image?: string };
-type CartItem = { id: number; qty: number; customPrice?: number; customName?: string; isCustom?: boolean };
+type EqVariant = { label: string; price: number };
+type Eq = { id: number; name: string; category: string; price: number; unit: string; image?: string; variants?: EqVariant[] };
+type CartItem = { id: number; qty: number; customPrice?: number; customName?: string; isCustom?: boolean; variantLabel?: string; variantPrice?: number };
 
 const iCls = "w-full bg-transparent border border-amber-500/20 rounded-sm px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/50";
 
@@ -119,6 +120,9 @@ export default function AdminQuote() {
   // Редактирование цены в корзине
   const [editingPriceId, setEditingPriceId] = useState<number | null>(null);
   const [editingPriceVal, setEditingPriceVal] = useState("");
+
+  // Выбор варианта (id позиции с вариантами, которую раскрыли)
+  const [expandedVariantId, setExpandedVariantId] = useState<number | null>(null);
 
   const currentCity = CITIES[cityKey];
   const currentZones = currentCity.zones;
@@ -214,21 +218,26 @@ export default function AdminQuote() {
       return matchCat && matchSearch;
     }), [equipment, catFilter, search]);
 
-  const getQty = (id: number) => cart.find((c) => c.id === id)?.qty || 0;
-  const addToCart = (id: number) => setCart((prev) => {
-    const f = prev.find((c) => c.id === id);
-    return f ? prev.map((c) => c.id === id ? { ...c, qty: c.qty + 1 } : c) : [...prev, { id, qty: 1 }];
+  const cartKey = (id: number, variantLabel?: string) => variantLabel ? `${id}__${variantLabel}` : String(id);
+  const getQty = (id: number, variantLabel?: string) => cart.find((c) => c.id === id && c.variantLabel === variantLabel)?.qty || 0;
+  const getTotalQty = (id: number) => cart.filter((c) => c.id === id).reduce((s, c) => s + c.qty, 0);
+  const addToCart = (id: number, variantLabel?: string, variantPrice?: number) => setCart((prev) => {
+    const f = prev.find((c) => c.id === id && c.variantLabel === variantLabel);
+    return f ? prev.map((c) => cartKey(c.id, c.variantLabel) === cartKey(id, variantLabel) ? { ...c, qty: c.qty + 1 } : c)
+             : [...prev, { id, qty: 1, variantLabel, variantPrice }];
   });
-  const removeFromCart = (id: number) => setCart((prev) => {
-    const f = prev.find((c) => c.id === id);
+  const removeFromCart = (id: number, variantLabel?: string) => setCart((prev) => {
+    const f = prev.find((c) => c.id === id && c.variantLabel === variantLabel);
     if (!f) return prev;
-    return f.qty <= 1 ? prev.filter((c) => c.id !== id) : prev.map((c) => c.id === id ? { ...c, qty: c.qty - 1 } : c);
+    return f.qty <= 1 ? prev.filter((c) => cartKey(c.id, c.variantLabel) !== cartKey(id, variantLabel))
+                      : prev.map((c) => cartKey(c.id, c.variantLabel) === cartKey(id, variantLabel) ? { ...c, qty: c.qty - 1 } : c);
   });
-  const setQty = (id: number, qty: number) => {
-    if (qty <= 0) { setCart((prev) => prev.filter((c) => c.id !== id)); return; }
+  const setQty = (id: number, qty: number, variantLabel?: string) => {
+    if (qty <= 0) { setCart((prev) => prev.filter((c) => cartKey(c.id, c.variantLabel) !== cartKey(id, variantLabel))); return; }
     setCart((prev) => {
-      const f = prev.find((c) => c.id === id);
-      return f ? prev.map((c) => c.id === id ? { ...c, qty } : c) : [...prev, { id, qty }];
+      const f = prev.find((c) => c.id === id && c.variantLabel === variantLabel);
+      return f ? prev.map((c) => cartKey(c.id, c.variantLabel) === cartKey(id, variantLabel) ? { ...c, qty } : c)
+               : [...prev, { id, qty, variantLabel, variantPrice: undefined }];
     });
   };
   const toggleExtra = (id: string) =>
@@ -254,7 +263,7 @@ export default function AdminQuote() {
   const equipmentTotalRaw = useMemo(() =>
     cart.reduce((sum, item) => {
       const eq = equipment.find((e) => e.id === item.id);
-      const price = item.customPrice !== undefined ? item.customPrice : eq?.price ?? 0;
+      const price = item.customPrice !== undefined ? item.customPrice : (item.variantPrice !== undefined ? item.variantPrice : eq?.price ?? 0);
       return sum + (price * item.qty * days);
     }, 0), [cart, days, equipment]);
 
@@ -276,8 +285,9 @@ export default function AdminQuote() {
   const buildPayload = () => {
     const items = cart.map((c) => {
       const eq = equipment.find((e) => e.id === c.id)!;
-      const price = c.customPrice !== undefined ? c.customPrice : eq.price;
-      return { id: c.isCustom ? null : eq.id, name: eq.name, price, unit: eq.unit, qty: c.qty };
+      const price = c.customPrice !== undefined ? c.customPrice : (c.variantPrice !== undefined ? c.variantPrice : eq.price);
+      const name = c.variantLabel ? `${eq.name} (${c.variantLabel})` : eq.name;
+      return { id: c.isCustom ? null : eq.id, name, price, unit: eq.unit, qty: c.qty };
     });
     const extrasData = selectedExtras.map((id) => {
       const s = extraServices.find((s) => s.id === id)!;
@@ -428,20 +438,58 @@ export default function AdminQuote() {
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {filtered.map((eq) => {
-                    const qty = getQty(eq.id);
+                    const hasVariants = eq.variants && eq.variants.length > 0;
+                    const totalQty = getTotalQty(eq.id);
+                    const isExpanded = expandedVariantId === eq.id;
                     return (
-                      <div key={eq.id} className={`glass-card rounded-sm p-4 flex gap-3 transition-all ${qty > 0 ? "border border-amber-500/40" : ""}`}>
+                      <div key={eq.id} className={`glass-card rounded-sm p-4 flex gap-3 transition-all ${totalQty > 0 ? "border border-amber-500/40" : ""}`}>
                         {eq.image && <img src={eq.image} alt={eq.name} className="w-16 h-16 object-cover rounded-sm shrink-0 opacity-80" />}
                         <div className="flex-1 min-w-0">
                           <p className="text-white text-sm font-medium leading-tight mb-1 truncate">{eq.name}</p>
-                          <p className="text-amber-500 text-xs font-bold mb-3">{eq.price.toLocaleString()} ₽/{eq.unit}</p>
-                          <div className="flex items-center gap-2">
-                            <button onClick={() => removeFromCart(eq.id)}
-                              className="w-7 h-7 border border-amber-500/30 rounded-sm text-amber-500 hover:bg-amber-500/10 flex items-center justify-center transition-colors text-base leading-none">−</button>
-                            <span className="text-white text-sm w-6 text-center">{qty}</span>
-                            <button onClick={() => addToCart(eq.id)}
-                              className="w-7 h-7 border border-amber-500/30 rounded-sm text-amber-500 hover:bg-amber-500/10 flex items-center justify-center transition-colors text-base leading-none">+</button>
-                          </div>
+                          {hasVariants ? (
+                            <p className="text-amber-500 text-xs font-bold mb-2">от {Math.min(...eq.variants!.map(v => v.price)).toLocaleString()} ₽/{eq.unit}</p>
+                          ) : (
+                            <p className="text-amber-500 text-xs font-bold mb-3">{eq.price.toLocaleString()} ₽/{eq.unit}</p>
+                          )}
+                          {hasVariants ? (
+                            <div>
+                              <button
+                                onClick={() => setExpandedVariantId(isExpanded ? null : eq.id)}
+                                className="flex items-center gap-1 text-xs border border-amber-500/30 text-amber-500 hover:bg-amber-500/10 px-2.5 py-1 rounded-sm transition-colors"
+                              >
+                                <Icon name={isExpanded ? "ChevronUp" : "ChevronDown"} size={11} />
+                                {totalQty > 0 ? `Выбрано: ${totalQty} шт` : "Выбрать вариант"}
+                              </button>
+                              {isExpanded && (
+                                <div className="mt-2 space-y-1">
+                                  {eq.variants!.map((v) => {
+                                    const vQty = getQty(eq.id, v.label);
+                                    return (
+                                      <div key={v.label} className="flex items-center justify-between bg-black/30 border border-amber-500/10 rounded-sm px-2 py-1.5">
+                                        <span className="text-gray-300 text-xs flex-1 mr-2">{v.label}</span>
+                                        <span className="text-amber-500 text-xs font-bold mr-2 shrink-0">{v.price.toLocaleString()} ₽</span>
+                                        <div className="flex items-center gap-1 shrink-0">
+                                          <button onClick={() => removeFromCart(eq.id, v.label)}
+                                            className="w-5 h-5 border border-amber-500/30 rounded-sm text-amber-500 hover:bg-amber-500/10 flex items-center justify-center text-xs">−</button>
+                                          <span className="text-white text-xs w-4 text-center">{vQty}</span>
+                                          <button onClick={() => addToCart(eq.id, v.label, v.price)}
+                                            className="w-5 h-5 border border-amber-500/30 rounded-sm text-amber-500 hover:bg-amber-500/10 flex items-center justify-center text-xs">+</button>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <button onClick={() => removeFromCart(eq.id)}
+                                className="w-7 h-7 border border-amber-500/30 rounded-sm text-amber-500 hover:bg-amber-500/10 flex items-center justify-center transition-colors text-base leading-none">−</button>
+                              <span className="text-white text-sm w-6 text-center">{totalQty}</span>
+                              <button onClick={() => addToCart(eq.id)}
+                                className="w-7 h-7 border border-amber-500/30 rounded-sm text-amber-500 hover:bg-amber-500/10 flex items-center justify-center transition-colors text-base leading-none">+</button>
+                            </div>
+                          )}
                         </div>
                       </div>
                     );
@@ -521,21 +569,22 @@ export default function AdminQuote() {
                     {cart.map((c) => {
                       const eq = equipment.find((e) => e.id === c.id);
                       if (!eq) return null;
-                      const price = c.customPrice !== undefined ? c.customPrice : eq.price;
-                      const isEditing = editingPriceId === c.id;
+                      const price = c.customPrice !== undefined ? c.customPrice : (c.variantPrice !== undefined ? c.variantPrice : eq.price);
+                      const ck = cartKey(c.id, c.variantLabel);
+                      const isEditing = editingPriceId !== null && cartKey(editingPriceId, c.variantLabel) === ck;
                       return (
-                        <div key={c.id} className="text-sm">
+                        <div key={ck} className="text-sm">
                           <div className="flex items-center gap-2">
                             <div className="flex-1 min-w-0">
-                              <p className="text-gray-300 truncate">{eq.name}</p>
+                              <p className="text-gray-300 truncate">{eq.name}{c.variantLabel && <span className="text-gray-500 ml-1">({c.variantLabel})</span>}</p>
                               <div className="flex items-center gap-1.5 mt-0.5">
                                 {isEditing ? (
                                   <input
                                     type="number"
                                     value={editingPriceVal}
                                     onChange={(e) => setEditingPriceVal(e.target.value)}
-                                    onBlur={() => { const v = Number(editingPriceVal); if (v > 0) setPriceOverride(c.id, v); setEditingPriceId(null); }}
-                                    onKeyDown={(e) => { if (e.key === "Enter") { const v = Number(editingPriceVal); if (v > 0) setPriceOverride(c.id, v); setEditingPriceId(null); } }}
+                                    onBlur={() => { const v = Number(editingPriceVal); if (v > 0) { if (c.variantLabel) setCart(prev => prev.map(x => cartKey(x.id, x.variantLabel) === ck ? { ...x, variantPrice: v } : x)); else setPriceOverride(c.id, v); } setEditingPriceId(null); }}
+                                    onKeyDown={(e) => { if (e.key === "Enter") { const v = Number(editingPriceVal); if (v > 0) { if (c.variantLabel) setCart(prev => prev.map(x => cartKey(x.id, x.variantLabel) === ck ? { ...x, variantPrice: v } : x)); else setPriceOverride(c.id, v); } setEditingPriceId(null); } }}
                                     autoFocus
                                     className="w-24 bg-transparent border border-amber-500/50 rounded-sm px-1.5 py-0.5 text-xs text-white focus:outline-none"
                                   />
@@ -550,7 +599,7 @@ export default function AdminQuote() {
                               </div>
                             </div>
                             <span className="text-white font-bold shrink-0">{(price * c.qty * days).toLocaleString()} ₽</span>
-                            <button onClick={() => setQty(eq.id, 0)} className="text-gray-600 hover:text-red-400 transition-colors shrink-0">
+                            <button onClick={() => setQty(eq.id, 0, c.variantLabel)} className="text-gray-600 hover:text-red-400 transition-colors shrink-0">
                               <Icon name="X" size={14} />
                             </button>
                           </div>
