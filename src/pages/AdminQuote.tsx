@@ -151,61 +151,69 @@ export default function AdminQuote() {
 
   useEffect(() => {
     if (!authed) return;
+    // Загружаем каталог, и если editId — сразу после загружаем КП
+    if (editId) setEditLoading(true);
     fetch(URLS["get-catalog"])
       .then((r) => r.json())
-      .then((d) => { setEquipment(d.equipment || []); setLoading(false); })
-      .catch(() => setLoading(false));
-  }, [authed]);
+      .then((d) => {
+        const catalog: Eq[] = d.equipment || [];
+        setEquipment(catalog);
+        setLoading(false);
+        if (!editId) return;
+        // Загружаем КП после каталога, чтобы fakeEq не затёрся
+        return fetch(`${URLS["manage-quotes"]}?pwd=${encodeURIComponent(password)}&id=${editId}`)
+          .then(r => r.json())
+          .then((q: Record<string, unknown>) => {
+            setTitle((q.title as string) || "");
+            setEventDate((q.event_date as string) || "");
+            setDeliveryAddress((q.delivery_address as string) || "");
+            setDays(Number(q.days) || 1);
+            setDiscount(Number(q.discount) || 0);
+            setDiscountInput(q.discount ? String(q.discount) : "");
+            setAccessPin((q.access_pin as string) || "");
+            setEditToken((q.token as string) || null);
 
-  // Загружаем существующее КП для редактирования
-  useEffect(() => {
-    if (!authed || !editId) return;
-    setEditLoading(true);
-    fetch(`${URLS["manage-quotes"]}?pwd=${encodeURIComponent(password)}&id=${editId}`)
-      .then(r => r.json())
-      .then((q: Record<string, unknown>) => {
-        setTitle((q.title as string) || "");
-        setEventDate((q.event_date as string) || "");
-        setDeliveryAddress((q.delivery_address as string) || "");
-        setDays(Number(q.days) || 1);
-        setDiscount(Number(q.discount) || 0);
-        setDiscountInput(q.discount ? String(q.discount) : "");
-        setAccessPin((q.access_pin as string) || "");
-        setEditToken((q.token as string) || null);
+            // Восстанавливаем корзину из items
+            const items = (q.items as {id:number|null;name:string;price:number;unit:string;qty:number}[]) || [];
+            let counter = -1;
+            const cartItems: CartItem[] = [];
+            const fakeEq: Eq[] = [];
+            for (const item of items) {
+              if (item.id === null || item.id < 0) {
+                // кастомная позиция
+                const baseName = item.name.replace(/\s*\([^)]+\)$/, "").trim();
+                cartItems.push({ id: counter, qty: item.qty, isCustom: true, customName: baseName, customPrice: item.price });
+                fakeEq.push({ id: counter, name: baseName, category: "Другое", price: item.price, unit: item.unit });
+                counter--;
+              } else {
+                // Парсим вариант из названия вида "Название (Вариант)"
+                // Ищем совпадение с вариантами из каталога
+                const catalogItem = catalog.find(e => e.id === item.id);
+                const variantMatch = item.name.match(/\(([^)]+)\)$/);
+                if (variantMatch && catalogItem?.variants?.find(v => v.label === variantMatch[1])) {
+                  cartItems.push({ id: item.id, qty: item.qty, variantLabel: variantMatch[1], variantPrice: item.price });
+                } else {
+                  cartItems.push({ id: item.id, qty: item.qty, customPrice: item.price });
+                }
+              }
+            }
+            setCart(cartItems);
+            if (fakeEq.length) setEquipment(prev => [...prev, ...fakeEq]);
 
-        // Восстанавливаем корзину из items
-        const items = (q.items as {id:number|null;name:string;price:number;unit:string;qty:number}[]) || [];
-        let counter = -1;
-        const cartItems: CartItem[] = [];
-        const fakeEq: Eq[] = [];
-        for (const item of items) {
-          if (item.id === null || item.id < 0) {
-            // кастомная позиция
-            cartItems.push({ id: counter, qty: item.qty, isCustom: true, customName: item.name, customPrice: item.price });
-            fakeEq.push({ id: counter, name: item.name, category: "Другое", price: item.price, unit: item.unit });
-            counter--;
-          } else {
-            cartItems.push({ id: item.id, qty: item.qty, customPrice: item.price });
-          }
-        }
-        setCart(cartItems);
-        if (fakeEq.length) setEquipment(prev => [...prev, ...fakeEq]);
+            // Восстанавливаем extras
+            const extras = (q.extras as {id:string}[]) || [];
+            setSelectedExtras(extras.map(e => e.id).filter(Boolean));
 
-        // Восстанавливаем extras
-        const extras = (q.extras as {id:string}[]) || [];
-        setSelectedExtras(extras.map(e => e.id).filter(Boolean));
+            // Монтаж / доставка
+            setNoInstallation(Boolean(q.no_installation));
+            setInstallationPrice(Number(q.installation_price) || 0);
+            setDismantlingPrice(Number(q.dismantling_price) || 0);
 
-        // Монтаж / доставка
-        setNoInstallation(Boolean(q.no_installation));
-        setInstallationPrice(Number(q.installation_price) || 0);
-        setDismantlingPrice(Number(q.dismantling_price) || 0);
-
-        // Ссылка на КП (уже отправлено)
-        if (q.token) setShareLink(`${window.location.origin}/quote/${q.token}`);
-        setEditLoading(false);
+            setEditLoading(false);
+          });
       })
-      .catch(() => setEditLoading(false));
-  }, [authed, editId]);
+      .catch(() => { setLoading(false); setEditLoading(false); });
+  }, [authed]);
 
   // Сбрасываем зону при смене города
   useEffect(() => { setDeliveryZoneIdx(0); }, [cityKey]);
