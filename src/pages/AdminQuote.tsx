@@ -173,6 +173,40 @@ export default function AdminQuote() {
             setAccessPin((q.access_pin as string) || "");
             setEditToken((q.token as string) || null);
 
+            // Восстанавливаем город и зону доставки
+            const deliveryStr = (q.delivery as string) || "";
+            let foundCity = "moscow";
+            let foundZoneIdx = 0;
+            for (const [key, city] of Object.entries(CITIES)) {
+              for (let zi = 1; zi < city.zones.length; zi++) {
+                if (deliveryStr.includes(city.zones[zi].name)) {
+                  foundCity = key; foundZoneIdx = zi; break;
+                }
+              }
+            }
+            setCityKey(foundCity);
+            // Восстанавливаем кастомную цену доставки если отличается от дефолтной
+            const savedDeliveryPrice = Number(q.delivery_price) || 0;
+            if (savedDeliveryPrice > 0 && foundZoneIdx > 0) {
+              setDeliveryPrices(prev => ({
+                ...prev,
+                [foundCity]: prev[foundCity].map((p, i) => i === foundZoneIdx ? savedDeliveryPrice : p),
+              }));
+            }
+            // setDeliveryZoneIdx после setCityKey — ставим напрямую
+            setTimeout(() => setDeliveryZoneIdx(foundZoneIdx), 0);
+
+            // Восстанавливаем время доставки и монтажа (хранятся как форматированные строки)
+            const instTime = (q.installation_time as string) || "";
+            const dismTime = (q.dismantling_time as string) || "";
+            const delTime = (q.delivery_time as string) || "";
+            const pickTime = (q.pickup_time as string) || "";
+            // Разбиваем "5 июня, 09:00" → date="" time="5 июня, 09:00" (вставляем в текстовое поле)
+            setInstallationTime(instTime);
+            setDismantlingTime(dismTime);
+            setDeliveryTime(delTime);
+            setPickupTime(pickTime);
+
             // Восстанавливаем корзину из items
             const items = (q.items as {id:number|null;name:string;price:number;unit:string;qty:number}[]) || [];
             let counter = -1;
@@ -200,14 +234,22 @@ export default function AdminQuote() {
             setCart(cartItems);
             if (fakeEq.length) setEquipment(prev => [...prev, ...fakeEq]);
 
-            // Восстанавливаем extras
-            const extras = (q.extras as {id:string}[]) || [];
+            // Восстанавливаем extras с кастомными ценами
+            const extras = (q.extras as {id:string; price:number}[]) || [];
             setSelectedExtras(extras.map(e => e.id).filter(Boolean));
+            if (extras.length) {
+              setExtraServices(prev => prev.map(s => {
+                const saved = extras.find(e => e.id === s.id);
+                return saved ? { ...s, price: saved.price } : s;
+              }));
+            }
 
             // Монтаж / доставка
             setNoInstallation(Boolean(q.no_installation));
             setInstallationPrice(Number(q.installation_price) || 0);
             setDismantlingPrice(Number(q.dismantling_price) || 0);
+            // Восстанавливаем цену доставки как кастомную для текущей зоны (если отличается)
+            // (уже сделано выше через setDeliveryPrices)
 
             setEditLoading(false);
           });
