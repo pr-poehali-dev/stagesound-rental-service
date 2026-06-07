@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useParams } from "react-router-dom";
 import Icon from "@/components/ui/icon";
+import { exportQuoteToXlsx } from "@/utils/exportQuoteXlsx";
 import func2url from "../../backend/func2url.json";
 
 const URLS = func2url as Record<string, string>;
@@ -979,6 +980,17 @@ export default function QuoteApproval() {
               <span className="font-oswald neon-text">{q.total.toLocaleString()} ₽</span>
             </div>
           </div>
+        </div>
+
+        {/* Скачать Excel */}
+        <div className="mb-4 flex justify-end">
+          <button
+            onClick={() => exportQuoteToXlsx(q)}
+            className="flex items-center gap-2 border border-amber-500/30 text-amber-500/80 hover:text-amber-500 hover:border-amber-500/60 px-4 py-2 rounded-sm text-sm transition-colors"
+          >
+            <Icon name="Download" size={14} />
+            Скачать Excel
+          </button>
         </div>
 
         {/* Блок подписания */}

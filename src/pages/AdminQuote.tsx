@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import Icon from "@/components/ui/icon";
+import { exportQuoteToXlsx } from "@/utils/exportQuoteXlsx";
 import func2url from "../../backend/func2url.json";
 
 const URLS = func2url as Record<string, string>;
@@ -449,6 +450,11 @@ export default function AdminQuote() {
               <button onClick={copyLink} className="neon-btn flex items-center gap-2 px-6 py-2 rounded-sm text-sm">
                 <Icon name={copiedLink ? "Check" : "Copy"} size={14} />
                 {copiedLink ? "Скопировано!" : "Скопировать ссылку"}
+              </button>
+              <button onClick={() => exportQuoteToXlsx(buildPayload())}
+                className="flex items-center gap-2 border border-amber-500/30 text-amber-500/80 hover:text-amber-500 hover:border-amber-500/60 px-6 py-2 rounded-sm text-sm transition-colors">
+                <Icon name="Download" size={14} />
+                Скачать Excel
               </button>
               {editId ? (
                 <button onClick={() => setShareLink("")}
