@@ -106,6 +106,39 @@ const iCls =
 
 const EMPTY_ITEM: QuoteItem = { name: "", price: 0, qty: 1, unit: "шт" };
 
+// ── Конфиг доставки и доп. услуг (идентично AdminQuote) ─────────────────────
+const CITIES: Record<string, { label: string; zones: { name: string; defaultPrice: number }[] }> = {
+  moscow: { label: "Москва", zones: [
+    { name: "Без доставки", defaultPrice: 0 },
+    { name: "Центр Москвы", defaultPrice: 4500 },
+    { name: "Москва (в пределах МКАД)", defaultPrice: 6600 },
+    { name: "Подмосковье (до 50 км)", defaultPrice: 10500 },
+    { name: "Подмосковье (50–100 км)", defaultPrice: 16500 },
+  ]},
+  spb: { label: "Санкт-Петербург", zones: [
+    { name: "Без доставки", defaultPrice: 0 },
+    { name: "Центр СПб (внутри КАД)", defaultPrice: 4500 },
+    { name: "Санкт-Петербург (за КАД)", defaultPrice: 6600 },
+    { name: "Ленобласть (до 50 км)", defaultPrice: 10500 },
+    { name: "Ленобласть (50–100 км)", defaultPrice: 16500 },
+  ]},
+  krasnoyarsk: { label: "Красноярск", zones: [
+    { name: "Без доставки", defaultPrice: 0 },
+    { name: "Центр Красноярска", defaultPrice: 4500 },
+    { name: "Красноярск (все районы)", defaultPrice: 6600 },
+    { name: "Пригород (до 50 км)", defaultPrice: 10500 },
+    { name: "Красноярский край (50–100 км)", defaultPrice: 16500 },
+  ]},
+};
+
+type ExtraService = { id: string; label: string; price: number };
+const DEFAULT_EXTRAS: ExtraService[] = [
+  { id: "install", label: "Монтаж и демонтаж", price: 15000 },
+  { id: "tech",    label: "Техник на месте (1 день)", price: 12000 },
+  { id: "sound",   label: "Звукорежиссёр (1 день)", price: 21000 },
+  { id: "light",   label: "Световой оператор (1 день)", price: 19500 },
+];
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function StaffDashboard() {
@@ -137,6 +170,43 @@ export default function StaffDashboard() {
   const [qSaving, setQSaving] = useState(false);
   const [qSaveError, setQSaveError] = useState("");
   const [qSaveOk, setQSaveOk] = useState(false);
+  const [qShareLink, setQShareLink] = useState("");
+  const [qCopied, setQCopied] = useState(false);
+
+  // Скидка
+  const [qDiscount, setQDiscount] = useState(0);
+  const [qDiscountInput, setQDiscountInput] = useState("");
+
+  // Коэффициент
+  const [qUseCoeff, setQUseCoeff] = useState(false);
+  const [qCoeffs, setQCoeffs] = useState<number[]>([1]);
+
+  // Доставка
+  const [qCityKey, setQCityKey] = useState("moscow");
+  const [qZoneIdx, setQZoneIdx] = useState(0);
+  const [qDeliveryPrices, setQDeliveryPrices] = useState<Record<string, number[]>>(
+    Object.fromEntries(Object.entries(CITIES).map(([k, c]) => [k, c.zones.map(z => z.defaultPrice)]))
+  );
+  const [qDeliveryDate, setQDeliveryDate] = useState("");
+  const [qDeliveryTime, setQDeliveryTime] = useState("");
+  const [qPickupDate, setQPickupDate] = useState("");
+  const [qPickupTime, setQPickupTime] = useState("");
+
+  // Доп. услуги
+  const [qExtras, setQExtras] = useState<ExtraService[]>(DEFAULT_EXTRAS.map(e => ({ ...e })));
+  const [qSelectedExtras, setQSelectedExtras] = useState<string[]>([]);
+
+  // Монтаж
+  const [qNoInstall, setQNoInstall] = useState(false);
+  const [qInstallDate, setQInstallDate] = useState("");
+  const [qInstallTime, setQInstallTime] = useState("");
+  const [qInstallPrice, setQInstallPrice] = useState(0);
+  const [qDismantleDate, setQDismantleDate] = useState("");
+  const [qDismantleTime, setQDismantleTime] = useState("");
+  const [qDismantlePrice, setQDismantlePrice] = useState(0);
+
+  // Пин
+  const [qAccessPin, setQAccessPin] = useState("");
 
   // ── Contracts ──
   const [contracts, setContracts] = useState<Contract[]>([]);
@@ -164,8 +234,27 @@ export default function StaffDashboard() {
     loadQuotes();
   }, [profile]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── computed quote total ──
-  const qTotal = qItems.reduce((sum, it) => sum + it.price * it.qty * qDays, 0);
+  // ── computed values ──
+  const qCurrentCity = CITIES[qCityKey];
+  const qCurrentPrices = qDeliveryPrices[qCityKey] ?? [];
+  const qDeliveryTotal = qCurrentPrices[qZoneIdx] ?? 0;
+  const qExtrasTotal = qSelectedExtras.reduce((s, id) => {
+    const ex = qExtras.find(e => e.id === id);
+    return s + (ex?.price ?? 0);
+  }, 0);
+  const qInstallTotal = qNoInstall ? 0 : (qInstallTime ? qInstallPrice : 0) + (qDismantleTime ? qDismantlePrice : 0);
+  const qEqRaw = qItems.reduce((sum, it, idx) => {
+    const mult = qUseCoeff ? (qCoeffs[idx] ?? 1) : qDays;
+    return sum + it.price * it.qty * mult;
+  }, 0);
+  const qDiscountAmt = qDiscount > 0 ? Math.round(qEqRaw * qDiscount / 100) : 0;
+  const qEqTotal = qEqRaw - qDiscountAmt;
+  const qTotal = qEqTotal + qExtrasTotal + qDeliveryTotal + qInstallTotal;
+
+  const fmtDT = (date: string, time: string) => {
+    const parts = [date ? new Date(date).toLocaleDateString("ru-RU", { day: "numeric", month: "long" }) : "", time].filter(Boolean);
+    return parts.join(", ") || null;
+  };
 
   // ── Login ──
   const handleLogin = async () => {
@@ -270,13 +359,17 @@ export default function StaffDashboard() {
     );
 
   const resetQuoteForm = () => {
-    setQTitle("");
-    setQEventDate("");
-    setQAddress("");
-    setQDays(1);
-    setQItems([{ ...EMPTY_ITEM }]);
-    setQSaveError("");
-    setQSaveOk(false);
+    setQTitle(""); setQEventDate(""); setQAddress(""); setQDays(1);
+    setQItems([{ ...EMPTY_ITEM }]); setQCoeffs([1]);
+    setQDiscount(0); setQDiscountInput("");
+    setQUseCoeff(false);
+    setQCityKey("moscow"); setQZoneIdx(0);
+    setQDeliveryDate(""); setQDeliveryTime(""); setQPickupDate(""); setQPickupTime("");
+    setQExtras(DEFAULT_EXTRAS.map(e => ({ ...e }))); setQSelectedExtras([]);
+    setQNoInstall(false); setQInstallDate(""); setQInstallTime(""); setQInstallPrice(0);
+    setQDismantleDate(""); setQDismantleTime(""); setQDismantlePrice(0);
+    setQAccessPin("");
+    setQSaveError(""); setQSaveOk(false); setQShareLink(""); setQCopied(false);
   };
 
   // ── Save new quote ──
@@ -284,39 +377,53 @@ export default function StaffDashboard() {
     if (!profile) return;
     if (!qTitle.trim()) { setQSaveError("Укажите название КП"); return; }
     if (qItems.some((it) => !it.name.trim())) { setQSaveError("Заполните названия всех позиций"); return; }
-    const token = localStorage.getItem("staff_token") ?? "";
-    setQSaving(true);
-    setQSaveError("");
-    setQSaveOk(false);
+    const staffToken = localStorage.getItem("staff_token") ?? "";
+    setQSaving(true); setQSaveError(""); setQSaveOk(false);
     try {
+      const deliveryName = qZoneIdx === 0 ? "Без доставки" : `${qCurrentCity.label} — ${qCurrentCity.zones[qZoneIdx].name}`;
+      const extrasData = qSelectedExtras.map(id => {
+        const ex = qExtras.find(e => e.id === id)!;
+        return { id, name: ex.label, price: ex.price };
+      });
       const body = {
         title: qTitle.trim(),
         event_date: qEventDate || null,
         delivery_address: qAddress || null,
-        days: qDays,
-        items: qItems.map((it) => ({
-          name: it.name,
-          price: it.price,
-          qty: it.qty,
-          unit: it.unit,
-          subtotal: it.price * it.qty * qDays,
+        days: qUseCoeff ? 1 : qDays,
+        use_coeff: qUseCoeff,
+        items: qItems.map((it, idx) => ({
+          name: it.name, price: it.price, qty: it.qty, unit: it.unit,
+          coeff: qUseCoeff ? (qCoeffs[idx] ?? 1) : undefined,
         })),
+        delivery: deliveryName,
+        delivery_price: qDeliveryTotal,
+        delivery_time: fmtDT(qDeliveryDate, qDeliveryTime) || null,
+        pickup_time: fmtDT(qPickupDate, qPickupTime) || null,
+        extras: extrasData,
+        no_installation: qNoInstall,
+        installation_time: qNoInstall ? null : (fmtDT(qInstallDate, qInstallTime) || null),
+        installation_price: qNoInstall ? 0 : (qInstallTime ? qInstallPrice : 0),
+        dismantling_time: qNoInstall ? null : (fmtDT(qDismantleDate, qDismantleTime) || null),
+        dismantling_price: qNoInstall ? 0 : (qDismantleTime ? qDismantlePrice : 0),
+        discount: qDiscount,
+        access_pin: qAccessPin.trim() || null,
         total: qTotal,
         staff_id: profile.id,
       };
       const res = await fetch(`${URLS["manage-quotes"]}`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Staff-Token": token,
-        },
+        headers: { "Content-Type": "application/json", "X-Staff-Token": staffToken },
         body: JSON.stringify(body),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Ошибка сохранения");
+      // Помечаем как отправленное и получаем ссылку
+      await fetch(`${URLS["manage-quotes"]}?action=send&id=${data.id}`, {
+        method: "POST",
+        headers: { "X-Staff-Token": staffToken },
+      });
+      setQShareLink(`${window.location.origin}/quote/${data.token}`);
       setQSaveOk(true);
-      resetQuoteForm();
-      setShowQuoteForm(false);
       await loadQuotes();
     } catch (e) {
       setQSaveError(e instanceof Error ? e.message : "Ошибка сохранения КП");
@@ -513,208 +620,307 @@ export default function StaffDashboard() {
 
             {/* ── New quote form ── */}
             {showQuoteForm && (
-              <div className="glass-card rounded-sm p-6 mb-6 border border-amber-500/20">
-                <div className="flex items-center justify-between mb-5">
-                  <h2 className="font-oswald text-xl font-bold text-white uppercase">
-                    Новое коммерческое предложение
-                  </h2>
-                  <button
-                    onClick={() => {
-                      setShowQuoteForm(false);
-                      resetQuoteForm();
-                    }}
-                    className="text-gray-500 hover:text-white transition-colors"
-                  >
+              <div className="mb-6 border border-amber-500/20 rounded-sm">
+
+                {/* Шапка */}
+                <div className="flex items-center justify-between px-6 py-4 border-b border-amber-500/10">
+                  <h2 className="font-oswald text-xl font-bold text-white uppercase">Новое коммерческое предложение</h2>
+                  <button onClick={() => { setShowQuoteForm(false); resetQuoteForm(); }} className="text-gray-500 hover:text-white transition-colors">
                     <Icon name="X" size={18} />
                   </button>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
-                  <div className="sm:col-span-2">
-                    <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1.5">
-                      Название КП *
-                    </label>
-                    <input
-                      type="text"
-                      value={qTitle}
-                      onChange={(e) => setQTitle(e.target.value)}
-                      placeholder="Например: Аренда оборудования для конференции"
-                      className={iCls}
-                    />
+                {/* Если КП создано — показываем ссылку */}
+                {qShareLink ? (
+                  <div className="p-6 text-center">
+                    <Icon name="CheckCircle" size={40} className="text-amber-500 mx-auto mb-3" />
+                    <h3 className="font-oswald text-xl font-bold text-white uppercase mb-1">КП готово!</h3>
+                    <p className="text-gray-400 text-sm mb-4">Отправьте эту ссылку клиенту</p>
+                    <div className="bg-black/40 border border-amber-500/30 rounded-sm px-4 py-3 text-amber-400 text-sm break-all mb-4 text-left">{qShareLink}</div>
+                    <div className="flex gap-3 justify-center flex-wrap">
+                      <button onClick={() => { navigator.clipboard.writeText(qShareLink); setQCopied(true); setTimeout(() => setQCopied(false), 2000); }}
+                        className="neon-btn flex items-center gap-2 px-5 py-2 rounded-sm text-sm">
+                        <Icon name={qCopied ? "Check" : "Copy"} size={14} />
+                        {qCopied ? "Скопировано!" : "Скопировать ссылку"}
+                      </button>
+                      <button onClick={() => { resetQuoteForm(); }} className="border border-gray-700 text-gray-400 px-5 py-2 rounded-sm text-sm hover:border-gray-500 transition-colors">
+                        Создать ещё КП
+                      </button>
+                      <button onClick={() => { setShowQuoteForm(false); resetQuoteForm(); }} className="border border-gray-700 text-gray-400 px-5 py-2 rounded-sm text-sm hover:border-gray-500 transition-colors">
+                        Закрыть
+                      </button>
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1.5">
-                      Дата мероприятия
-                    </label>
-                    <input
-                      type="date"
-                      value={qEventDate}
-                      onChange={(e) => setQEventDate(e.target.value)}
-                      className={iCls}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1.5">
-                      Дней аренды
-                    </label>
-                    <input
-                      type="number"
-                      min={1}
-                      value={qDays}
-                      onChange={(e) => setQDays(Math.max(1, Number(e.target.value)))}
-                      className={iCls}
-                    />
-                  </div>
-                  <div className="sm:col-span-2">
-                    <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1.5">
-                      Адрес доставки
-                    </label>
-                    <input
-                      type="text"
-                      value={qAddress}
-                      onChange={(e) => setQAddress(e.target.value)}
-                      placeholder="г. Москва, ул. Примерная, 1"
-                      className={iCls}
-                    />
-                  </div>
-                </div>
+                ) : (
+                <div className="grid grid-cols-1 xl:grid-cols-3 gap-0">
 
-                {/* Items */}
-                <div className="mb-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="text-xs text-gray-500 uppercase tracking-wider">
-                      Позиции
-                    </label>
-                    <button
-                      onClick={addItem}
-                      className="flex items-center gap-1 text-amber-500 hover:text-amber-400 text-xs transition-colors"
-                    >
-                      <Icon name="Plus" size={12} />
-                      Добавить позицию
+                  {/* ── Левая часть: позиции ── */}
+                  <div className="xl:col-span-2 p-6 border-r border-amber-500/10 space-y-4">
+
+                    {/* Позиции */}
+                    <div className="glass-card rounded-sm p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-xs text-gray-500 uppercase tracking-wider">Позиции</h3>
+                        <button onClick={() => { addItem(); setQCoeffs(prev => [...prev, 1]); }}
+                          className="flex items-center gap-1 text-amber-500 hover:text-amber-400 text-xs transition-colors">
+                          <Icon name="Plus" size={12} /> Добавить позицию
+                        </button>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="grid grid-cols-12 gap-2 text-xs text-gray-600 uppercase tracking-wider px-1 hidden sm:grid">
+                          <div className="col-span-5">Наименование</div>
+                          <div className="col-span-2 text-right">Цена, ₽</div>
+                          <div className="col-span-2 text-center">Кол-во</div>
+                          <div className="col-span-2">Ед.</div>
+                          {qUseCoeff && <div className="col-span-1 text-center">К</div>}
+                          <div className="col-span-1" />
+                        </div>
+                        {qItems.map((it, idx) => (
+                          <div key={idx} className="grid grid-cols-12 gap-2 items-center">
+                            <div className="col-span-12 sm:col-span-5">
+                              <input type="text" value={it.name} onChange={e => updateItem(idx, "name", e.target.value)} placeholder="Название позиции" className={iCls} />
+                            </div>
+                            <div className="col-span-4 sm:col-span-2">
+                              <input type="number" min={0} value={it.price || ""} onChange={e => updateItem(idx, "price", Number(e.target.value))} placeholder="0" className={iCls + " text-right"} />
+                            </div>
+                            <div className="col-span-3 sm:col-span-2">
+                              <input type="number" min={1} value={it.qty} onChange={e => updateItem(idx, "qty", Math.max(1, Number(e.target.value)))} className={iCls + " text-center"} />
+                            </div>
+                            <div className={qUseCoeff ? "col-span-2 sm:col-span-1" : "col-span-4 sm:col-span-2"}>
+                              <input type="text" value={it.unit} onChange={e => updateItem(idx, "unit", e.target.value)} placeholder="шт" className={iCls} />
+                            </div>
+                            {qUseCoeff && (
+                              <div className="col-span-2 sm:col-span-1">
+                                <input type="number" step="0.1" min="0.1" value={qCoeffs[idx] ?? 1}
+                                  onChange={e => setQCoeffs(prev => prev.map((c, i) => i === idx ? Math.max(0.1, Number(e.target.value) || 1) : c))}
+                                  className={iCls + " text-center"} />
+                              </div>
+                            )}
+                            <div className="col-span-1 flex justify-center">
+                              <button onClick={() => { removeItem(idx); setQCoeffs(prev => prev.filter((_, i) => i !== idx)); }}
+                                disabled={qItems.length === 1} className="text-gray-600 hover:text-red-400 transition-colors disabled:opacity-30">
+                                <Icon name="Trash2" size={14} />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Город и доставка */}
+                    <div className="glass-card rounded-sm p-4">
+                      <h3 className="text-xs text-gray-500 uppercase tracking-wider mb-3">Город и доставка</h3>
+                      <div className="grid grid-cols-2 gap-3 mb-3">
+                        <div>
+                          <label className="text-xs text-gray-600 block mb-1">Город</label>
+                          <select value={qCityKey} onChange={e => { setQCityKey(e.target.value); setQZoneIdx(0); }}
+                            className="w-full border border-amber-500/20 rounded-sm px-3 py-2 text-sm text-gray-300 focus:outline-none" style={{ background: "#111" }}>
+                            {Object.entries(CITIES).map(([k, c]) => <option key={k} value={k}>{c.label}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-xs text-gray-600 block mb-1">Зона</label>
+                          <select value={qZoneIdx} onChange={e => setQZoneIdx(Number(e.target.value))}
+                            className="w-full border border-amber-500/20 rounded-sm px-3 py-2 text-sm text-gray-300 focus:outline-none" style={{ background: "#111" }}>
+                            {qCurrentCity.zones.map((z, i) => <option key={i} value={i}>{z.name}{i > 0 ? ` — ${qCurrentPrices[i]?.toLocaleString()} ₽` : ""}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-xs text-gray-600 block mb-1">Привоз</label>
+                          <div className="flex gap-1">
+                            <input type="date" value={qDeliveryDate} onChange={e => setQDeliveryDate(e.target.value)} className="w-28 bg-transparent border border-amber-500/20 rounded-sm px-2 py-2 text-sm text-white focus:outline-none" />
+                            <input value={qDeliveryTime} onChange={e => setQDeliveryTime(e.target.value)} placeholder="08:00–10:00" className={iCls} />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-xs text-gray-600 block mb-1">Увоз</label>
+                          <div className="flex gap-1">
+                            <input type="date" value={qPickupDate} onChange={e => setQPickupDate(e.target.value)} className="w-28 bg-transparent border border-amber-500/20 rounded-sm px-2 py-2 text-sm text-white focus:outline-none" />
+                            <input value={qPickupTime} onChange={e => setQPickupTime(e.target.value)} placeholder="23:00–01:00" className={iCls} />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Монтаж */}
+                    <div className="glass-card rounded-sm p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-xs text-gray-500 uppercase tracking-wider">Монтаж и демонтаж</h3>
+                        <button onClick={() => setQNoInstall(v => !v)}
+                          className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-sm border transition-colors ${qNoInstall ? "border-green-500/50 text-green-400 bg-green-500/10" : "border-amber-500/20 text-gray-500 hover:text-white"}`}>
+                          <Icon name={qNoInstall ? "CheckCircle" : "Circle"} size={12} /> Монтаж не нужен
+                        </button>
+                      </div>
+                      {qNoInstall ? (
+                        <div className="flex items-center gap-2 bg-green-500/5 border border-green-500/20 rounded-sm px-3 py-2.5">
+                          <Icon name="CheckCircle" size={14} className="text-green-400" />
+                          <p className="text-green-400 text-sm">Монтаж и демонтаж не требуются</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          <div>
+                            <label className="text-xs text-gray-600 block mb-1">Монтаж</label>
+                            <div className="flex gap-2">
+                              <input type="date" value={qInstallDate} onChange={e => setQInstallDate(e.target.value)} className="w-32 bg-transparent border border-amber-500/20 rounded-sm px-2 py-2 text-sm text-white focus:outline-none" />
+                              <input value={qInstallTime} onChange={e => setQInstallTime(e.target.value)} placeholder="10:00–14:00" className={iCls} />
+                              <input type="number" value={qInstallPrice || ""} onChange={e => setQInstallPrice(Number(e.target.value))} placeholder="₽" className="w-20 bg-transparent border border-amber-500/20 rounded-sm px-2 py-2 text-sm text-white text-right focus:outline-none" />
+                            </div>
+                          </div>
+                          <div>
+                            <label className="text-xs text-gray-600 block mb-1">Демонтаж</label>
+                            <div className="flex gap-2">
+                              <input type="date" value={qDismantleDate} onChange={e => setQDismantleDate(e.target.value)} className="w-32 bg-transparent border border-amber-500/20 rounded-sm px-2 py-2 text-sm text-white focus:outline-none" />
+                              <input value={qDismantleTime} onChange={e => setQDismantleTime(e.target.value)} placeholder="23:00–02:00" className={iCls} />
+                              <input type="number" value={qDismantlePrice || ""} onChange={e => setQDismantlePrice(Number(e.target.value))} placeholder="₽" className="w-20 bg-transparent border border-amber-500/20 rounded-sm px-2 py-2 text-sm text-white text-right focus:outline-none" />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Доп. услуги */}
+                    <div className="glass-card rounded-sm p-4">
+                      <h3 className="text-xs text-gray-500 uppercase tracking-wider mb-3">Доп. услуги</h3>
+                      <div className="space-y-2">
+                        {qExtras.map(ex => (
+                          <div key={ex.id} className="flex items-center gap-2">
+                            <input type="checkbox" checked={qSelectedExtras.includes(ex.id)}
+                              onChange={() => setQSelectedExtras(prev => prev.includes(ex.id) ? prev.filter(id => id !== ex.id) : [...prev, ex.id])}
+                              className="w-4 h-4 accent-amber-500 shrink-0" />
+                            <span className="text-gray-400 text-sm flex-1">{ex.label}</span>
+                            <input type="number" value={ex.price}
+                              onChange={e => setQExtras(prev => prev.map(e2 => e2.id === ex.id ? { ...e2, price: Number(e.target.value) } : e2))}
+                              className="w-24 bg-transparent border border-amber-500/20 rounded-sm px-2 py-1 text-sm text-white text-right focus:outline-none" />
+                            <span className="text-gray-600 text-xs">₽</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* ── Правая часть: настройки и итого ── */}
+                  <div className="xl:col-span-1 p-6 space-y-4">
+
+                    {/* Инфо о мероприятии */}
+                    <div className="glass-card rounded-sm p-4 space-y-3">
+                      <div>
+                        <label className="text-xs text-gray-500 uppercase tracking-wider block mb-2">Название КП *</label>
+                        <input value={qTitle} onChange={e => setQTitle(e.target.value)} placeholder="Мероприятие, событие..." className={iCls} />
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-500 uppercase tracking-wider block mb-2">Дата мероприятия</label>
+                        <input type="date" value={qEventDate} onChange={e => setQEventDate(e.target.value)} className={iCls} />
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-500 uppercase tracking-wider block mb-2">Адрес</label>
+                        <input value={qAddress} onChange={e => setQAddress(e.target.value)} placeholder="г. Москва, ул. Примерная, 1" className={iCls} />
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-500 uppercase tracking-wider block mb-1">
+                          <Icon name="Lock" size={11} className="inline mr-1 text-amber-500" /> Пин-код доступа
+                        </label>
+                        <p className="text-gray-600 text-xs mb-2">Если не задан — ссылка открыта для всех</p>
+                        <input value={qAccessPin} onChange={e => setQAccessPin(e.target.value)} placeholder="Например: 1234" className={iCls} />
+                      </div>
+                    </div>
+
+                    {/* Режим расчёта + дни */}
+                    <div className="glass-card rounded-sm p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-xs text-gray-500 uppercase tracking-wider">Расчёт</span>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-xs ${!qUseCoeff ? "text-amber-500" : "text-gray-600"}`}>Дни</span>
+                          <button onClick={() => setQUseCoeff(v => !v)}
+                            className={`relative w-10 h-5 rounded-full border transition-colors ${qUseCoeff ? "border-amber-500 bg-amber-500/20" : "border-gray-600 bg-gray-800"}`}>
+                            <span className={`absolute top-0.5 w-4 h-4 rounded-full transition-all ${qUseCoeff ? "left-5 bg-amber-500" : "left-0.5 bg-gray-500"}`} />
+                          </button>
+                          <span className={`text-xs ${qUseCoeff ? "text-amber-500" : "text-gray-600"}`}>Коэфф.</span>
+                        </div>
+                      </div>
+                      {!qUseCoeff && (
+                        <div className="flex items-center gap-3">
+                          <button onClick={() => setQDays(d => Math.max(1, d - 1))} className="w-8 h-8 border border-amber-500/30 rounded-sm text-amber-500 hover:bg-amber-500/10 flex items-center justify-center">−</button>
+                          <span className="text-white font-bold text-lg w-8 text-center">{qDays}</span>
+                          <button onClick={() => setQDays(d => d + 1)} className="w-8 h-8 border border-amber-500/30 rounded-sm text-amber-500 hover:bg-amber-500/10 flex items-center justify-center">+</button>
+                          <span className="text-gray-600 text-xs ml-1">{qDays === 1 ? "день" : qDays < 5 ? "дня" : "дней"}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Скидка */}
+                    <div className="glass-card rounded-sm p-4">
+                      <label className="text-xs text-gray-500 uppercase tracking-wider block mb-2">Скидка</label>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {[0, 5, 10, 15, 20].map(p => (
+                          <button key={p} onClick={() => { setQDiscount(p); setQDiscountInput(p > 0 ? String(p) : ""); }}
+                            className={`px-2.5 py-1 rounded-sm text-xs transition-colors ${qDiscount === p ? "neon-btn" : "border border-amber-500/20 text-gray-500 hover:text-white"}`}>
+                            {p === 0 ? "Нет" : `${p}%`}
+                          </button>
+                        ))}
+                        <div className="flex items-center gap-1">
+                          <input type="number" min={0} max={90} value={qDiscountInput} onChange={e => setQDiscountInput(e.target.value)}
+                            onBlur={() => { const v = Math.min(90, Math.max(0, Number(qDiscountInput) || 0)); setQDiscount(v); setQDiscountInput(v > 0 ? String(v) : ""); }}
+                            placeholder="0" className="w-14 bg-transparent border border-amber-500/20 rounded-sm px-2 py-1 text-xs text-white text-center focus:outline-none" />
+                          <span className="text-gray-600 text-xs">%</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Итого */}
+                    <div className="glass-card rounded-sm p-4 space-y-1.5">
+                      {qDiscount > 0 && qEqRaw > 0 && (
+                        <div className="flex justify-between text-sm text-gray-500 line-through">
+                          <span>Оборудование</span><span>{qEqRaw.toLocaleString()} ₽</span>
+                        </div>
+                      )}
+                      {qDiscount > 0 && (
+                        <div className="flex justify-between text-sm text-green-400">
+                          <span>Скидка {qDiscount}%</span><span>−{qDiscountAmt.toLocaleString()} ₽</span>
+                        </div>
+                      )}
+                      {qEqTotal > 0 && (
+                        <div className="flex justify-between text-sm text-gray-400">
+                          <span>Оборудование{qDiscount > 0 ? " (со скидкой)" : ""}</span><span>{qEqTotal.toLocaleString()} ₽</span>
+                        </div>
+                      )}
+                      {qExtrasTotal > 0 && (
+                        <div className="flex justify-between text-sm text-gray-400">
+                          <span>Доп. услуги</span><span>{qExtrasTotal.toLocaleString()} ₽</span>
+                        </div>
+                      )}
+                      {qDeliveryTotal > 0 && (
+                        <div className="flex justify-between text-sm text-gray-400">
+                          <span>Доставка</span><span>{qDeliveryTotal.toLocaleString()} ₽</span>
+                        </div>
+                      )}
+                      {!qNoInstall && qInstallTotal > 0 && (
+                        <div className="flex justify-between text-sm text-gray-400">
+                          <span>Монтаж + демонтаж</span><span>{qInstallTotal.toLocaleString()} ₽</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between text-lg font-bold text-white pt-2 border-t border-amber-500/20">
+                        <span>ИТОГО</span>
+                        <span className="font-oswald neon-text">{qTotal.toLocaleString()} ₽</span>
+                      </div>
+                    </div>
+
+                    {qSaveError && (
+                      <div className="flex items-center gap-2 text-red-400 text-sm">
+                        <Icon name="AlertCircle" size={14} />{qSaveError}
+                      </div>
+                    )}
+
+                    <button onClick={saveQuote} disabled={qSaving || !qTitle.trim()}
+                      className="neon-btn w-full flex items-center justify-center gap-2 py-3 rounded-sm text-sm disabled:opacity-40">
+                      {qSaving ? <Icon name="Loader2" size={16} className="animate-spin" /> : <Icon name="Send" size={16} />}
+                      {qSaving ? "Создаём КП..." : "Создать и получить ссылку"}
                     </button>
                   </div>
 
-                  <div className="space-y-2">
-                    {/* Header row */}
-                    <div className="grid grid-cols-12 gap-2 text-xs text-gray-600 uppercase tracking-wider px-1 hidden sm:grid">
-                      <div className="col-span-5">Наименование</div>
-                      <div className="col-span-2 text-right">Цена, ₽</div>
-                      <div className="col-span-2 text-center">Кол-во</div>
-                      <div className="col-span-2">Ед.</div>
-                      <div className="col-span-1" />
-                    </div>
-
-                    {qItems.map((it, idx) => (
-                      <div
-                        key={idx}
-                        className="grid grid-cols-12 gap-2 items-center"
-                      >
-                        <div className="col-span-12 sm:col-span-5">
-                          <input
-                            type="text"
-                            value={it.name}
-                            onChange={(e) => updateItem(idx, "name", e.target.value)}
-                            placeholder="Название позиции"
-                            className={iCls}
-                          />
-                        </div>
-                        <div className="col-span-4 sm:col-span-2">
-                          <input
-                            type="number"
-                            min={0}
-                            value={it.price || ""}
-                            onChange={(e) => updateItem(idx, "price", Number(e.target.value))}
-                            placeholder="0"
-                            className={iCls + " text-right"}
-                          />
-                        </div>
-                        <div className="col-span-3 sm:col-span-2">
-                          <input
-                            type="number"
-                            min={1}
-                            value={it.qty}
-                            onChange={(e) =>
-                              updateItem(idx, "qty", Math.max(1, Number(e.target.value)))
-                            }
-                            className={iCls + " text-center"}
-                          />
-                        </div>
-                        <div className="col-span-4 sm:col-span-2">
-                          <input
-                            type="text"
-                            value={it.unit}
-                            onChange={(e) => updateItem(idx, "unit", e.target.value)}
-                            placeholder="шт"
-                            className={iCls}
-                          />
-                        </div>
-                        <div className="col-span-1 flex justify-center">
-                          <button
-                            onClick={() => removeItem(idx)}
-                            disabled={qItems.length === 1}
-                            className="text-gray-600 hover:text-red-400 transition-colors disabled:opacity-30"
-                          >
-                            <Icon name="Trash2" size={14} />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
                 </div>
-
-                {/* Total */}
-                <div className="flex justify-end mb-5">
-                  <div className="glass-card rounded-sm px-5 py-3 border border-amber-500/10 text-right space-y-0.5">
-                    {qDays > 1 && (
-                      <p className="text-gray-600 text-xs">
-                        × {qDays} {qDays === 1 ? "день" : qDays < 5 ? "дня" : "дней"} аренды
-                      </p>
-                    )}
-                    <div>
-                      <span className="text-gray-500 text-sm mr-3">Итого:</span>
-                      <span className="font-oswald text-xl font-bold neon-text">
-                        {qTotal.toLocaleString("ru-RU")} ₽
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {qSaveError && (
-                  <div className="flex items-center gap-2 text-red-400 text-sm mb-3">
-                    <Icon name="AlertCircle" size={14} />
-                    {qSaveError}
-                  </div>
                 )}
-                {qSaveOk && (
-                  <div className="flex items-center gap-2 text-green-400 text-sm mb-3">
-                    <Icon name="CheckCircle" size={14} />
-                    КП успешно создано
-                  </div>
-                )}
-
-                <div className="flex gap-3">
-                  <button
-                    onClick={saveQuote}
-                    disabled={qSaving}
-                    className="neon-btn flex items-center gap-2 px-6 py-2.5 rounded-sm text-sm disabled:opacity-40"
-                  >
-                    {qSaving ? (
-                      <Icon name="Loader2" size={14} className="animate-spin" />
-                    ) : (
-                      <Icon name="Save" size={14} />
-                    )}
-                    Сохранить КП
-                  </button>
-                  <button
-                    onClick={() => {
-                      setShowQuoteForm(false);
-                      resetQuoteForm();
-                    }}
-                    className="flex items-center gap-2 border border-gray-700 text-gray-400 hover:text-white px-5 py-2.5 rounded-sm text-sm transition-colors"
-                  >
-                    Отмена
-                  </button>
-                </div>
               </div>
             )}
 

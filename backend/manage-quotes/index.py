@@ -21,7 +21,7 @@ import boto3
 CORS = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, X-Quote-Pin",
+    "Access-Control-Allow-Headers": "Content-Type, X-Quote-Pin, X-Staff-Token",
     "Content-Type": "application/json",
 }
 
