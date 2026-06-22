@@ -114,7 +114,6 @@ export default function StaffDashboard() {
   // ── Auth state ──
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [adminPwd, setAdminPwd] = useState(() => sessionStorage.getItem("staff_admin_pwd") ?? "");
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState("");
   const [profile, setProfile] = useState<StaffProfile | null>(null);
@@ -169,8 +168,8 @@ export default function StaffDashboard() {
 
   // ── Login ──
   const handleLogin = async () => {
-    if (!email || !password || !adminPwd) {
-      setAuthError("Заполните все поля");
+    if (!email || !password) {
+      setAuthError("Введите email и пароль");
       return;
     }
     setAuthLoading(true);
@@ -186,14 +185,6 @@ export default function StaffDashboard() {
         setAuthError(data.error ?? "Неверный логин или пароль");
         return;
       }
-      // Verify admin pwd works against manage-quotes
-      const checkRes = await fetch(
-        `${URLS["manage-quotes"]}?pwd=${encodeURIComponent(adminPwd)}`
-      );
-      if (!checkRes.ok) {
-        setAuthError("Неверный системный пароль");
-        return;
-      }
       const prof: StaffProfile = {
         id: data.id,
         name: data.name,
@@ -202,7 +193,6 @@ export default function StaffDashboard() {
       };
       localStorage.setItem("staff_token", data.token);
       localStorage.setItem("staff_profile", JSON.stringify(prof));
-      sessionStorage.setItem("staff_admin_pwd", adminPwd);
       setProfile(prof);
     } catch {
       setAuthError("Ошибка подключения к серверу");
@@ -215,7 +205,6 @@ export default function StaffDashboard() {
   const handleLogout = () => {
     localStorage.removeItem("staff_token");
     localStorage.removeItem("staff_profile");
-    sessionStorage.removeItem("staff_admin_pwd");
     setProfile(null);
     setQuotes([]);
     setContracts([]);
@@ -224,12 +213,13 @@ export default function StaffDashboard() {
   // ── Load quotes ──
   const loadQuotes = useCallback(async () => {
     if (!profile) return;
-    const pwd = sessionStorage.getItem("staff_admin_pwd") ?? adminPwd;
+    const token = localStorage.getItem("staff_token") ?? "";
     setQuotesLoading(true);
     setQuotesError("");
     try {
       const res = await fetch(
-        `${URLS["manage-quotes"]}?pwd=${encodeURIComponent(pwd)}&staff_id=${profile.id}`
+        `${URLS["manage-quotes"]}`,
+        { headers: { "X-Staff-Token": token } }
       );
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Ошибка загрузки");
@@ -239,17 +229,18 @@ export default function StaffDashboard() {
     } finally {
       setQuotesLoading(false);
     }
-  }, [profile, adminPwd]);
+  }, [profile]);
 
   // ── Load contracts ──
   const loadContracts = useCallback(async () => {
     if (!profile) return;
-    const pwd = sessionStorage.getItem("staff_admin_pwd") ?? adminPwd;
+    const token = localStorage.getItem("staff_token") ?? "";
     setContractsLoading(true);
     setContractsError("");
     try {
       const res = await fetch(
-        `${URLS["get-contracts"]}?pwd=${encodeURIComponent(pwd)}&staff_id=${profile.id}`
+        `${URLS["get-contracts"]}?staff_id=${profile.id}`,
+        { headers: { "X-Staff-Token": token } }
       );
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Ошибка загрузки");
@@ -259,7 +250,7 @@ export default function StaffDashboard() {
     } finally {
       setContractsLoading(false);
     }
-  }, [profile, adminPwd]);
+  }, [profile]);
 
   // ── Switch tab → load data ──
   useEffect(() => {
@@ -292,7 +283,7 @@ export default function StaffDashboard() {
     if (!profile) return;
     if (!qTitle.trim()) { setQSaveError("Укажите название КП"); return; }
     if (qItems.some((it) => !it.name.trim())) { setQSaveError("Заполните названия всех позиций"); return; }
-    const pwd = sessionStorage.getItem("staff_admin_pwd") ?? adminPwd;
+    const token = localStorage.getItem("staff_token") ?? "";
     setQSaving(true);
     setQSaveError("");
     setQSaveOk(false);
@@ -312,11 +303,11 @@ export default function StaffDashboard() {
         total: qTotal,
         staff_id: profile.id,
       };
-      const res = await fetch(`${URLS["manage-quotes"]}?pwd=${encodeURIComponent(pwd)}`, {
+      const res = await fetch(`${URLS["manage-quotes"]}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Staff-Token": localStorage.getItem("staff_token") ?? "",
+          "X-Staff-Token": token,
         },
         body: JSON.stringify(body),
       });
@@ -390,23 +381,6 @@ export default function StaffDashboard() {
                 autoComplete="current-password"
               />
             </div>
-            <div>
-              <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1.5">
-                Системный пароль
-              </label>
-              <input
-                type="password"
-                value={adminPwd}
-                onChange={(e) => setAdminPwd(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleLogin()}
-                placeholder="••••••••"
-                className={iCls}
-                autoComplete="off"
-              />
-              <p className="text-gray-600 text-xs mt-1.5">
-                Системный пароль — уточните у руководителя
-              </p>
-            </div>
           </div>
 
           {authError && (
@@ -418,7 +392,7 @@ export default function StaffDashboard() {
 
           <button
             onClick={handleLogin}
-            disabled={authLoading || !email || !password || !adminPwd}
+            disabled={authLoading || !email || !password}
             className="neon-btn w-full py-3 rounded-sm text-sm flex items-center justify-center gap-2 disabled:opacity-40 mt-5"
           >
             {authLoading ? (

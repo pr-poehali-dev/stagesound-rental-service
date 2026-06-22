@@ -20,7 +20,7 @@ from openpyxl.utils import get_column_letter
 CORS = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET, PUT, DELETE, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Headers": "Content-Type, X-Staff-Token",
     "Content-Type": "application/json",
 }
 
@@ -148,7 +148,25 @@ def handler(event: dict, context) -> dict:
 
     qp = event.get("queryStringParameters") or {}
     pwd = qp.get("pwd", "")
-    if not auth(pwd):
+    staff_token = (event.get("headers") or {}).get("X-Staff-Token", "")
+
+    is_admin = auth(pwd)
+    token_staff_id = None
+    if not is_admin and staff_token:
+        conn_tmp = db()
+        cur_tmp = conn_tmp.cursor()
+        cur_tmp.execute(
+            f"SELECT s.id FROM {s()}.staff_sessions ss "
+            f"JOIN {s()}.staff st ON st.id = ss.staff_id "
+            f"WHERE ss.token = %s AND ss.expires_at > now() AND st.is_active = true",
+            (staff_token,)
+        )
+        row_tmp = cur_tmp.fetchone()
+        cur_tmp.close(); conn_tmp.close()
+        if row_tmp:
+            token_staff_id = row_tmp[0]
+
+    if not is_admin and token_staff_id is None:
         return {"statusCode": 401, "headers": CORS, "body": json.dumps({"error": "Unauthorized"})}
 
     method = event.get("httpMethod", "GET")

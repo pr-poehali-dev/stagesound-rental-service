@@ -37,6 +37,39 @@ def check_pwd(event: dict) -> bool:
     return pwd.lower() == expected.lower()
 
 
+def get_staff_by_token(token: str):
+    """Проверяет staff-токен, возвращает staff_id или None."""
+    if not token:
+        return None
+    conn = db()
+    cur = conn.cursor()
+    schema = os.environ.get("MAIN_DB_SCHEMA", "public")
+    cur.execute(
+        f"SELECT s.id FROM {schema}.staff_sessions ss "
+        f"JOIN {schema}.staff s ON s.id = ss.staff_id "
+        f"WHERE ss.token = %s AND ss.expires_at > now() AND s.is_active = true",
+        (token,)
+    )
+    row = cur.fetchone()
+    cur.close(); conn.close()
+    return row[0] if row else None
+
+
+def check_auth(event: dict):
+    """Возвращает (is_admin, staff_id). is_admin=True если пароль верный."""
+    qp = event.get("queryStringParameters") or {}
+    pwd = qp.get("pwd", "")
+    expected = os.environ.get("ADMIN_PASSWORD", "Qwert12345")
+    if pwd.lower() == expected.lower():
+        return True, None
+    # Пробуем staff-токен из заголовка
+    token = (event.get("headers") or {}).get("X-Staff-Token", "")
+    staff_id = get_staff_by_token(token)
+    if staff_id:
+        return False, staff_id
+    return False, None
+
+
 def send_telegram(text: str):
     try:
         token = os.environ["TELEGRAM_BOT_TOKEN"]
@@ -170,7 +203,8 @@ def handler(event: dict, context) -> dict:
         return {"statusCode": 200, "headers": CORS, "body": json.dumps({"ok": True, "contract_id": contract_id})}
 
     # === Защищённые операции ===
-    if not check_pwd(event):
+    is_admin, token_staff_id = check_auth(event)
+    if not is_admin and token_staff_id is None:
         return {"statusCode": 401, "headers": CORS, "body": json.dumps({"error": "Unauthorized"})}
 
     conn = db()
@@ -183,7 +217,7 @@ def handler(event: dict, context) -> dict:
             cur.execute(
                 f"SELECT id, token, title, items, days, delivery, delivery_price, extras, total, status, created_at, sent_at, access_pin, "
                 f"event_date, delivery_address, installation_time, installation_price, dismantling_time, dismantling_price, "
-                f"no_installation, delivery_time, pickup_time, discount, staff_id "
+                f"no_installation, delivery_time, pickup_time, discount, staff_id, use_coeff "
                 f"FROM {schema}.quotes WHERE id = %s", (int(qid_single),)
             )
             row = cur.fetchone()
@@ -192,14 +226,16 @@ def handler(event: dict, context) -> dict:
                 return {"statusCode": 404, "headers": CORS, "body": json.dumps({"error": "Not found"})}
             keys = ["id", "token", "title", "items", "days", "delivery", "delivery_price", "extras", "total", "status", "created_at", "sent_at", "access_pin",
                     "event_date", "delivery_address", "installation_time", "installation_price", "dismantling_time", "dismantling_price",
-                    "no_installation", "delivery_time", "pickup_time", "discount", "staff_id"]
+                    "no_installation", "delivery_time", "pickup_time", "discount", "staff_id", "use_coeff"]
             q = dict(zip(keys, row))
             q["created_at"] = str(q["created_at"])
             q["sent_at"] = str(q["sent_at"]) if q["sent_at"] else None
             return {"statusCode": 200, "headers": CORS, "body": json.dumps(q, default=str)}
 
-        # Список всех КП
-        staff_filter = qp.get("staff_id", "")
+        # Список всех КП — сотрудник видит только свои
+        staff_filter = qp.get("staff_id", "") or (str(token_staff_id) if token_staff_id else "")
+        if not is_admin and token_staff_id:
+            staff_filter = str(token_staff_id)
         where = f"WHERE q.staff_id = %s" if staff_filter else ""
         params = [int(staff_filter)] if staff_filter else []
         cur.execute(
@@ -233,7 +269,7 @@ def handler(event: dict, context) -> dict:
         body = json.loads(event.get("body") or "{}")
         tok = secrets.token_urlsafe(16)
         pin_val = (body.get("access_pin") or "").strip() or None
-        staff_id_val = body.get("staff_id") or None
+        staff_id_val = token_staff_id or body.get("staff_id") or None
         cur.execute(
             f"INSERT INTO {schema}.quotes (token, title, items, days, delivery, delivery_price, extras, total, status, event_date, delivery_address, installation_time, installation_price, dismantling_time, dismantling_price, no_installation, delivery_time, pickup_time, discount, access_pin, staff_id) "
             f"VALUES (%s,%s,%s,%s,%s,%s,%s,%s,'draft',%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id",
