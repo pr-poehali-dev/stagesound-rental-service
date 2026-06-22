@@ -125,6 +125,7 @@ export default function StaffDashboard() {
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [quotesLoading, setQuotesLoading] = useState(false);
   const [quotesError, setQuotesError] = useState("");
+  const [copiedToken, setCopiedToken] = useState<string | null>(null);
 
   // ── New quote form ──
   const [showQuoteForm, setShowQuoteForm] = useState(false);
@@ -717,6 +718,33 @@ export default function StaffDashboard() {
               </div>
             )}
 
+            {/* ── Заработок ── */}
+            {quotes.length > 0 && (() => {
+              const totalSum = quotes.reduce((s, q) => s + (q.total ?? 0), 0);
+              const earning = Math.round(totalSum * 0.05);
+              const sentSum = quotes.filter(q => ["sent","approved","contracted"].includes(q.status)).reduce((s, q) => s + (q.total ?? 0), 0);
+              const sentEarning = Math.round(sentSum * 0.05);
+              return (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
+                  <div className="glass-card rounded-sm p-4">
+                    <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">КП всего</p>
+                    <p className="font-oswald text-2xl font-bold text-white">{totalSum.toLocaleString("ru-RU")} ₽</p>
+                    <p className="text-gray-600 text-xs mt-0.5">{quotes.length} предложений</p>
+                  </div>
+                  <div className="glass-card rounded-sm p-4">
+                    <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Отправлено клиентам</p>
+                    <p className="font-oswald text-2xl font-bold text-white">{sentSum.toLocaleString("ru-RU")} ₽</p>
+                    <p className="text-gray-600 text-xs mt-0.5">{quotes.filter(q => ["sent","approved","contracted"].includes(q.status)).length} КП</p>
+                  </div>
+                  <div className="glass-card rounded-sm p-4 border border-green-500/20">
+                    <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Мой заработок (5%)</p>
+                    <p className="font-oswald text-2xl font-bold text-green-400">+{sentEarning.toLocaleString("ru-RU")} ₽</p>
+                    <p className="text-gray-600 text-xs mt-0.5">от отправленных КП · всего {earning.toLocaleString("ru-RU")} ₽</p>
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* ── Quotes list ── */}
             {quotesError && (
               <div className="glass-card rounded-sm p-4 mb-4 border border-red-500/20 flex items-center gap-2 text-red-400 text-sm">
@@ -744,54 +772,51 @@ export default function StaffDashboard() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-amber-500/10 text-left">
-                        <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider font-medium">
-                          Название
-                        </th>
-                        <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider font-medium">
-                          Статус
-                        </th>
-                        <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider font-medium text-right">
-                          Сумма
-                        </th>
-                        <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider font-medium">
-                          Создано
-                        </th>
+                        <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider font-medium">Название</th>
+                        <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider font-medium">Статус</th>
+                        <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider font-medium text-right">Сумма</th>
+                        <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider font-medium text-right">Заработок</th>
+                        <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider font-medium">Создано</th>
                         <th className="px-4 py-3" />
                       </tr>
                     </thead>
                     <tbody>
-                      {quotes.map((q, i) => (
-                        <tr
-                          key={q.id}
-                          className={`border-b border-amber-500/5 transition-colors ${
-                            i % 2 === 0 ? "" : "bg-white/[0.01]"
-                          }`}
-                        >
-                          <td className="px-4 py-3 text-white font-medium max-w-[220px] truncate">
-                            {q.title}
-                          </td>
+                      {quotes.map((q, i) => {
+                        const earning = Math.round((q.total ?? 0) * 0.05);
+                        const link = q.token ? `${window.location.origin}/quote/${q.token}` : null;
+                        const isCopied = copiedToken === q.token;
+                        return (
+                        <tr key={q.id} className={`border-b border-amber-500/5 transition-colors ${i % 2 === 0 ? "" : "bg-white/[0.01]"}`}>
+                          <td className="px-4 py-3 text-white font-medium max-w-[180px] truncate">{q.title}</td>
                           <td className="px-4 py-3">{quoteBadge(q.status)}</td>
-                          <td className="px-4 py-3 text-right font-oswald font-bold neon-text">
+                          <td className="px-4 py-3 text-right font-oswald font-bold neon-text whitespace-nowrap">
                             {(q.total ?? 0).toLocaleString("ru-RU")} ₽
                           </td>
-                          <td className="px-4 py-3 text-gray-400 text-xs">
-                            {fmt(q.created_at)}
+                          <td className="px-4 py-3 text-right whitespace-nowrap">
+                            <span className="text-green-400 font-bold text-sm">+{earning.toLocaleString("ru-RU")} ₽</span>
+                            <span className="text-gray-600 text-xs ml-1">5%</span>
                           </td>
+                          <td className="px-4 py-3 text-gray-400 text-xs">{fmt(q.created_at)}</td>
                           <td className="px-4 py-3">
-                            {q.token && (
-                              <a
-                                href={`/quote/${q.token}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="flex items-center gap-1 text-amber-500 hover:text-amber-400 text-xs transition-colors whitespace-nowrap"
-                              >
-                                <Icon name="ExternalLink" size={12} />
-                                Открыть ссылку
-                              </a>
+                            {link && (
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => { navigator.clipboard.writeText(link); setCopiedToken(q.token); setTimeout(() => setCopiedToken(null), 2000); }}
+                                  className={`flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-sm border transition-colors whitespace-nowrap ${isCopied ? "border-green-500/40 text-green-400" : "border-amber-500/30 text-amber-500 hover:bg-amber-500/10"}`}
+                                >
+                                  <Icon name={isCopied ? "Check" : "Copy"} size={11} />
+                                  {isCopied ? "Скопировано" : "Скопировать ссылку"}
+                                </button>
+                                <a href={link} target="_blank" rel="noopener noreferrer"
+                                  className="text-gray-500 hover:text-amber-500 transition-colors">
+                                  <Icon name="ExternalLink" size={13} />
+                                </a>
+                              </div>
                             )}
                           </td>
                         </tr>
-                      ))}
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

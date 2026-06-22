@@ -205,7 +205,7 @@ export default function Admin() {
   const [expenseSaving, setExpenseSaving] = useState(false);
 
   // Сотрудники
-  type StaffMember = { id: number; name: string; email: string; role: string; is_active: boolean; created_at: string; };
+  type StaffMember = { id: number; name: string; email: string; role: string; is_active: boolean; created_at: string; quotes_total?: number; quotes_count?: number; };
   const [staffList, setStaffList] = useState<StaffMember[]>([]);
   const [staffLoading, setStaffLoading] = useState(false);
   const [newStaff, setNewStaff] = useState({ name: "", email: "", password: "" });
@@ -216,7 +216,28 @@ export default function Admin() {
   const loadStaff = async () => {
     setStaffLoading(true);
     const res = await fetch(`${URLS["staff-auth"]}?admin=1&pwd=${encodeURIComponent(password)}`);
-    if (res.ok) setStaffList(await res.json());
+    if (!res.ok) { setStaffLoading(false); return; }
+    const members: StaffMember[] = await res.json();
+    // Загружаем все КП и считаем по каждому сотруднику
+    const qRes = await fetch(`${URLS["manage-quotes"]}?pwd=${encodeURIComponent(password)}`);
+    if (qRes.ok) {
+      const allQuotes: { staff_id: number | null; total: number; status: string }[] = await qRes.json();
+      const statsMap: Record<number, { total: number; count: number }> = {};
+      for (const q of allQuotes) {
+        if (!q.staff_id) continue;
+        if (!statsMap[q.staff_id]) statsMap[q.staff_id] = { total: 0, count: 0 };
+        // Считаем только отправленные/согласованные/договор
+        if (["sent","approved","contracted"].includes(q.status)) {
+          statsMap[q.staff_id].total += q.total ?? 0;
+          statsMap[q.staff_id].count += 1;
+        }
+      }
+      for (const m of members) {
+        m.quotes_total = statsMap[m.id]?.total ?? 0;
+        m.quotes_count = statsMap[m.id]?.count ?? 0;
+      }
+    }
+    setStaffList(members);
     setStaffLoading(false);
   };
 
@@ -874,25 +895,33 @@ export default function Admin() {
                   <tr className="border-b border-amber-500/10 text-left">
                     <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider">Имя</th>
                     <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider">Email</th>
-                    <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider">Дата</th>
+                    <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider text-right">КП (отправл.)</th>
+                    <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider text-right">Сумма КП</th>
+                    <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider text-right">Заработок 5%</th>
                     <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider">Статус</th>
-                    <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider">Кабинет</th>
                     <th className="px-4 py-3"></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {staffList.map((m, i) => (
+                  {staffList.map((m, i) => {
+                    const earning = Math.round((m.quotes_total ?? 0) * 0.05);
+                    return (
                     <tr key={m.id} className={`border-b border-amber-500/5 ${i % 2 === 0 ? "" : "bg-white/[0.01]"}`}>
-                      <td className="px-4 py-3 text-white font-medium">{m.name}</td>
-                      <td className="px-4 py-3 text-gray-400">{m.email}</td>
-                      <td className="px-4 py-3 text-gray-500 text-xs">{formatDate(m.created_at)}</td>
+                      <td className="px-4 py-3 text-white font-medium whitespace-nowrap">{m.name}</td>
+                      <td className="px-4 py-3 text-gray-400 text-xs">{m.email}</td>
+                      <td className="px-4 py-3 text-right text-gray-400 text-xs">
+                        {m.quotes_count ?? 0} шт.
+                      </td>
+                      <td className="px-4 py-3 text-right font-oswald font-bold neon-text whitespace-nowrap">
+                        {(m.quotes_total ?? 0).toLocaleString("ru-RU")} ₽
+                      </td>
+                      <td className="px-4 py-3 text-right whitespace-nowrap">
+                        <span className="text-green-400 font-bold">+{earning.toLocaleString("ru-RU")} ₽</span>
+                      </td>
                       <td className="px-4 py-3">
                         {m.is_active
                           ? <span className="text-xs text-green-400 border border-green-500/30 px-2 py-0.5 rounded-sm">Активен</span>
                           : <span className="text-xs text-red-400 border border-red-500/30 px-2 py-0.5 rounded-sm">Отключён</span>}
-                      </td>
-                      <td className="px-4 py-3">
-                        <a href="/staff" target="_blank" className="text-xs text-amber-500/70 hover:text-amber-500 underline">/staff</a>
                       </td>
                       <td className="px-4 py-3">
                         <button onClick={() => toggleStaffActive(m.id, !m.is_active)}
@@ -901,8 +930,29 @@ export default function Admin() {
                         </button>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
+                {/* Итого */}
+                {staffList.length > 1 && (
+                  <tfoot>
+                    <tr className="border-t border-amber-500/20 bg-amber-500/5">
+                      <td className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider font-bold" colSpan={2}>Итого</td>
+                      <td className="px-4 py-3 text-right text-gray-400 text-xs font-bold">
+                        {staffList.reduce((s, m) => s + (m.quotes_count ?? 0), 0)} шт.
+                      </td>
+                      <td className="px-4 py-3 text-right font-oswald font-bold neon-text whitespace-nowrap">
+                        {staffList.reduce((s, m) => s + (m.quotes_total ?? 0), 0).toLocaleString("ru-RU")} ₽
+                      </td>
+                      <td className="px-4 py-3 text-right whitespace-nowrap">
+                        <span className="text-green-400 font-bold">
+                          +{Math.round(staffList.reduce((s, m) => s + (m.quotes_total ?? 0), 0) * 0.05).toLocaleString("ru-RU")} ₽
+                        </span>
+                      </td>
+                      <td colSpan={2} />
+                    </tr>
+                  </tfoot>
+                )}
               </table>
             </div>
           )}
