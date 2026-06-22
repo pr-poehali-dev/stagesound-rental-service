@@ -51,7 +51,7 @@ const DEFAULT_EXTRAS: ExtraService[] = [
 
 type EqVariant = { label: string; price: number };
 type Eq = { id: number; name: string; category: string; price: number; unit: string; image?: string; variants?: EqVariant[] };
-type CartItem = { id: number; qty: number; customPrice?: number; customName?: string; isCustom?: boolean; variantLabel?: string; variantPrice?: number };
+type CartItem = { id: number; qty: number; customPrice?: number; customName?: string; isCustom?: boolean; variantLabel?: string; variantPrice?: number; coeff?: number };
 
 const iCls = "w-full bg-transparent border border-amber-500/20 rounded-sm px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/50";
 
@@ -124,6 +124,9 @@ export default function AdminQuote() {
 
   // Выбор варианта (id позиции с вариантами, которую раскрыли)
   const [expandedVariantId, setExpandedVariantId] = useState<number | null>(null);
+
+  // Режим расчёта: дни или коэффициент
+  const [useCoeff, setUseCoeff] = useState(false);
 
   const currentCity = CITIES[cityKey];
   const currentZones = currentCity.zones;
@@ -208,27 +211,29 @@ export default function AdminQuote() {
             setDeliveryTime(delTime);
             setPickupTime(pickTime);
 
+            // Восстанавливаем режим расчёта
+            const savedUseCoeff = Boolean(q.use_coeff);
+            setUseCoeff(savedUseCoeff);
+
             // Восстанавливаем корзину из items
-            const items = (q.items as {id:number|null;name:string;price:number;unit:string;qty:number}[]) || [];
+            const items = (q.items as {id:number|null;name:string;price:number;unit:string;qty:number;coeff?:number}[]) || [];
             let counter = -1;
             const cartItems: CartItem[] = [];
             const fakeEq: Eq[] = [];
             for (const item of items) {
+              const itemCoeff = item.coeff ?? 1;
               if (item.id === null || item.id < 0) {
-                // кастомная позиция
                 const baseName = item.name.replace(/\s*\([^)]+\)$/, "").trim();
-                cartItems.push({ id: counter, qty: item.qty, isCustom: true, customName: baseName, customPrice: item.price });
+                cartItems.push({ id: counter, qty: item.qty, isCustom: true, customName: baseName, customPrice: item.price, coeff: itemCoeff });
                 fakeEq.push({ id: counter, name: baseName, category: "Другое", price: item.price, unit: item.unit });
                 counter--;
               } else {
-                // Парсим вариант из названия вида "Название (Вариант)"
-                // Ищем совпадение с вариантами из каталога
                 const catalogItem = catalog.find(e => e.id === item.id);
                 const variantMatch = item.name.match(/\(([^)]+)\)$/);
                 if (variantMatch && catalogItem?.variants?.find(v => v.label === variantMatch[1])) {
-                  cartItems.push({ id: item.id, qty: item.qty, variantLabel: variantMatch[1], variantPrice: item.price });
+                  cartItems.push({ id: item.id, qty: item.qty, variantLabel: variantMatch[1], variantPrice: item.price, coeff: itemCoeff });
                 } else {
-                  cartItems.push({ id: item.id, qty: item.qty, customPrice: item.price });
+                  cartItems.push({ id: item.id, qty: item.qty, customPrice: item.price, coeff: itemCoeff });
                 }
               }
             }
@@ -315,8 +320,9 @@ export default function AdminQuote() {
     cart.reduce((sum, item) => {
       const eq = equipment.find((e) => e.id === item.id);
       const price = item.customPrice !== undefined ? item.customPrice : (item.variantPrice !== undefined ? item.variantPrice : eq?.price ?? 0);
-      return sum + (price * item.qty * days);
-    }, 0), [cart, days, equipment]);
+      const multiplier = useCoeff ? (item.coeff ?? 1) : days;
+      return sum + (price * item.qty * multiplier);
+    }, 0), [cart, days, equipment, useCoeff]);
 
   const discountAmount = discount > 0 ? Math.round(equipmentTotalRaw * discount / 100) : 0;
   const equipmentTotal = equipmentTotalRaw - discountAmount;
@@ -338,7 +344,7 @@ export default function AdminQuote() {
       const eq = equipment.find((e) => e.id === c.id)!;
       const price = c.customPrice !== undefined ? c.customPrice : (c.variantPrice !== undefined ? c.variantPrice : eq.price);
       const name = c.variantLabel ? `${eq.name} (${c.variantLabel})` : eq.name;
-      return { id: c.isCustom ? null : eq.id, name, price, unit: eq.unit, qty: c.qty };
+      return { id: c.isCustom ? null : eq.id, name, price, unit: eq.unit, qty: c.qty, coeff: useCoeff ? (c.coeff ?? 1) : undefined };
     });
     const extrasData = selectedExtras.map((id) => {
       const s = extraServices.find((s) => s.id === id)!;
@@ -347,7 +353,8 @@ export default function AdminQuote() {
     const deliveryName = deliveryZoneIdx === 0 ? "Без доставки" : `${currentCity.label} — ${deliveryZone.name}`;
     return {
       title: title || "КП без названия",
-      items, days,
+      items, days: useCoeff ? 1 : days,
+      use_coeff: useCoeff,
       delivery: deliveryName,
       delivery_price: deliveryTotal,
       extras: extrasData, total,
@@ -617,7 +624,21 @@ export default function AdminQuote() {
 
               {/* Корзина */}
               <div className="glass-card rounded-sm p-4">
-                <h3 className="text-xs text-gray-500 uppercase tracking-wider mb-3">Выбранное оборудование</h3>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-xs text-gray-500 uppercase tracking-wider">Выбранное оборудование</h3>
+                  {/* Тумблер Дни / Коэффициент */}
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs transition-colors ${!useCoeff ? "text-amber-500" : "text-gray-600"}`}>Дни</span>
+                    <button
+                      onClick={() => setUseCoeff(v => !v)}
+                      className={`relative w-10 h-5 rounded-full border transition-colors ${useCoeff ? "border-amber-500 bg-amber-500/20" : "border-gray-600 bg-gray-800"}`}
+                    >
+                      <span className={`absolute top-0.5 w-4 h-4 rounded-full transition-all ${useCoeff ? "left-5 bg-amber-500" : "left-0.5 bg-gray-500"}`} />
+                    </button>
+                    <span className={`text-xs transition-colors ${useCoeff ? "text-amber-500" : "text-gray-600"}`}>Коэфф.</span>
+                  </div>
+                </div>
+
                 {cart.length === 0 ? (
                   <p className="text-gray-600 text-sm text-center py-4">Добавьте позиции из каталога</p>
                 ) : (
@@ -628,12 +649,15 @@ export default function AdminQuote() {
                       const price = c.customPrice !== undefined ? c.customPrice : (c.variantPrice !== undefined ? c.variantPrice : eq.price);
                       const ck = cartKey(c.id, c.variantLabel);
                       const isEditing = editingPriceId !== null && cartKey(editingPriceId, c.variantLabel) === ck;
+                      const coeff = c.coeff ?? 1;
+                      const multiplier = useCoeff ? coeff : days;
+                      const lineTotal = price * c.qty * multiplier;
                       return (
                         <div key={ck} className="text-sm">
                           <div className="flex items-center gap-2">
                             <div className="flex-1 min-w-0">
                               <p className="text-gray-300 truncate">{eq.name}{c.variantLabel && <span className="text-gray-500 ml-1">({c.variantLabel})</span>}</p>
-                              <div className="flex items-center gap-1.5 mt-0.5">
+                              <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                                 {isEditing ? (
                                   <input
                                     type="number"
@@ -651,10 +675,28 @@ export default function AdminQuote() {
                                     <Icon name="Pencil" size={10} />
                                   </button>
                                 )}
-                                <span className="text-gray-600 text-xs">× {c.qty} × {days} дн.</span>
+                                <span className="text-gray-600 text-xs">× {c.qty}</span>
+                                {useCoeff ? (
+                                  <span className="flex items-center gap-0.5 text-xs text-gray-600">
+                                    × коэфф.
+                                    <input
+                                      type="number"
+                                      step="0.1"
+                                      min="0.1"
+                                      value={coeff}
+                                      onChange={e => {
+                                        const v = Math.max(0.1, Number(e.target.value) || 1);
+                                        setCart(prev => prev.map(x => cartKey(x.id, x.variantLabel) === ck ? { ...x, coeff: v } : x));
+                                      }}
+                                      className="w-14 bg-transparent border border-amber-500/20 rounded-sm px-1.5 py-0.5 text-xs text-amber-400 text-center focus:outline-none focus:border-amber-500/50 ml-0.5"
+                                    />
+                                  </span>
+                                ) : (
+                                  <span className="text-gray-600 text-xs">× {days} дн.</span>
+                                )}
                               </div>
                             </div>
-                            <span className="text-white font-bold shrink-0">{(price * c.qty * days).toLocaleString()} ₽</span>
+                            <span className="text-white font-bold shrink-0">{lineTotal.toLocaleString()} ₽</span>
                             <button onClick={() => setQty(eq.id, 0, c.variantLabel)} className="text-gray-600 hover:text-red-400 transition-colors shrink-0">
                               <Icon name="X" size={14} />
                             </button>
@@ -665,15 +707,19 @@ export default function AdminQuote() {
                   </div>
                 )}
 
-                {/* Дней */}
-                <label className="text-xs text-gray-500 uppercase tracking-wider block mb-1 mt-2">Дней аренды</label>
-                <div className="flex items-center gap-3 mb-4">
-                  <button onClick={() => setDays((d) => Math.max(1, d - 1))}
-                    className="w-8 h-8 border border-amber-500/30 rounded-sm text-amber-500 hover:bg-amber-500/10 flex items-center justify-center transition-colors">−</button>
-                  <span className="text-white font-bold text-lg w-8 text-center">{days}</span>
-                  <button onClick={() => setDays((d) => d + 1)}
-                    className="w-8 h-8 border border-amber-500/30 rounded-sm text-amber-500 hover:bg-amber-500/10 flex items-center justify-center transition-colors">+</button>
-                </div>
+                {/* Дней (только в режиме дней) */}
+                {!useCoeff && (
+                  <>
+                    <label className="text-xs text-gray-500 uppercase tracking-wider block mb-1 mt-2">Дней аренды</label>
+                    <div className="flex items-center gap-3 mb-4">
+                      <button onClick={() => setDays((d) => Math.max(1, d - 1))}
+                        className="w-8 h-8 border border-amber-500/30 rounded-sm text-amber-500 hover:bg-amber-500/10 flex items-center justify-center transition-colors">−</button>
+                      <span className="text-white font-bold text-lg w-8 text-center">{days}</span>
+                      <button onClick={() => setDays((d) => d + 1)}
+                        className="w-8 h-8 border border-amber-500/30 rounded-sm text-amber-500 hover:bg-amber-500/10 flex items-center justify-center transition-colors">+</button>
+                    </div>
+                  </>
+                )}
 
                 {/* Скидка */}
                 {cart.length > 0 && (

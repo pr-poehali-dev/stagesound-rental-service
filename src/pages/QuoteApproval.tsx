@@ -10,7 +10,7 @@ const SIGN_URL    = URLS["sign-contract"];
 const GEN_URL     = URLS["generate-contract"];
 
 // ── Типы ────────────────────────────────────────────────────────────────────
-type QuoteItem  = { id: number; name: string; price: number; unit: string; qty: number };
+type QuoteItem  = { id: number; name: string; price: number; unit: string; qty: number; coeff?: number };
 type QuoteExtra = { id: string; name: string; price: number };
 type Quote = {
   id: number; token: string; title: string; items: QuoteItem[];
@@ -22,6 +22,7 @@ type Quote = {
   no_installation?: boolean;
   delivery_time?: string; pickup_time?: string;
   discount?: number;
+  use_coeff?: boolean;
 };
 
 // ── Вспомогательные компоненты ───────────────────────────────────────────────
@@ -375,7 +376,7 @@ export default function QuoteApproval() {
   // ────────────────────────────────────────────────────────────────────────
   // Вспомогательные значения
   const q                   = quote!;
-  const equipmentTotalRaw   = quote ? quote.items.reduce((s, i) => s + i.price * i.qty * quote.days, 0) : 0;
+  const equipmentTotalRaw   = quote ? quote.items.reduce((s, i) => s + i.price * i.qty * (quote.use_coeff ? (i.coeff ?? 1) : quote.days), 0) : 0;
   const discountPct         = quote?.discount || 0;
   const discountAmt         = discountPct > 0 ? Math.round(equipmentTotalRaw * discountPct / 100) : 0;
   const equipmentTotal      = equipmentTotalRaw - discountAmt;
@@ -891,17 +892,28 @@ export default function QuoteApproval() {
 
           {/* Оборудование */}
           <div className="space-y-3 mb-4">
-            {q.items.map((item, idx) => (
+            {q.items.map((item, idx) => {
+              const multiplier = q.use_coeff ? (item.coeff ?? 1) : q.days;
+              const lineTotal = item.price * item.qty * multiplier;
+              return (
               <div key={idx} className="flex justify-between items-start gap-4">
                 <div>
                   <p className="text-gray-300 text-sm">{item.name}</p>
-                  <p className="text-gray-600 text-xs">{item.qty} шт. × {item.price.toLocaleString()} ₽/{item.unit} × {q.days} дн.</p>
+                  {q.use_coeff ? (
+                    <p className="text-gray-600 text-xs">
+                      {item.qty} шт. × {item.price.toLocaleString()} ₽/{item.unit}
+                      {(item.coeff ?? 1) !== 1 && <span className="text-amber-500/70 ml-1">× коэфф. {item.coeff ?? 1}</span>}
+                    </p>
+                  ) : (
+                    <p className="text-gray-600 text-xs">{item.qty} шт. × {item.price.toLocaleString()} ₽/{item.unit} × {q.days} дн.</p>
+                  )}
                 </div>
                 <span className="text-white font-bold text-sm shrink-0">
-                  {(item.price * item.qty * q.days).toLocaleString()} ₽
+                  {lineTotal.toLocaleString()} ₽
                 </span>
               </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* Доп. услуги */}
@@ -947,7 +959,7 @@ export default function QuoteApproval() {
           <div className="border-t border-amber-500/20 pt-3 space-y-1">
             {discountPct > 0 && equipmentTotalRaw > 0 && (
               <div className="flex justify-between text-sm text-gray-500 line-through">
-                <span>Оборудование ({q.days} дн.)</span><span>{equipmentTotalRaw.toLocaleString()} ₽</span>
+                <span>Оборудование{!q.use_coeff ? ` (${q.days} дн.)` : ""}</span><span>{equipmentTotalRaw.toLocaleString()} ₽</span>
               </div>
             )}
             {discountPct > 0 && (
@@ -957,7 +969,7 @@ export default function QuoteApproval() {
             )}
             {equipmentTotal > 0 && (
               <div className="flex justify-between text-sm text-gray-400">
-                <span>Оборудование{discountPct > 0 ? " (со скидкой)" : ` (${q.days} дн.)`}</span><span>{equipmentTotal.toLocaleString()} ₽</span>
+                <span>Оборудование{discountPct > 0 ? " (со скидкой)" : (!q.use_coeff ? ` (${q.days} дн.)` : "")}</span><span>{equipmentTotal.toLocaleString()} ₽</span>
               </div>
             )}
             {extrasTotal > 0 && (

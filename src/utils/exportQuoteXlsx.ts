@@ -1,12 +1,13 @@
 import * as XLSX from "xlsx";
 
-interface QuoteItem { name: string; price: number; unit: string; qty: number }
+interface QuoteItem { name: string; price: number; unit: string; qty: number; coeff?: number }
 interface QuoteExtra { name: string; price: number }
 
 interface QuoteData {
   title: string;
   items: QuoteItem[];
   days: number;
+  use_coeff?: boolean;
   delivery: string;
   delivery_price: number;
   delivery_address?: string;
@@ -26,46 +27,52 @@ interface QuoteData {
 export function exportQuoteToXlsx(q: QuoteData) {
   const wb = XLSX.utils.book_new();
   const rows: (string | number)[][] = [];
+  const useCoeff = Boolean(q.use_coeff);
 
   // Заголовок
-  rows.push(["КОММЕРЧЕСКОЕ ПРЕДЛОЖЕНИЕ", ""]);
-  rows.push([q.title || "", ""]);
-  rows.push([""]);
+  rows.push(["КОММЕРЧЕСКОЕ ПРЕДЛОЖЕНИЕ", "", "", "", "", ""]);
+  rows.push([q.title || "", "", "", "", "", ""]);
+  rows.push(["", "", "", "", "", ""]);
 
   // Реквизиты мероприятия
   if (q.event_date) {
     const d = new Date(q.event_date);
     const formatted = d.toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" });
-    rows.push(["Дата мероприятия:", formatted]);
+    rows.push(["Дата мероприятия:", formatted, "", "", "", ""]);
   }
-  if (q.delivery_address) rows.push(["Адрес:", q.delivery_address]);
-  if (q.delivery && q.delivery !== "Без доставки") rows.push(["Зона доставки:", q.delivery]);
-  if (q.delivery_time) rows.push(["Привоз оборудования:", q.delivery_time]);
-  if (q.pickup_time) rows.push(["Увоз оборудования:", q.pickup_time]);
+  if (q.delivery_address) rows.push(["Адрес:", q.delivery_address, "", "", "", ""]);
+  if (q.delivery && q.delivery !== "Без доставки") rows.push(["Зона доставки:", q.delivery, "", "", "", ""]);
+  if (q.delivery_time) rows.push(["Привоз оборудования:", q.delivery_time, "", "", "", ""]);
+  if (q.pickup_time) rows.push(["Увоз оборудования:", q.pickup_time, "", "", "", ""]);
   if (q.no_installation) {
-    rows.push(["Монтаж и демонтаж:", "Не требуется"]);
+    rows.push(["Монтаж и демонтаж:", "Не требуется", "", "", "", ""]);
   } else {
-    if (q.installation_time) rows.push(["Монтаж:", q.installation_time]);
-    if (q.dismantling_time) rows.push(["Демонтаж:", q.dismantling_time]);
+    if (q.installation_time) rows.push(["Монтаж:", q.installation_time, "", "", "", ""]);
+    if (q.dismantling_time) rows.push(["Демонтаж:", q.dismantling_time, "", "", "", ""]);
   }
-  rows.push([""]);
+  rows.push(["", "", "", "", "", ""]);
 
-  // Состав аренды
-  rows.push(["Позиция", "Кол-во", "Ед.", "Цена за ед., ₽", "Дней", "Сумма, ₽"]);
+  // Заголовок таблицы
+  if (useCoeff) {
+    rows.push(["Позиция", "Кол-во", "Ед.", "Стоимость, ₽", "Коэф-нт", "Итого, ₽"]);
+  } else {
+    rows.push(["Позиция", "Кол-во", "Ед.", "Стоимость, ₽", "Дней", "Итого, ₽"]);
+  }
 
   const discountPct = q.discount || 0;
   let equipmentRaw = 0;
 
   for (const item of q.items) {
-    const lineTotal = item.price * item.qty * q.days;
+    const multiplier = useCoeff ? (item.coeff ?? 1) : q.days;
+    const lineTotal = item.price * item.qty * multiplier;
     equipmentRaw += lineTotal;
-    rows.push([item.name, item.qty, item.unit, item.price, q.days, lineTotal]);
+    rows.push([item.name, item.qty, item.unit, item.price, multiplier, lineTotal]);
   }
 
   // Доп. услуги
   let extrasTotal = 0;
   if (q.extras.length > 0) {
-    rows.push([""]);
+    rows.push(["", "", "", "", "", ""]);
     rows.push(["Дополнительные услуги", "", "", "", "", ""]);
     for (const ex of q.extras) {
       extrasTotal += ex.price;
@@ -76,16 +83,12 @@ export function exportQuoteToXlsx(q: QuoteData) {
   // Монтаж/демонтаж стоимость
   let installTotal = 0;
   if (!q.no_installation) {
-    if (q.installation_price && q.installation_price > 0) {
-      installTotal += q.installation_price;
-    }
-    if (q.dismantling_price && q.dismantling_price > 0) {
-      installTotal += q.dismantling_price;
-    }
+    if (q.installation_price && q.installation_price > 0) installTotal += q.installation_price;
+    if (q.dismantling_price && q.dismantling_price > 0) installTotal += q.dismantling_price;
   }
 
   // Итоги
-  rows.push([""]);
+  rows.push(["", "", "", "", "", ""]);
   const discountAmt = discountPct > 0 ? Math.round(equipmentRaw * discountPct / 100) : 0;
   const equipmentTotal = equipmentRaw - discountAmt;
 
@@ -105,7 +108,7 @@ export function exportQuoteToXlsx(q: QuoteData) {
 
   // Ширина колонок
   ws["!cols"] = [
-    { wch: 46 }, { wch: 8 }, { wch: 6 }, { wch: 16 }, { wch: 7 }, { wch: 14 },
+    { wch: 44 }, { wch: 8 }, { wch: 6 }, { wch: 16 }, { wch: 9 }, { wch: 14 },
   ];
 
   XLSX.utils.book_append_sheet(wb, ws, "КП");
