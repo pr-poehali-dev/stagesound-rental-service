@@ -10,6 +10,9 @@ import hashlib
 import json
 import os
 import secrets
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 import psycopg2
 
 CORS = {
@@ -34,6 +37,52 @@ def h(pwd: str) -> str:
 
 def check_admin(pwd: str) -> bool:
     return pwd.lower() == os.environ.get("ADMIN_PASSWORD", "").lower()
+
+
+def send_staff_welcome(to_email: str, name: str, password: str):
+    smtp_user = os.environ.get("SMTP_USER", "")
+    smtp_pass = os.environ.get("SMTP_PASSWORD", "")
+    if not smtp_user or not smtp_pass:
+        return
+    site_url = os.environ.get("SITE_URL", "https://global.promo")
+    html = f"""<!DOCTYPE html>
+<html lang="ru"><head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#0a0a0a;font-family:Arial,sans-serif;">
+  <div style="max-width:560px;margin:40px auto;background:#111;border:1px solid #222;border-radius:6px;overflow:hidden;">
+    <div style="background:#161616;padding:24px 32px;border-bottom:2px solid #f59e0b;">
+      <p style="color:#f59e0b;font-size:11px;letter-spacing:2px;text-transform:uppercase;margin:0 0 4px;">Global Renta</p>
+      <h1 style="color:#fff;font-size:20px;margin:0;font-weight:bold;">Добро пожаловать в команду!</h1>
+    </div>
+    <div style="padding:28px 32px;">
+      <p style="color:#ccc;font-size:15px;margin:0 0 16px;">Здравствуйте, <strong style="color:#fff;">{name}</strong>!</p>
+      <p style="color:#999;font-size:13px;line-height:1.7;margin:0 0 20px;">
+        Для вас создан аккаунт сотрудника в системе Global Renta. Используйте данные ниже для входа.
+      </p>
+      <div style="background:#1a1a1a;border:1px solid rgba(245,158,11,0.25);border-radius:4px;padding:18px 22px;margin-bottom:24px;">
+        <p style="color:#f59e0b;font-size:11px;text-transform:uppercase;letter-spacing:1px;margin:0 0 12px;">Данные для входа</p>
+        <p style="color:#ccc;font-size:13px;margin:0 0 6px;">📧 <strong style="color:#fff;">Email:</strong> {to_email}</p>
+        <p style="color:#ccc;font-size:13px;margin:0;">🔑 <strong style="color:#fff;">Пароль:</strong> {password}</p>
+      </div>
+      <div style="text-align:center;margin-top:4px;">
+        <a href="{site_url}/staff"
+           style="display:inline-block;background:#f59e0b;color:#000;font-weight:bold;font-size:14px;padding:12px 32px;border-radius:4px;text-decoration:none;">
+          Войти в личный кабинет
+        </a>
+      </div>
+      <p style="color:#555;font-size:11px;margin:24px 0 0;text-align:center;">
+        Вопросы? Пишите: <a href="mailto:info@global.promo" style="color:#f59e0b;">info@global.promo</a>
+      </p>
+    </div>
+  </div>
+</body></html>"""
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = "Добро пожаловать в Global Renta — данные для входа"
+    msg["From"] = f"Global Renta <{smtp_user}>"
+    msg["To"] = to_email
+    msg.attach(MIMEText(html, "html", "utf-8"))
+    with smtplib.SMTP("mail.hosting.reg.ru", 587, timeout=15) as srv:
+        srv.ehlo(); srv.starttls(); srv.login(smtp_user, smtp_pass)
+        srv.sendmail(smtp_user, to_email, msg.as_string())
 
 
 def get_staff_by_token(cur, token: str):
@@ -117,6 +166,10 @@ def handler(event: dict, context) -> dict:
             )
             new_id = cur.fetchone()[0]
             conn.commit()
+            try:
+                send_staff_welcome(email, name, password)
+            except Exception:
+                pass  # email не критичен — аккаунт уже создан
             return {"statusCode": 201, "headers": CORS, "body": json.dumps({"ok": True, "id": new_id}, ensure_ascii=False)}
 
         # ── Список сотрудников (admin) ──

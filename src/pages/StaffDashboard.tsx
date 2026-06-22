@@ -165,7 +165,7 @@ export default function StaffDashboard() {
   }, [profile]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── computed quote total ──
-  const qTotal = qItems.reduce((sum, it) => sum + it.price * it.qty, 0);
+  const qTotal = qItems.reduce((sum, it) => sum + it.price * it.qty * qDays, 0);
 
   // ── Login ──
   const handleLogin = async () => {
@@ -307,7 +307,7 @@ export default function StaffDashboard() {
           price: it.price,
           qty: it.qty,
           unit: it.unit,
-          subtotal: it.price * it.qty,
+          subtotal: it.price * it.qty * qDays,
         })),
         total: qTotal,
         staff_id: profile.id,
@@ -689,11 +689,18 @@ export default function StaffDashboard() {
 
                 {/* Total */}
                 <div className="flex justify-end mb-5">
-                  <div className="glass-card rounded-sm px-5 py-3 border border-amber-500/10">
-                    <span className="text-gray-500 text-sm mr-3">Итого:</span>
-                    <span className="font-oswald text-xl font-bold neon-text">
-                      {qTotal.toLocaleString("ru-RU")} ₽
-                    </span>
+                  <div className="glass-card rounded-sm px-5 py-3 border border-amber-500/10 text-right space-y-0.5">
+                    {qDays > 1 && (
+                      <p className="text-gray-600 text-xs">
+                        × {qDays} {qDays === 1 ? "день" : qDays < 5 ? "дня" : "дней"} аренды
+                      </p>
+                    )}
+                    <div>
+                      <span className="text-gray-500 text-sm mr-3">Итого:</span>
+                      <span className="font-oswald text-xl font-bold neon-text">
+                        {qTotal.toLocaleString("ru-RU")} ₽
+                      </span>
+                    </div>
                   </div>
                 </div>
 
