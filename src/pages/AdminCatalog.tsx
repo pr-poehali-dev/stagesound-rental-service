@@ -21,6 +21,9 @@ const EMPTY_ITEM: Omit<EquipmentItem, "id"> = {
 };
 
 const BASE_URL = (func2url as Record<string, string>)["manage-catalog"];
+const QUOTES_URL = (func2url as Record<string, string>)["manage-quotes"];
+
+type CustomQuoteItem = { name: string; price: number; unit: string; quote_id: number; quote_title: string; created_at: string };
 
 export default function AdminCatalog() {
   const [password, setPassword] = useState(() => sessionStorage.getItem("adminPwd") || "");
@@ -28,7 +31,10 @@ export default function AdminCatalog() {
   const [authError, setAuthError] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const [tab, setTab] = useState<"equipment" | "categories" | "subcategories">("equipment");
+  const [tab, setTab] = useState<"equipment" | "categories" | "subcategories" | "custom">("equipment");
+  const [customItems, setCustomItems] = useState<CustomQuoteItem[]>([]);
+  const [customLoading, setCustomLoading] = useState(false);
+  const [addedNames, setAddedNames] = useState<Set<string>>(new Set());
   const { discount, setDiscount } = useDiscount();
   const [discountInput, setDiscountInput] = useState<string>(String(discount || ""));
 
@@ -115,6 +121,34 @@ export default function AdminCatalog() {
     setShowNewItem(false);
     setNewItem(EMPTY_ITEM);
     setNewSpecsStr("");
+    load();
+  };
+
+  // ── Внекаталожные позиции из КП ───────────────────────────────────
+  const loadCustomItems = async () => {
+    setCustomLoading(true);
+    try {
+      const res = await fetch(`${QUOTES_URL}?pwd=${encodeURIComponent(password)}&action=custom_items`);
+      if (res.ok) {
+        const data: CustomQuoteItem[] = await res.json();
+        setCustomItems(data);
+        const existingNames = new Set(equipment.map((e) => e.name.trim().toLowerCase()));
+        setAddedNames(existingNames);
+      }
+    } finally {
+      setCustomLoading(false);
+    }
+  };
+
+  const addCustomToCatalog = async (item: CustomQuoteItem) => {
+    await api("equipment", "POST", {
+      ...EMPTY_ITEM,
+      name: item.name,
+      category: categories[0]?.name || "Другое",
+      price: item.price,
+      unit: item.unit || "шт",
+    });
+    setAddedNames((prev) => new Set(prev).add(item.name.trim().toLowerCase()));
     load();
   };
 
@@ -301,17 +335,17 @@ export default function AdminCatalog() {
 
         {/* Tabs */}
         <div className="flex gap-1 mb-6 border-b border-amber-500/10 pb-0">
-          {(["equipment", "categories", "subcategories"] as const).map((t) => (
+          {(["equipment", "categories", "subcategories", "custom"] as const).map((t) => (
             <button
               key={t}
-              onClick={() => setTab(t)}
+              onClick={() => { setTab(t); if (t === "custom") loadCustomItems(); }}
               className={`px-5 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px ${
                 tab === t
                   ? "border-amber-500 text-amber-500"
                   : "border-transparent text-gray-500 hover:text-gray-300"
               }`}
             >
-              {t === "equipment" ? `Позиции (${equipment.length})` : t === "categories" ? `Разделы (${categories.length})` : `Подразделы (${subcategories.length})`}
+              {t === "equipment" ? `Позиции (${equipment.length})` : t === "categories" ? `Разделы (${categories.length})` : t === "subcategories" ? `Подразделы (${subcategories.length})` : `Из КП (${customItems.length})`}
             </button>
           ))}
         </div>
@@ -641,6 +675,67 @@ export default function AdminCatalog() {
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {/* ── CUSTOM ITEMS TAB (внекаталожные позиции из КП) ────────── */}
+        {tab === "custom" && (
+          <div>
+            <div className="flex items-center justify-between mb-5">
+              <p className="text-gray-500 text-sm">
+                Позиции, которые сотрудники или вы добавляли вручную в КП (не из каталога). Добавьте нужные на сайт в один клик.
+              </p>
+              <button
+                onClick={loadCustomItems}
+                disabled={customLoading}
+                className="flex items-center gap-2 border border-amber-500/30 text-amber-500 hover:bg-amber-500/10 px-4 py-2 rounded-sm text-sm transition-colors shrink-0 ml-4"
+              >
+                <Icon name="RefreshCw" size={14} className={customLoading ? "animate-spin" : ""} />
+                Обновить
+              </button>
+            </div>
+
+            {customLoading ? (
+              <div className="glass-card rounded-sm p-16 flex items-center justify-center gap-3 text-gray-500">
+                <Icon name="Loader2" size={20} className="animate-spin" />
+                Загрузка...
+              </div>
+            ) : customItems.length === 0 ? (
+              <div className="glass-card rounded-sm p-12 text-center">
+                <Icon name="PackageSearch" size={40} className="text-gray-700 mx-auto mb-3" />
+                <p className="text-gray-500">Внекаталожных позиций пока нет.</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {customItems.map((item, i) => {
+                  const isAdded = addedNames.has(item.name.trim().toLowerCase());
+                  return (
+                    <div key={i} className="glass-card rounded-sm p-4 flex items-center gap-4">
+                      <div className="w-10 h-10 flex items-center justify-center border border-amber-500/10 rounded-sm shrink-0 bg-amber-500/5">
+                        <Icon name="PackagePlus" size={18} className="text-gray-600" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-white font-medium truncate">{item.name}</p>
+                        <p className="text-amber-500 text-sm font-bold">{item.price.toLocaleString()} ₽ / {item.unit}</p>
+                        <p className="text-gray-600 text-xs mt-0.5 truncate">из КП «{item.quote_title}»</p>
+                      </div>
+                      <button
+                        onClick={() => addCustomToCatalog(item)}
+                        disabled={isAdded}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-sm text-sm shrink-0 transition-colors ${
+                          isAdded
+                            ? "border border-green-500/30 text-green-400 cursor-default"
+                            : "neon-btn"
+                        }`}
+                      >
+                        <Icon name={isAdded ? "Check" : "Plus"} size={14} />
+                        {isAdded ? "Добавлено" : "Добавить на сайт"}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 

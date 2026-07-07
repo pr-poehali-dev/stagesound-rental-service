@@ -2,6 +2,7 @@
 CRUD для коммерческих предложений (КП) менеджера.
 GET  /?pwd=X              — список всех КП
 GET  /?pwd=X&token=T      — КП по токену (публичный, без пароля)
+GET  /?pwd=X&action=custom_items — список внекаталожных позиций (id=null) из всех КП
 POST /?pwd=X              — создать КП {title, items, days, delivery, delivery_price, extras, total}
 PUT  /?pwd=X&id=N         — обновить КП
 DELETE /?pwd=X&id=N       — удалить КП
@@ -209,6 +210,32 @@ def handler(event: dict, context) -> dict:
 
     conn = db()
     cur = conn.cursor()
+
+    # === Внекаталожные позиции из всех КП (для добавления в каталог) ===
+    if method == "GET" and action == "custom_items":
+        cur.execute(f"SELECT id, title, items, created_at FROM {schema}.quotes ORDER BY created_at DESC")
+        rows = cur.fetchall()
+        cur.close(); conn.close()
+        seen = {}
+        for qid, qtitle, items, created_at in rows:
+            items = items or []
+            for it in items:
+                if it.get("id") is not None:
+                    continue  # это позиция из каталога, пропускаем
+                name = (it.get("name") or "").strip()
+                if not name:
+                    continue
+                key = name.lower()
+                if key not in seen:
+                    seen[key] = {
+                        "name": name,
+                        "price": it.get("price", 0),
+                        "unit": it.get("unit", "шт"),
+                        "quote_id": qid,
+                        "quote_title": qtitle,
+                        "created_at": str(created_at),
+                    }
+        return {"statusCode": 200, "headers": CORS, "body": json.dumps(list(seen.values()), ensure_ascii=False)}
 
     if method == "GET":
         # Получить одно КП по id (для редактирования)
