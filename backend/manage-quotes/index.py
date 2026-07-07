@@ -100,7 +100,7 @@ def handler(event: dict, context) -> dict:
         cur.execute(
             f"SELECT id, token, title, items, days, delivery, delivery_price, extras, total, status, created_at, event_date, delivery_address, "
             f"installation_time, installation_price, dismantling_time, dismantling_price, "
-            f"no_installation, delivery_time, pickup_time, discount, access_pin "
+            f"no_installation, delivery_time, pickup_time, discount, access_pin, use_coeff "
             f"FROM {schema}.quotes WHERE token = %s", (token,)
         )
         row = cur.fetchone()
@@ -109,7 +109,7 @@ def handler(event: dict, context) -> dict:
             return {"statusCode": 404, "headers": CORS, "body": json.dumps({"error": "Not found"})}
         keys = ["id", "token", "title", "items", "days", "delivery", "delivery_price", "extras", "total", "status", "created_at", "event_date", "delivery_address",
                 "installation_time", "installation_price", "dismantling_time", "dismantling_price",
-                "no_installation", "delivery_time", "pickup_time", "discount", "access_pin"]
+                "no_installation", "delivery_time", "pickup_time", "discount", "access_pin", "use_coeff"]
         q = dict(zip(keys, row))
         stored_pin = q.pop("access_pin") or ""
 
@@ -336,7 +336,7 @@ def handler(event: dict, context) -> dict:
             f"UPDATE {schema}.quotes SET title=%s, items=%s, days=%s, delivery=%s, delivery_price=%s, extras=%s, total=%s, "
             f"event_date=%s, delivery_address=%s, access_pin=%s, "
             f"installation_time=%s, installation_price=%s, dismantling_time=%s, dismantling_price=%s, "
-            f"no_installation=%s, delivery_time=%s, pickup_time=%s, discount=%s "
+            f"no_installation=%s, delivery_time=%s, pickup_time=%s, discount=%s, use_coeff=%s "
             f"WHERE id=%s",
             (
                 body.get("title", ""), json.dumps(body.get("items", [])),
@@ -348,6 +348,7 @@ def handler(event: dict, context) -> dict:
                 bool(body.get("no_installation", False)),
                 body.get("delivery_time") or None, body.get("pickup_time") or None,
                 int(body.get("discount", 0)),
+                bool(body.get("use_coeff", False)),
                 qid,
             )
         )
