@@ -283,7 +283,10 @@ def build_pdf(contract: dict, quote: dict, company_reqs: dict = None, tpl: dict 
     story.append(Spacer(1, 1*mm))
     story.append(Paragraph(f"&#8470;&nbsp;{num}", Ss["sub"]))
     story.append(Spacer(1, 5*mm))
-    loc = Table([[Paragraph("г. Москва", Ss["body"]),
+    cr_early = company_reqs or {}
+    lessor_name = cr_early.get("company_name") or "ИП"
+    lessor_city = cr_early.get("company_city") or "г. Санкт-Петербург"
+    loc = Table([[Paragraph(lessor_city, Ss["body"]),
                   Paragraph(f"&laquo;&nbsp;&nbsp;&nbsp;&raquo; _______________ {today.year}&nbsp;г.", Ss["right"])]],
                 colWidths=[W/2, W/2])
     loc.setStyle(TableStyle([("LEFTPADDING",(0,0),(-1,-1),0),("RIGHTPADDING",(0,0),(-1,-1),0),
@@ -291,7 +294,7 @@ def build_pdf(contract: dict, quote: dict, company_reqs: dict = None, tpl: dict 
     story.append(loc)
     story.append(Spacer(1, 5*mm))
     story.append(Paragraph(
-        f'<b>ООО &laquo;Global Renta&raquo;</b>, именуемое далее <b>&laquo;Арендодатель&raquo;</b>, '
+        f'<b>{lessor_name}</b>, именуем{"ое" if lessor_name.startswith("ООО") else "ый(-ая)"} далее <b>&laquo;Арендодатель&raquo;</b>, '
         f'и <b>{cname}</b> ({clabel}), именуемый(-ая) далее <b>&laquo;Арендатор&raquo;</b>, '
         f'заключили настоящий Договор о нижеследующем:', Ss["body"]))
     story.append(Spacer(1, 4*mm))
@@ -383,7 +386,7 @@ def build_pdf(contract: dict, quote: dict, company_reqs: dict = None, tpl: dict 
 
     cr = company_reqs or {}
     arend_rows = [
-        ("Организация", cr.get("company_name") or "ООО &laquo;Global Renta&raquo;"),
+        ("Организация", lessor_name),
     ]
     if cr.get("company_inn"):
         arend_rows.append(("ИНН", cr["company_inn"] + (f" / КПП: {cr['company_kpp']}" if cr.get("company_kpp") else "")))
@@ -582,14 +585,14 @@ def build_pdf(contract: dict, quote: dict, company_reqs: dict = None, tpl: dict 
         # Арендодатель
         if manager_signed_at and manager_name_val:
             left_parts = [
-                f"Арендодатель: <b>{cr.get('company_name','ООО Global Renta')}</b>",
+                f"Арендодатель: <b>{lessor_name}</b>",
                 f"От имени: <b>{manager_name_val}</b>",
                 f"Подписано: {mgr_date}",
                 "<font color='#888'>М.П.</font>",
             ]
         else:
             left_parts = [
-                f"Арендодатель: <b>{cr.get('company_name','ООО Global Renta')}</b>",
+                f"Арендодатель: <b>{lessor_name}</b>",
                 "Подпись: _____________________________",
                 "<font color='#888'>М.П.</font>",
             ]
