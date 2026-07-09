@@ -1,8 +1,6 @@
 import json
 import os
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+import urllib.request
 
 
 def handler(event: dict, context) -> dict:
@@ -33,12 +31,9 @@ def handler(event: dict, context) -> dict:
         return {"statusCode": 400, "headers": cors_headers, "body": json.dumps({"error": "Имя и телефон обязательны"})}
 
 
-    smtp_host = os.environ.get("SMTP_HOST", "")
-    smtp_port = int(os.environ.get("SMTP_PORT", "465"))
-    smtp_user = os.environ.get("SMTP_USER", "")
-    smtp_password = os.environ.get("SMTP_PASSWORD", "")
     to_email = "info@global.promo"
 
+    message_html = message.replace("\n", "<br>")
     html_body = f"""
     <html>
     <body style="font-family: Arial, sans-serif; background: #f5f5f5; padding: 20px;">
@@ -53,7 +48,7 @@ def handler(event: dict, context) -> dict:
             {"<tr><td style='padding: 10px 0; border-bottom: 1px solid #eee; color: #888;'>Email</td><td style='padding: 10px 0; border-bottom: 1px solid #eee;'>" + email + "</td></tr>" if email else ""}
             {"<tr><td style='padding: 10px 0; border-bottom: 1px solid #eee; color: #888;'>Тип мероприятия</td><td style='padding: 10px 0; border-bottom: 1px solid #eee;'>" + event_type + "</td></tr>" if event_type else ""}
             {"<tr><td style='padding: 10px 0; border-bottom: 1px solid #eee; color: #888;'>Дата</td><td style='padding: 10px 0; border-bottom: 1px solid #eee;'>" + date + "</td></tr>" if date else ""}
-            {"<tr><td style='padding: 10px 0; color: #888; vertical-align: top;'>Сообщение</td><td style='padding: 10px 0;'>" + message.replace("\n", "<br>") + "</td></tr>" if message else ""}
+            {"<tr><td style='padding: 10px 0; color: #888; vertical-align: top;'>Сообщение</td><td style='padding: 10px 0;'>" + message_html + "</td></tr>" if message else ""}
           </table>
         </div>
         <div style="background: #f9f9f9; padding: 16px 30px; font-size: 12px; color: #aaa;">
@@ -64,21 +59,16 @@ def handler(event: dict, context) -> dict:
     </html>
     """
 
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = f"Новая заявка: {name} — {phone}"
-    msg["From"] = smtp_user
-    msg["To"] = to_email
-    msg.attach(MIMEText(html_body, "html", "utf-8"))
-
-    if smtp_port == 465:
-        with smtplib.SMTP_SSL(smtp_host, smtp_port) as server:
-            server.login(smtp_user, smtp_password)
-            server.sendmail(smtp_user, to_email, msg.as_string())
-    else:
-        with smtplib.SMTP(smtp_host, smtp_port) as server:
-            server.starttls()
-            server.login(smtp_user, smtp_password)
-            server.sendmail(smtp_user, to_email, msg.as_string())
+    api_key = os.environ.get("RESEND_API_KEY", "")
+    if api_key:
+        from_addr = os.environ.get("RESEND_FROM_EMAIL") or "Global Renta <onboarding@resend.dev>"
+        data = json.dumps({"from": from_addr, "to": [to_email], "subject": f"Новая заявка: {name} — {phone}", "html": html_body}).encode("utf-8")
+        req = urllib.request.Request(
+            "https://api.resend.com/emails", data=data, method="POST",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            resp.read()
 
     return {
         "statusCode": 200,

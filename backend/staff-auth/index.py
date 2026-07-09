@@ -10,10 +10,23 @@ import hashlib
 import json
 import os
 import secrets
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+import urllib.request
 import psycopg2
+
+
+def _resend_send(to_email: str, subject: str, html: str):
+    """Отправка письма через Resend HTTP API (порт 443, не блокируется облаком)."""
+    api_key = os.environ.get("RESEND_API_KEY", "")
+    if not api_key:
+        return
+    from_addr = os.environ.get("RESEND_FROM_EMAIL") or "Global Renta <onboarding@resend.dev>"
+    data = json.dumps({"from": from_addr, "to": [to_email], "subject": subject, "html": html}).encode("utf-8")
+    req = urllib.request.Request(
+        "https://api.resend.com/emails", data=data, method="POST",
+        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+    )
+    with urllib.request.urlopen(req, timeout=20) as resp:
+        resp.read()
 
 CORS = {
     "Access-Control-Allow-Origin": "*",
@@ -40,10 +53,6 @@ def check_admin(pwd: str) -> bool:
 
 
 def send_staff_welcome(to_email: str, name: str, password: str):
-    smtp_user = os.environ.get("SMTP_USER", "")
-    smtp_pass = os.environ.get("SMTP_PASSWORD", "")
-    if not smtp_user or not smtp_pass:
-        return
     site_url = os.environ.get("SITE_URL", "https://global.promo")
     html = f"""<!DOCTYPE html>
 <html lang="ru"><head><meta charset="UTF-8"></head>
@@ -75,14 +84,7 @@ def send_staff_welcome(to_email: str, name: str, password: str):
     </div>
   </div>
 </body></html>"""
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = "Добро пожаловать в Global Renta — данные для входа"
-    msg["From"] = f"Global Renta <{smtp_user}>"
-    msg["To"] = to_email
-    msg.attach(MIMEText(html, "html", "utf-8"))
-    with smtplib.SMTP("mail.hosting.reg.ru", 587, timeout=15) as srv:
-        srv.ehlo(); srv.starttls(); srv.login(smtp_user, smtp_pass)
-        srv.sendmail(smtp_user, to_email, msg.as_string())
+    _resend_send(to_email, "Добро пожаловать в Global Renta — данные для входа", html)
 
 
 def get_staff_by_token(cur, token: str):

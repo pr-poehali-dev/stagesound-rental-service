@@ -2,20 +2,29 @@ import json
 import os
 import urllib.request
 import urllib.parse
+import urllib.error
 import psycopg2
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+
+
+def _resend_send(to_email: str, subject: str, html: str):
+    """Отправка письма через Resend HTTP API (порт 443, не блокируется облаком)."""
+    api_key = os.environ.get("RESEND_API_KEY", "")
+    if not api_key:
+        return
+    from_addr = os.environ.get("RESEND_FROM_EMAIL") or "Global Renta <onboarding@resend.dev>"
+    data = json.dumps({"from": from_addr, "to": [to_email], "subject": subject, "html": html}).encode("utf-8")
+    req = urllib.request.Request(
+        "https://api.resend.com/emails", data=data, method="POST",
+        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+    )
+    with urllib.request.urlopen(req, timeout=20) as resp:
+        resp.read()
 
 
 def send_renter_notification_email(to_email: str, renter_name: str, order_number: str,
                                    equipment_name: str, qty: int, days: int, subtotal: int,
                                    client_name: str, client_phone: str, event_date: str, place: str):
     """Письмо прокатчику о новом заказе на его оборудование."""
-    smtp_user = os.environ.get("SMTP_USER", "")
-    smtp_password = os.environ.get("SMTP_PASSWORD", "")
-    if not smtp_user or not smtp_password:
-        return
 
     date_row = f"<p style='color:#888;font-size:13px;margin:4px 0;'>📅 Дата мероприятия: <span style='color:#fff;'>{event_date}</span></p>" if event_date else ""
     place_row = f"<p style='color:#888;font-size:13px;margin:4px 0;'>📍 Место: <span style='color:#fff;'>{place}</span></p>" if place else ""
@@ -63,23 +72,10 @@ def send_renter_notification_email(to_email: str, renter_name: str, order_number
 </body>
 </html>"""
 
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = f"Новый заказ {order_number} на ваше оборудование — Global Renta"
-    msg["From"] = f"Global Renta <{smtp_user}>"
-    msg["To"] = to_email
-    msg.attach(MIMEText(html, "html", "utf-8"))
-
-    with smtplib.SMTP("mail.hosting.reg.ru", 587, timeout=15) as server:
-        server.ehlo()
-        server.starttls()
-        server.login(smtp_user, smtp_password)
-        server.sendmail(smtp_user, to_email, msg.as_string())
+    _resend_send(to_email, f"Новый заказ {order_number} на ваше оборудование — Global Renta", html)
 
 
 def send_confirmation_email(to_email: str, order_number: str, name: str, total: int, items: list, days: int, date: str, place: str, extras: list, delivery: str):
-    smtp_user = os.environ["SMTP_USER"]
-    smtp_password = os.environ["SMTP_PASSWORD"]
-
     items_html = "".join(
         f"<tr><td style='padding:6px 0;color:#ccc;font-size:13px;'>{it['name']} × {it['qty']} × {days} дн.</td>"
         f"<td style='padding:6px 0;color:#fff;text-align:right;font-weight:bold;font-size:13px;'>{it['subtotal']:,} ₽</td></tr>"
@@ -139,17 +135,7 @@ def send_confirmation_email(to_email: str, order_number: str, name: str, total: 
 </html>
 """
 
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = f"Заявка {order_number} принята — Global Renta"
-    msg["From"] = f"Global Renta <{smtp_user}>"
-    msg["To"] = to_email
-    msg.attach(MIMEText(html, "html", "utf-8"))
-
-    with smtplib.SMTP("mail.hosting.reg.ru", 587, timeout=15) as server:
-        server.ehlo()
-        server.starttls()
-        server.login(smtp_user, smtp_password)
-        server.sendmail(smtp_user, to_email, msg.as_string())
+    _resend_send(to_email, f"Заявка {order_number} принята — Global Renta", html)
 
 
 def handler(event: dict, context) -> dict:

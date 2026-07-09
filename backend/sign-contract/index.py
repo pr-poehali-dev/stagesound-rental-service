@@ -7,18 +7,15 @@ GET  /?token=T                      — получить статус подпи
 POST /?action=submit&token=T        — создать контракт + сгенерировать PDF + отправить OTP
 POST /?action=manager_sign&pwd=X    — менеджер подписывает с обеих сторон + отправка email клиенту
 """
+import base64
 import json
 import os
 import random
-import smtplib
 import string
 import urllib.request
 import urllib.parse
+import urllib.error
 from datetime import datetime, timedelta, timezone
-from email.mime.base import MIMEBase
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
-from email import encoders
 
 import psycopg2
 import boto3
@@ -43,75 +40,69 @@ def gen_otp() -> str:
     return "".join(random.choices(string.digits, k=6))
 
 
-def _smtp_send(smtp_user: str, smtp_pass: str, to_email: str, msg, timeout: int):
-    """Пытается отправить письмо через несколько вариантов подключения к reg.ru,
-    т.к. сервер иногда обрывает соединение (Connection unexpectedly closed)."""
-    last_err = None
-    attempts = [
-        ("mail.hosting.reg.ru", 587, "starttls"),
-        ("mail.hosting.reg.ru", 465, "ssl"),
-        ("mail.hosting.reg.ru", 587, "starttls"),
-    ]
-    for host, port, mode in attempts:
-        try:
-            if mode == "ssl":
-                with smtplib.SMTP_SSL(host, port, timeout=timeout) as srv:
-                    srv.ehlo()
-                    srv.login(smtp_user, smtp_pass)
-                    srv.sendmail(smtp_user, to_email, msg.as_string())
-            else:
-                with smtplib.SMTP(host, port, timeout=timeout) as srv:
-                    srv.ehlo()
-                    srv.starttls()
-                    srv.ehlo()
-                    srv.login(smtp_user, smtp_pass)
-                    srv.sendmail(smtp_user, to_email, msg.as_string())
-            return  # успех
-        except Exception as e:
-            last_err = e
-            print(f"[SMTP RETRY] {host}:{port} ({mode}) failed: {e}")
-    raise last_err
+RESEND_FROM = "Global Renta <onboarding@resend.dev>"
+
+
+def _resend_from():
+    """Отправитель: используем свой домен, если он подтверждён в Resend, иначе дефолтный тестовый адрес."""
+    return os.environ.get("RESEND_FROM_EMAIL") or RESEND_FROM
+
+
+def _resend_api_call(payload: dict):
+    api_key = os.environ.get("RESEND_API_KEY", "")
+    if not api_key:
+        raise RuntimeError("RESEND_API_KEY not configured")
+    data = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        "https://api.resend.com/emails",
+        data=data,
+        method="POST",
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        err_body = e.read().decode("utf-8", errors="ignore")
+        raise RuntimeError(f"Resend API error {e.code}: {err_body}")
 
 
 def send_email(to_email: str, subject: str, html_body: str):
-    smtp_user = os.environ.get("SMTP_USER", "")
-    smtp_pass = os.environ.get("SMTP_PASSWORD", "")
-    if not smtp_user or not smtp_pass:
-        raise RuntimeError("SMTP credentials not configured")
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = subject
-    msg["From"] = f"Global Renta <{smtp_user}>"
-    msg["To"] = to_email
-    msg.attach(MIMEText(html_body, "html", "utf-8"))
-    _smtp_send(smtp_user, smtp_pass, to_email, msg, timeout=15)
+    """Отправка письма через Resend HTTP API (порт 443, не блокируется облаком)."""
+    _resend_api_call({
+        "from": _resend_from(),
+        "to": [to_email],
+        "subject": subject,
+        "html": html_body,
+    })
 
 
 def send_email_with_attachments(to_email: str, subject: str, html_body: str, attachments: list):
-    """Отправить письмо с PDF-вложениями. attachments = [{"name": "...", "url": "..."}]"""
-    smtp_user = os.environ.get("SMTP_USER", "")
-    smtp_pass = os.environ.get("SMTP_PASSWORD", "")
-    if not smtp_user or not smtp_pass:
-        raise RuntimeError("SMTP credentials not configured")
-    msg = MIMEMultipart("mixed")
-    msg["Subject"] = subject
-    msg["From"] = f"Global Renta <{smtp_user}>"
-    msg["To"] = to_email
-    alt = MIMEMultipart("alternative")
-    alt.attach(MIMEText(html_body, "html", "utf-8"))
-    msg.attach(alt)
+    """Отправить письмо с PDF-вложениями через Resend. attachments = [{"name": "...", "url": "..."}]"""
+    resend_attachments = []
     for att in attachments:
         try:
             req = urllib.request.Request(att["url"])
             with urllib.request.urlopen(req, timeout=20) as resp:
                 pdf_bytes = resp.read()
-            part = MIMEBase("application", "pdf")
-            part.set_payload(pdf_bytes)
-            encoders.encode_base64(part)
-            part.add_header("Content-Disposition", "attachment", filename=att["name"])
-            msg.attach(part)
+            resend_attachments.append({
+                "filename": att["name"],
+                "content": base64.b64encode(pdf_bytes).decode("ascii"),
+            })
         except Exception as e:
             print(f"[ATTACH ERROR] {att['name']}: {e}")
-    _smtp_send(smtp_user, smtp_pass, to_email, msg, timeout=20)
+    payload = {
+        "from": _resend_from(),
+        "to": [to_email],
+        "subject": subject,
+        "html": html_body,
+    }
+    if resend_attachments:
+        payload["attachments"] = resend_attachments
+    _resend_api_call(payload)
 
 
 def call_generate(contract_id: int, action: str = "contract") -> str:
