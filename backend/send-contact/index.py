@@ -61,7 +61,7 @@ def handler(event: dict, context) -> dict:
 
     api_key = os.environ.get("RESEND_API_KEY", "")
     if api_key:
-        from_addr = os.environ.get("RESEND_FROM_EMAIL") or "Global Renta <onboarding@resend.dev>"
+        from_addr = os.environ.get("RESEND_FROM_EMAIL") or "Global Renta <info@global.promo>"
         data = json.dumps({"from": from_addr, "to": [to_email], "subject": f"Новая заявка: {name} — {phone}", "html": html_body}).encode("utf-8")
         req = urllib.request.Request(
             "https://api.resend.com/emails", data=data, method="POST",

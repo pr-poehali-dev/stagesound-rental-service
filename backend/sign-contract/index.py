@@ -40,7 +40,7 @@ def gen_otp() -> str:
     return "".join(random.choices(string.digits, k=6))
 
 
-RESEND_FROM = "Global Renta <onboarding@resend.dev>"
+RESEND_FROM = "Global Renta <info@global.promo>"
 
 
 def _resend_from():
