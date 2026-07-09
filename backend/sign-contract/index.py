@@ -43,21 +43,47 @@ def gen_otp() -> str:
     return "".join(random.choices(string.digits, k=6))
 
 
+def _smtp_send(smtp_user: str, smtp_pass: str, to_email: str, msg, timeout: int):
+    """Пытается отправить письмо через несколько вариантов подключения к reg.ru,
+    т.к. сервер иногда обрывает соединение (Connection unexpectedly closed)."""
+    last_err = None
+    attempts = [
+        ("mail.hosting.reg.ru", 587, "starttls"),
+        ("mail.hosting.reg.ru", 465, "ssl"),
+        ("mail.hosting.reg.ru", 587, "starttls"),
+    ]
+    for host, port, mode in attempts:
+        try:
+            if mode == "ssl":
+                with smtplib.SMTP_SSL(host, port, timeout=timeout) as srv:
+                    srv.ehlo()
+                    srv.login(smtp_user, smtp_pass)
+                    srv.sendmail(smtp_user, to_email, msg.as_string())
+            else:
+                with smtplib.SMTP(host, port, timeout=timeout) as srv:
+                    srv.ehlo()
+                    srv.starttls()
+                    srv.ehlo()
+                    srv.login(smtp_user, smtp_pass)
+                    srv.sendmail(smtp_user, to_email, msg.as_string())
+            return  # успех
+        except Exception as e:
+            last_err = e
+            print(f"[SMTP RETRY] {host}:{port} ({mode}) failed: {e}")
+    raise last_err
+
+
 def send_email(to_email: str, subject: str, html_body: str):
     smtp_user = os.environ.get("SMTP_USER", "")
     smtp_pass = os.environ.get("SMTP_PASSWORD", "")
     if not smtp_user or not smtp_pass:
-        return
+        raise RuntimeError("SMTP credentials not configured")
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
     msg["From"] = f"Global Renta <{smtp_user}>"
     msg["To"] = to_email
     msg.attach(MIMEText(html_body, "html", "utf-8"))
-    with smtplib.SMTP("mail.hosting.reg.ru", 587, timeout=15) as srv:
-        srv.ehlo()
-        srv.starttls()
-        srv.login(smtp_user, smtp_pass)
-        srv.sendmail(smtp_user, to_email, msg.as_string())
+    _smtp_send(smtp_user, smtp_pass, to_email, msg, timeout=15)
 
 
 def send_email_with_attachments(to_email: str, subject: str, html_body: str, attachments: list):
@@ -65,7 +91,7 @@ def send_email_with_attachments(to_email: str, subject: str, html_body: str, att
     smtp_user = os.environ.get("SMTP_USER", "")
     smtp_pass = os.environ.get("SMTP_PASSWORD", "")
     if not smtp_user or not smtp_pass:
-        return
+        raise RuntimeError("SMTP credentials not configured")
     msg = MIMEMultipart("mixed")
     msg["Subject"] = subject
     msg["From"] = f"Global Renta <{smtp_user}>"
@@ -85,11 +111,7 @@ def send_email_with_attachments(to_email: str, subject: str, html_body: str, att
             msg.attach(part)
         except Exception as e:
             print(f"[ATTACH ERROR] {att['name']}: {e}")
-    with smtplib.SMTP("mail.hosting.reg.ru", 587, timeout=20) as srv:
-        srv.ehlo()
-        srv.starttls()
-        srv.login(smtp_user, smtp_pass)
-        srv.sendmail(smtp_user, to_email, msg.as_string())
+    _smtp_send(smtp_user, smtp_pass, to_email, msg, timeout=20)
 
 
 def call_generate(contract_id: int, action: str = "contract") -> str:
@@ -388,12 +410,15 @@ def handler(event: dict, context) -> dict:
             )
             conn.commit()
             name = full_name or company_name or "Клиент"
+            resend_email_error = None
             try:
                 send_email(email, "Код подтверждения — Global Renta", _otp_email_html(otp, name))
             except Exception as e:
+                resend_email_error = str(e)
                 print(f"[SMTP ERROR resend] {e}")
             return {"statusCode": 200, "headers": CORS,
-                    "body": json.dumps({"ok": True, "email_sent_to": email}, ensure_ascii=False)}
+                    "body": json.dumps({"ok": True, "email_sent_to": email,
+                                        "email_error": resend_email_error}, ensure_ascii=False)}
 
         # ── Проверить OTP и подписать ────────────────────────────────
         if action == "verify_otp":

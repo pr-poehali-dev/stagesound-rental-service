@@ -317,12 +317,15 @@ export default function QuoteApproval() {
   // ── Повторно отправить OTP ──────────────────────────────────────────────
   const handleResendOtp = async () => {
     if (otpCooldown > 0) return;
-    setOtpSending(true); setOtpError("");
+    setOtpSending(true); setOtpError(""); setEmailWarning("");
     try {
       const res  = await fetch(`${SIGN_URL}?action=send_otp&token=${token}`, { method: "POST" });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Ошибка");
       setOtpCooldown(60);
+      if (data.email_error) {
+        setEmailWarning(`Не удалось отправить письмо на ${email}. Попробуйте отправить код ещё раз.`);
+      }
     } catch (e: unknown) {
       setOtpError(e instanceof Error ? e.message : "Ошибка");
     } finally { setOtpSending(false); }
