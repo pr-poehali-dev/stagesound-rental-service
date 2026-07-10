@@ -3,6 +3,9 @@ import { Link, useLocation } from "react-router-dom";
 import Icon from "@/components/ui/icon";
 import { useCity } from "@/context/CityContext";
 import { useHiddenPages } from "@/hooks/useHiddenPages";
+import func2url from "../../backend/func2url.json";
+
+const URLS = func2url as Record<string, string>;
 
 const NAV_PAGES = [
   { page: "", label: "Главная" },
@@ -13,12 +16,20 @@ const NAV_PAGES = [
   { page: "contacts", label: "Контакты" },
 ];
 
+type CompanyRequisites = {
+  company_name?: string;
+  company_inn?: string;
+  company_ogrn?: string;
+  company_address?: string;
+};
+
 export default function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const { city } = useCity();
   const { isHidden } = useHiddenPages();
+  const [requisites, setRequisites] = useState<CompanyRequisites>({});
 
   const currentPage = location.pathname.replace(/^\//, "");
   const visibleNav = NAV_PAGES.filter((link) => !isHidden(link.page));
@@ -32,6 +43,20 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     setMenuOpen(false);
   }, [location.pathname]);
+
+  useEffect(() => {
+    fetch(URLS["manage-settings"])
+      .then((res) => res.json())
+      .then((data: Record<string, { value: string }>) => {
+        setRequisites({
+          company_name: data.company_name?.value,
+          company_inn: data.company_inn?.value,
+          company_ogrn: data.company_ogrn?.value,
+          company_address: data.company_address?.value,
+        });
+      })
+      .catch(() => {});
+  }, []);
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: "var(--surface)" }}>
@@ -210,7 +235,17 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               </div>
             </div>
           </div>
-          <div className="border-t border-amber-500/10 mt-8 pt-6 flex flex-col md:flex-row items-center justify-between gap-4">
+          {requisites.company_name && (
+            <div className="border-t border-amber-500/10 mt-8 pt-6 text-xs text-gray-600 leading-relaxed">
+              <p>
+                {requisites.company_name}
+                {requisites.company_inn && <> · ИНН {requisites.company_inn}</>}
+                {requisites.company_ogrn && <> · ОГРНИП {requisites.company_ogrn}</>}
+              </p>
+              {requisites.company_address && <p className="mt-1">{requisites.company_address}</p>}
+            </div>
+          )}
+          <div className="border-t border-amber-500/10 mt-4 pt-6 flex flex-col md:flex-row items-center justify-between gap-4">
             <p className="text-gray-600 text-xs">© 2024 Global Renta. Все права защищены.</p>
             <div className="flex items-center gap-4 flex-wrap justify-end">
               <Link
