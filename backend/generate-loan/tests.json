@@ -1,0 +1,22 @@
+{
+  "tests": [
+    {
+      "name": "CORS preflight",
+      "method": "OPTIONS",
+      "path": "/",
+      "expectedStatus": 200
+    },
+    {
+      "name": "GET без пароля — Unauthorized",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 401
+    },
+    {
+      "name": "GET без loan_id — 400",
+      "method": "GET",
+      "path": "/?pwd=wrongpwd",
+      "expectedStatus": 401
+    }
+  ]
+}

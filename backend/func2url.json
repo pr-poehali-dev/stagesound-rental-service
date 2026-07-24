@@ -1,4 +1,6 @@
 {
+  "manage-loans": "https://functions.poehali.dev/089e5fa7-952c-45a0-9a30-b6fb7fb417a8",
+  "generate-loan": "https://functions.poehali.dev/f49b47e6-c3ee-4331-a112-3ab9e7a9f6b2",
   "staff-auth": "https://functions.poehali.dev/37983429-e098-4fab-bfbd-2a28b284ccc4",
   "manage-contract-template": "https://functions.poehali.dev/1edca96f-0ade-4d0a-ac29-004aeae06752",
   "sign-contract": "https://functions.poehali.dev/a9032686-0922-4dfd-ae14-78b0cccb857b",

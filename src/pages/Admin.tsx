@@ -4,6 +4,7 @@ import Icon from "@/components/ui/icon";
 import func2url from "../../backend/func2url.json";
 import { useRef } from "react";
 import { useHiddenPages, usePortfolioItems, ALL_PAGES, type PortfolioItem } from "@/hooks/useHiddenPages";
+import AdminLoans from "@/components/AdminLoans";
 
 const URLS = func2url as Record<string, string>;
 
@@ -59,7 +60,7 @@ export default function Admin() {
   const [authed, setAuthed] = useState(false);
   const [authError, setAuthError] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [tab, setTab] = useState<"orders" | "quotes" | "contracts" | "settings" | "pages" | "portfolio" | "ai" | "renters" | "staff">("orders");
+  const [tab, setTab] = useState<"orders" | "quotes" | "contracts" | "loans" | "settings" | "pages" | "portfolio" | "ai" | "renters" | "staff">("orders");
 
   // Renters moderation
   type RenterMod = { id: number; email: string; company_name: string; contact_name: string; phone: string; city: string; telegram?: string; status: string; created_at: string; };
@@ -586,6 +587,7 @@ export default function Admin() {
             { key: "orders", label: "Заявки", icon: "Inbox", count: orders.length },
             { key: "quotes", label: "КП", icon: "FileText", count: quotes.length },
             { key: "contracts", label: "Договоры", icon: "FileCheck", count: contracts.filter(c => c.status === "pending").length },
+            { key: "loans", label: "Займы", icon: "Banknote", count: 0 },
             { key: "settings", label: "Настройки", icon: "Settings", count: 0 },
             { key: "pages", label: "Разделы", icon: "EyeOff", count: hidden.length },
             { key: "portfolio", label: "Портфолио", icon: "Images", count: portfolioItems.length },
@@ -967,6 +969,9 @@ export default function Admin() {
           )}
         </div>
       )}
+
+      {/* ── ЗАЙМЫ ── */}
+      {tab === "loans" && <AdminLoans password={password} />}
 
       {/* ── НАСТРОЙКИ ── */}
       {tab === "settings" && (

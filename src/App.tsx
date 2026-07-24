@@ -16,6 +16,7 @@ import Admin from "./pages/Admin";
 import AdminCatalog from "./pages/AdminCatalog";
 import AdminQuote from "./pages/AdminQuote";
 import QuoteApproval from "./pages/QuoteApproval";
+import LoanApproval from "./pages/LoanApproval";
 import EquipmentItem from "./pages/EquipmentItem";
 import NotFound from "./pages/NotFound";
 import RenterRegister from "./pages/RenterRegister";
@@ -46,6 +47,7 @@ const App = () => (
             <Route path="/admin/catalog" element={<AdminCatalog />} />
             <Route path="/admin/quote" element={<AdminQuote />} />
             <Route path="/quote/:token" element={<QuoteApproval />} />
+            <Route path="/loan/:token" element={<LoanApproval />} />
 
             <Route path="/renter/register" element={<RenterRegister />} />
             <Route path="/renter/login" element={<RenterLogin />} />

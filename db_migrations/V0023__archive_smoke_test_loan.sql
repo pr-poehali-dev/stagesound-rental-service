@@ -1,0 +1,2 @@
+UPDATE loans SET status = 'archived_test', amount = 0, full_name = '', email = '', phone = '', passport_series = '', passport_number = '', passport_issued = '', address = '', pdf_url = NULL
+WHERE token = 'smoke_test_loan_2026';

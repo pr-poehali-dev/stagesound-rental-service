@@ -1,0 +1,22 @@
+{
+  "tests": [
+    {
+      "name": "CORS preflight",
+      "method": "OPTIONS",
+      "path": "/",
+      "expectedStatus": 200
+    },
+    {
+      "name": "GET списка без пароля — Unauthorized",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 401
+    },
+    {
+      "name": "GET по несуществующему токену",
+      "method": "GET",
+      "path": "/?token=nonexistent_xyz",
+      "expectedStatus": 404
+    }
+  ]
+}
