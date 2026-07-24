@@ -221,7 +221,21 @@ def build_pdf(contract: dict, quote: dict, company_reqs: dict = None, tpl: dict 
     }
 
     today = datetime.now()
-    num   = f"А-{contract['id']:04d}"
+    # Кастомный номер договора (если задан вручную) — иначе авто "А-XXXX"
+    custom_num = (contract.get("doc_number") or "").strip()
+    num   = custom_num if custom_num else f"А-{contract['id']:04d}"
+    # Кастомная дата договора (если задана вручную) — иначе бланк «___» ______ ГОД г.
+    _MONTHS_RU = ["", "января", "февраля", "марта", "апреля", "мая", "июня",
+                  "июля", "августа", "сентября", "октября", "ноября", "декабря"]
+    custom_date = contract.get("doc_date")
+    if custom_date:
+        try:
+            _d = custom_date if isinstance(custom_date, datetime) else datetime.strptime(str(custom_date), "%Y-%m-%d")
+            date_str = f"&laquo;{_d.day:02d}&raquo; {_MONTHS_RU[_d.month]} {_d.year}&nbsp;г."
+        except Exception:
+            date_str = f"&laquo;&nbsp;&nbsp;&nbsp;&raquo; _______________ {today.year}&nbsp;г."
+    else:
+        date_str = f"&laquo;&nbsp;&nbsp;&nbsp;&raquo; _______________ {today.year}&nbsp;г."
     ctype = contract.get("client_type", "individual")
 
     if ctype == "individual":
@@ -287,7 +301,7 @@ def build_pdf(contract: dict, quote: dict, company_reqs: dict = None, tpl: dict 
     lessor_name = cr_early.get("company_name") or "ИП"
     lessor_city = cr_early.get("company_city") or "г. Санкт-Петербург"
     loc = Table([[Paragraph(lessor_city, Ss["body"]),
-                  Paragraph(f"&laquo;&nbsp;&nbsp;&nbsp;&raquo; _______________ {today.year}&nbsp;г.", Ss["right"])]],
+                  Paragraph(date_str, Ss["right"])]],
                 colWidths=[W/2, W/2])
     loc.setStyle(TableStyle([("LEFTPADDING",(0,0),(-1,-1),0),("RIGHTPADDING",(0,0),(-1,-1),0),
                               ("TOPPADDING",(0,0),(-1,-1),0),("BOTTOMPADDING",(0,0),(-1,-1),0)]))
@@ -686,7 +700,16 @@ def build_invoice_pdf(contract: dict, quote: dict, company_reqs: dict) -> bytes:
     total_base = int(quote.get("total") or 0)
     invoice_total = round(total_base * 1.1)
     today = datetime.now()
-    num = f"С-{contract['id']:04d}"
+    custom_num = (contract.get("doc_number") or "").strip()
+    num = custom_num if custom_num else f"С-{contract['id']:04d}"
+    custom_date = contract.get("doc_date")
+    inv_date_str = today.strftime('%d.%m.%Y')
+    if custom_date:
+        try:
+            _d = custom_date if isinstance(custom_date, datetime) else datetime.strptime(str(custom_date), "%Y-%m-%d")
+            inv_date_str = _d.strftime('%d.%m.%Y')
+        except Exception:
+            pass
     ctype = contract.get("client_type", "individual")
     if ctype == "individual":
         cname = contract.get("full_name") or "_______________"
@@ -698,7 +721,7 @@ def build_invoice_pdf(contract: dict, quote: dict, company_reqs: dict) -> bytes:
     # Заголовок
     story.append(Paragraph("СЧЁТ НА ОПЛАТУ", Ss["title"]))
     story.append(Spacer(1, 2*mm))
-    story.append(Paragraph(f"№ {num} от {today.strftime('%d.%m.%Y')}", Ss["sub"]))
+    story.append(Paragraph(f"№ {num} от {inv_date_str}", Ss["sub"]))
     story.append(Spacer(1, 6*mm))
     story.append(HRFlowable(width="100%", thickness=1, color=AM))
     story.append(Spacer(1, 4*mm))
@@ -887,7 +910,8 @@ def handler(event: dict, context) -> dict:
             q.event_date, q.delivery_address,
             q.installation_time, q.installation_price, q.dismantling_time, q.dismantling_price,
             q.no_installation, q.delivery_time, q.pickup_time, q.discount,
-            c.signed_at, c.pep_uid, c.manager_signed_at, c.manager_name
+            c.signed_at, c.pep_uid, c.manager_signed_at, c.manager_name,
+            c.doc_number, c.doc_date
         FROM {schema}.contracts c
         JOIN {schema}.quotes q ON q.id = c.quote_id
         WHERE c.id = %s""",
@@ -907,7 +931,7 @@ def handler(event: dict, context) -> dict:
               "event_date","delivery_address",
               "installation_time","installation_price","dismantling_time","dismantling_price",
               "no_installation","delivery_time","pickup_time","discount"]
-    keys_extra = ["signed_at","pep_uid","manager_signed_at","manager_name"]
+    keys_extra = ["signed_at","pep_uid","manager_signed_at","manager_name","doc_number","doc_date"]
     data     = dict(zip(keys_c + keys_q + keys_extra, row))
     contract = {k: data[k] for k in keys_c}
     quote    = {k: data[k] for k in keys_q}

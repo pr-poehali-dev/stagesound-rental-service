@@ -143,11 +143,15 @@ def handler(event: dict, context) -> dict:
             if not contract_id:
                 return {"statusCode": 400, "headers": CORS,
                         "body": json.dumps({"error": "contract_id required"}, ensure_ascii=False)}
+            # Ручной номер/дата договора (если менеджер включил ручной режим)
+            doc_number_val = (body2.get("doc_number") or "").strip() or None
+            doc_date_val = (body2.get("doc_date") or "").strip() or None
             now = datetime.now(timezone.utc)
             cur.execute(
-                f"UPDATE {s()}.contracts SET manager_signed_at=%s, manager_name=%s, status='signed' WHERE id=%s RETURNING "
+                f"UPDATE {s()}.contracts SET manager_signed_at=%s, manager_name=%s, "
+                f"doc_number=%s, doc_date=%s, status='signed' WHERE id=%s RETURNING "
                 f"email, full_name, company_name, payment_method, invoice_total",
-                (now, manager_name_val, contract_id)
+                (now, manager_name_val, doc_number_val, doc_date_val, contract_id)
             )
             row = cur.fetchone()
             if not row:

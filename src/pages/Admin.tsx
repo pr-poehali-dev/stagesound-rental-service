@@ -176,6 +176,10 @@ export default function Admin() {
   const [managerSigningId, setManagerSigningId] = useState<number | null>(null);
   const [managerName, setManagerName]           = useState(() => sessionStorage.getItem("manager_name") || "");
   const [managerSignDone, setManagerSignDone]   = useState<number | null>(null);
+  // Ручной номер/дата договора
+  const [manualDoc, setManualDoc]     = useState(false);
+  const [docNumber, setDocNumber]     = useState("");
+  const [docDate, setDocDate]         = useState("");
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -359,7 +363,12 @@ export default function Admin() {
     const res = await fetch(`${URLS["sign-contract"]}?action=manager_sign&pwd=${encodeURIComponent(password)}&token=_`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ contract_id: contractId, manager_name: managerName }),
+      body: JSON.stringify({
+        contract_id: contractId,
+        manager_name: managerName,
+        doc_number: manualDoc ? docNumber.trim() : "",
+        doc_date: manualDoc ? docDate : "",
+      }),
     });
     const data = await res.json();
     if (data.invoice_pdf_url) {
@@ -1267,16 +1276,37 @@ export default function Admin() {
               <div className="mb-3 p-3 bg-emerald-500/5 border border-emerald-500/20 rounded-sm">
                 <p className="text-xs text-gray-500 uppercase tracking-wider mb-2">Подпись со стороны компании</p>
                 {selectedContract.signed_at && !managerSignDone && (
-                  <div className="flex gap-2">
-                    <input value={managerName} onChange={e => setManagerName(e.target.value)}
-                      placeholder="Ваше имя (менеджер)"
-                      className="flex-1 bg-transparent border border-emerald-500/30 rounded-sm px-2 py-1.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-emerald-500/60" />
-                    <button onClick={() => managerSign(selectedContract.id)} disabled={!managerName.trim() || managerSigningId === selectedContract.id}
-                      className="flex items-center gap-1.5 bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/30 px-3 py-1.5 rounded-sm text-sm transition-colors disabled:opacity-40">
-                      {managerSigningId === selectedContract.id ? <Icon name="Loader2" size={13} className="animate-spin"/> : <Icon name="PenLine" size={13}/>}
-                      Подписать
-                    </button>
-                  </div>
+                  <>
+                    {/* Ручной номер и дата договора */}
+                    <div className="mb-2">
+                      <button type="button" onClick={() => setManualDoc(v => !v)}
+                        className="flex items-center gap-2 text-xs text-gray-400 hover:text-emerald-400 transition-colors">
+                        <span className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors ${manualDoc ? "bg-emerald-500/60" : "bg-white/10"}`}>
+                          <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${manualDoc ? "translate-x-3.5" : "translate-x-0.5"}`} />
+                        </span>
+                        Указать номер и дату договора вручную
+                      </button>
+                      {manualDoc && (
+                        <div className="flex gap-2 mt-2">
+                          <input value={docNumber} onChange={e => setDocNumber(e.target.value)}
+                            placeholder="Номер договора"
+                            className="flex-1 bg-transparent border border-emerald-500/30 rounded-sm px-2 py-1.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-emerald-500/60" />
+                          <input type="date" value={docDate} onChange={e => setDocDate(e.target.value)}
+                            className="flex-1 bg-transparent border border-emerald-500/30 rounded-sm px-2 py-1.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-emerald-500/60" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      <input value={managerName} onChange={e => setManagerName(e.target.value)}
+                        placeholder="Ваше имя (менеджер)"
+                        className="flex-1 bg-transparent border border-emerald-500/30 rounded-sm px-2 py-1.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-emerald-500/60" />
+                      <button onClick={() => managerSign(selectedContract.id)} disabled={!managerName.trim() || managerSigningId === selectedContract.id}
+                        className="flex items-center gap-1.5 bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/30 px-3 py-1.5 rounded-sm text-sm transition-colors disabled:opacity-40">
+                        {managerSigningId === selectedContract.id ? <Icon name="Loader2" size={13} className="animate-spin"/> : <Icon name="PenLine" size={13}/>}
+                        Подписать
+                      </button>
+                    </div>
+                  </>
                 )}
                 {managerSignDone === selectedContract.id && (
                   <div className="flex items-center gap-2 text-emerald-400 text-sm">
